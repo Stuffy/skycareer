@@ -1,0 +1,66 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject CareerService Career
+@inject NavigationManager Nav
+@inject GsxCoordinator Gsx
+
+<MudThemeProvider IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+@if (Career.ActiveCareerId is null)
+{
+    <CareerSelect />
+}
+else
+{
+    <MudLayout>
+        <MudAppBar Elevation="1" Dense="true">
+            <MudText Typo="Typo.h6" Class="mr-6">SkyCareer</MudText>
+            <CareerStatus />
+            <MudSpacer />
+            <MudTooltip Text="Karriere wechseln">
+                <MudIconButton Icon="@Icons.Material.Filled.SwitchAccount" Color="Color.Inherit" OnClick="SwitchCareer" aria-label="Karriere wechseln" />
+            </MudTooltip>
+        </MudAppBar>
+        <MudDrawer Open="true" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Persistent">
+            <MudNavMenu>
+                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Assignment">Aufträge</MudNavLink>
+                <MudNavLink Href="fleet" Icon="@Icons.Material.Filled.AirplanemodeActive">Flotte</MudNavLink>
+                <MudNavLink Href="finance" Icon="@Icons.Material.Filled.AccountBalance">Finanzen</MudNavLink>
+                <MudNavLink Href="logbook" Icon="@Icons.Material.Filled.MenuBook">Flugbuch</MudNavLink>
+                <MudDivider Class="my-2" />
+                <MudNavLink Href="live" Icon="@Icons.Material.Filled.FlightTakeoff">Live-Flug</MudNavLink>
+                <MudNavLink Href="aircraft" Icon="@Icons.Material.Filled.Tune">Flugzeugprofile</MudNavLink>
+                <MudNavLink Href="missions" Icon="@Icons.Material.Filled.Category">Missionstypen</MudNavLink>
+                <MudNavLink Href="spike" Icon="@Icons.Material.Filled.Scale">Beladungs-Spike</MudNavLink>
+                <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">Einstellungen</MudNavLink>
+            </MudNavMenu>
+        </MudDrawer>
+        @* No padding class on MudMainContent itself: its padding-top reserves room for the app bar,
+           and a utility like pa-4 (!important) would override it and push pages under the bar. *@
+        <MudMainContent>
+            <div class="pa-4">
+                <UpdateBanner />
+                @Body
+            </div>
+        </MudMainContent>
+    </MudLayout>
+}
+
+@code {
+    protected override void OnInitialized() => Career.Changed += OnCareerChanged;
+
+    // Re-render when a career is selected or left so the selection screen and the app swap.
+    private void OnCareerChanged() => InvokeAsync(StateHasChanged);
+
+    private void SwitchCareer()
+    {
+        Gsx.Stop(); // GSX polling belongs to a job of the career being left
+        Career.ClearSelection();
+        Nav.NavigateTo("");
+    }
+
+    public void Dispose() => Career.Changed -= OnCareerChanged;
+}

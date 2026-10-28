@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+TestResults/
+
+# Release output of tools/release.ps1
+publish/
+releases/
+
+# Local databases (the app's DB lives in %LOCALAPPDATA%, but keep stray test copies out)
+*.db
+*.db-shm
+*.db-wal

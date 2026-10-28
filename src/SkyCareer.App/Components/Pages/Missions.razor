@@ -1,0 +1,64 @@
+@page "/missions"
+@inherits CareerPageBase
+
+<MudText Typo="Typo.h5" Class="mb-1">Missionstypen</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Deine Reputation: <b>@_reputation</b> / 100 – manche Missionstypen erscheinen erst ab einer bestimmten Reputation im Markt.
+    Reputation gibt es für pünktliche, saubere Flüge; Verspätungen, Umleitungen und Regelverstöße kosten sie.
+</MudText>
+
+@foreach (var err in Career.Content.Errors)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@Path.GetFileName(err.File): @err.Message</MudAlert>
+}
+
+<MudSelect T="string" @bind-Value="_aircraftId" Label="Verfügbarkeit prüfen für Flugzeug" Variant="Variant.Outlined" Class="mb-4" Style="max-width:400px">
+    @foreach (var a in Career.Content.Aircraft)
+    {
+        <MudSelectItem Value="@a.Id">@a.Name@(_fleetProfiles.Contains(a.Id) ? " (in deiner Flotte)" : "")</MudSelectItem>
+    }
+</MudSelect>
+
+<MudSimpleTable Dense="true" Hover="true">
+    <thead>
+        <tr><th>Mission</th><th>Kategorie</th><th>Distanz</th><th>Bevorzugte Ziele</th><th>Reputation</th><th>SimBrief</th><th>Regeln</th><th>Verfügbar</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var m in Career.Content.MissionTypes.OrderBy(m => m.MinReputation).ThenBy(m => m.Name))
+        {
+            var result = Selected is null ? null : RequirementEvaluator.Evaluate(m, Selected);
+            bool locked = m.MinReputation > _reputation;
+            <tr>
+                <td><b>@m.Name</b><br /><MudText Typo="Typo.caption">@m.Description</MudText></td>
+                <td>@MissionTexts.Category(m.Category)</td>
+                <td>@m.Distance.MinNm.ToString("N0")–@m.Distance.MaxNm.ToString("N0") nm</td>
+                <td>@MissionTexts.Destinations(m.Destinations)</td>
+                <td class="@(locked ? "bad" : "")">@(m.MinReputation > 0 ? $"ab {m.MinReputation}" : "–")</td>
+                <td>@m.SimBrief</td>
+                <td>@m.FlightRules</td>
+                <td>
+                    @if (result is null) { <span>–</span> }
+                    else if (!result.Eligible) { <span class="bad">✘ @string.Join("; ", result.Reasons)</span> }
+                    else if (locked) { <span>🔒 gesperrt – Reputation @m.MinReputation nötig (aktuell @_reputation)</span> }
+                    else { <span class="ok">✔</span> }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    private string? _aircraftId;
+    private int _reputation;
+    private HashSet<string> _fleetProfiles = [];
+
+    private AircraftProfile? Selected => Career.Content.Aircraft.FirstOrDefault(a => a.Id == _aircraftId);
+
+    protected override async Task LoadAsync()
+    {
+        _reputation = (await Career.GetCareerAsync()).Reputation;
+        _fleetProfiles = (await Career.GetFleetAsync()).Select(f => f.ProfileId).ToHashSet();
+        // Default to a type the player actually flies.
+        _aircraftId ??= Career.Content.Aircraft.FirstOrDefault(a => _fleetProfiles.Contains(a.Id))?.Id ?? Career.Content.Aircraft.FirstOrDefault()?.Id;
+    }
+}

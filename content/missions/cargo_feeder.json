@@ -1,0 +1,15 @@
+{
+  "id": "cargo_feeder",
+  "name": "Fracht-Zubringer",
+  "description": "Expressfracht und Post zwischen Regionalflughäfen.",
+  "category": "cargo",
+  "requirements": { "requiredTags": ["cargo"], "minCargoKg": 300 },
+  "cargo": { "minKg": 300, "maxKg": 1200, "kinds": ["express", "mail", "spare_parts", "perishables"] },
+  "distance": { "minNm": 50, "maxNm": 600 },
+  "destinations": {"sizeWeights": {"large": 4, "medium": 3}, "minLargeShare": 0.3, "cityWeight": 2, "distanceInfluence": 0.5, "minCapitalShare": 0.2},
+  "pay": { "base": 600, "perNm": 1.5, "perCargoKg": 1.0, "hourlyRateFactor": 1.2, "onTimeBonus": 0.15 },
+  "scoring": { "landingRateWeight": 0.5, "punctualityWeight": 2 },
+  "simBrief": "optional",
+  "flightRules": "any",
+  "weight": 2
+}

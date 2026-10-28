@@ -1,0 +1,117 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div id="@_id" style="height:@(Height); width:100%; border-radius:4px; background:#1e1e2d"></div>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">Karte nicht verfügbar: @_error</MudAlert>
+}
+
+@code {
+    /// <summary>A fleet aircraft on the map (green = available, red = in maintenance).</summary>
+    public sealed record FleetPoint(double Lat, double Lon, string Label, bool Available);
+
+    /// <summary>
+    /// An offer or accepted job drawn as a line from origin to destination. Jobs sharing <paramref name="DestIdent"/>
+    /// share one pin whose popup shows <paramref name="Title"/>, <paramref name="Details"/> and <paramref name="Payout"/>.
+    /// </summary>
+    public sealed record Route(Guid Id, double[] From, double[] To, string Label, string Color, bool Accepted, bool Selected,
+        string DestIdent, string DestName, string Title, IReadOnlyList<string> Details, string Payout);
+
+    [Parameter] public IReadOnlyList<FleetPoint> Fleet { get; set; } = [];
+    [Parameter] public IReadOnlyList<Route> Routes { get; set; } = [];
+    /// <summary>Live aircraft position from the simulator; null hides the marker.</summary>
+    [Parameter] public (double Lat, double Lon, string Label)? Live { get; set; }
+    [Parameter] public EventCallback<Guid> OnRouteSelected { get; set; }
+    [Parameter] public EventCallback<Guid> OnShow { get; set; }
+    [Parameter] public EventCallback<Guid> OnAccept { get; set; }
+    [Parameter] public string Height { get; set; } = "420px";
+
+    private readonly string _id = $"map-{Guid.NewGuid():N}";
+    private DotNetObjectReference<MissionMap>? _ref;
+    private bool _ready;
+    private string? _error;
+    private object? _drawnFleet, _drawnRoutes;
+    private (double, double, string)? _drawnLive;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                _ref = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("skyMap.init", _id, _ref);
+                _ready = true;
+            }
+            if (!_ready) return;
+
+            // Only push data when the parameter instances changed; the page re-renders often (telemetry).
+            if (!ReferenceEquals(_drawnFleet, Fleet) || !ReferenceEquals(_drawnRoutes, Routes))
+            {
+                _drawnFleet = Fleet;
+                _drawnRoutes = Routes;
+                await JS.InvokeVoidAsync("skyMap.update", _id, new
+                {
+                    fleet = Fleet.Select(f => new { lat = f.Lat, lon = f.Lon, label = f.Label, available = f.Available }),
+                    offers = Routes.Select(r => new
+                    {
+                        id = r.Id, from = r.From, to = r.To, label = r.Label, color = r.Color, accepted = r.Accepted, selected = r.Selected,
+                        destIdent = r.DestIdent, destName = r.DestName, title = r.Title, details = r.Details, payout = r.Payout,
+                        canAccept = !r.Accepted
+                    })
+                });
+            }
+            if (_drawnLive != Live)
+            {
+                _drawnLive = Live;
+                if (Live is { } l) await JS.InvokeVoidAsync("skyMap.setAircraft", _id, l.Lat, l.Lon, l.Label);
+                else await JS.InvokeVoidAsync("skyMap.setAircraft", _id, null, null, null);
+            }
+        }
+        catch (JSException ex)
+        {
+            // Typically Leaflet failed to load because there is no internet connection.
+            _error = ex.Message;
+            _ready = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Zooms to the current content again on the next update.</summary>
+    public async Task FitAsync()
+    {
+        if (!_ready) return;
+        await JS.InvokeVoidAsync("skyMap.fit", _id);
+        _drawnRoutes = null;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task OnOfferClicked(string id) => OnRouteSelected.InvokeAsync(Guid.Parse(id));
+
+    /// <summary>"In Liste zeigen" in a pin popup.</summary>
+    [JSInvokable]
+    public Task OnShowClicked(string id) => OnShow.InvokeAsync(Guid.Parse(id));
+
+    /// <summary>"Annehmen" in a pin popup.</summary>
+    [JSInvokable]
+    public Task OnAcceptClicked(string id) => OnAccept.InvokeAsync(Guid.Parse(id));
+
+    /// <summary>Scrolls the page to an element, e.g. the table row of a job.</summary>
+    public async Task ScrollToAsync(string elementId)
+    {
+        if (_ready) await JS.InvokeVoidAsync("skyMap.scrollToElement", elementId);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_ready)
+        {
+            try { await JS.InvokeVoidAsync("skyMap.dispose", _id); }
+            catch (JSDisconnectedException) { }
+        }
+        _ref?.Dispose();
+    }
+}

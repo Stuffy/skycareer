@@ -1,0 +1,16 @@
+{
+  "id": "air_ambulance",
+  "name": "Ambulanzflug",
+  "description": "Patiententransport mit medizinischer Begleitung – ruhig und schnell fliegen.",
+  "category": "medical",
+  "requirements": { "requiredTags": ["medevac"] },
+  "passengers": { "min": 2, "max": 3, "childShare": 0, "baggage": "handOnly" },
+  "cargo": { "minKg": 80, "maxKg": 150, "kinds": ["medical_equipment"] },
+  "distance": { "minNm": 20, "maxNm": 400 },
+  "destinations": {"cityWeight": 1},
+  "pay": { "base": 2500, "perNm": 3, "hourlyRateFactor": 1.6, "onTimeBonus": 0.3 },
+  "scoring": { "gForceWeight": 3, "landingRateWeight": 2, "punctualityWeight": 3, "maxGForce": 1.3, "maxTouchdownFpm": 300 },
+  "simBrief": "none",
+  "flightRules": "any",
+  "offerValidityHours": 3
+}

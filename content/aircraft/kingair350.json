@@ -1,0 +1,30 @@
+{
+  "id": "kingair350",
+  "name": "Beechcraft King Air 350i",
+  "icaoType": "B350",
+  "simMatch": ["King Air 350", "B350"],
+  "operatingEmptyKg": 4150,
+  "maxZeroFuelKg": 5670,
+  "maxTakeoffKg": 6804,
+  "maxLandingKg": 6804,
+  "maxFuelKg": 1638,
+  "fuelType": "jetA",
+  "passengerSeats": 8,
+  "maxCargoKg": 250,
+  "crewCount": 2,
+  "cruiseKtas": 300,
+  "fuelBurnKgPerHour": 320,
+  "taxiFuelKg": 30,
+  "minRunwayM": 1000,
+  "surfaces": ["paved", "grass"],
+  "tags": ["pax", "turboprop", "multi_engine", "pressurized", "medevac", "business"],
+  "loading": "simConnectStations",
+  "stations": [
+    { "index": 1, "name": "Pilot", "kind": "crew", "seats": 1 },
+    { "index": 2, "name": "Copilot", "kind": "crew", "seats": 1 },
+    { "index": 3, "name": "Cabin forward", "kind": "passengers", "seats": 4 },
+    { "index": 4, "name": "Cabin aft", "kind": "passengers", "seats": 4 },
+    { "index": 5, "name": "Aft baggage", "kind": "baggage", "maxKg": 250 }
+  ],
+  "economics": { "purchasePriceNew": 8500000, "leasePerMonth": 75000, "rentPerBlockHour": 2600, "maintenancePerFlightHour": 520, "insurancePerMonth": 5200 }
+}

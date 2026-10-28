@@ -1,0 +1,97 @@
+@page "/aircraft"
+@inherits CareerPageBase
+@inject ContentStore Store
+@inject FlightMonitorService Monitor
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5">Flugzeugprofile</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FlightLand"
+               Disabled="@(Monitor.Inspector is null)" Href="aircraft/edit?fromSim=true">Aus aktuellem Sim-Flugzeug</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Href="aircraft/edit">Leeres Profil</MudButton>
+</MudStack>
+
+@if (SimTitle is { } title)
+{
+    @if (Recognized is { } match)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">Im Sim geladen: „@title“ – erkannt als <b>@match.Name</b>.</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Im Sim geladen: „@title“ – kein passendes Profil. Mit „Aus aktuellem Sim-Flugzeug“ ein Profil anlegen;
+            Gewichte, Stationen und Tanks werden aus dem Sim übernommen, der Rest aus einem ähnlichen Profil geschätzt.
+        </MudAlert>
+    }
+}
+
+@foreach (var err in Store.Current.Errors)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@Path.GetFileName(err.File): @err.Message</MudAlert>
+}
+
+<MudPaper Class="pa-4">
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>Name</th><th>ICAO</th><th>Herkunft</th><th>Sitze / Fracht</th><th>MTOW</th><th>Laden</th><th>Prüfung</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var p in Store.Current.Aircraft)
+            {
+                bool own = Store.IsUserProfile(p.Id);
+                var issues = AircraftProfileValidator.Validate(p);
+                <tr>
+                    <td><b>@p.Name</b><br /><MudText Typo="Typo.caption" Class="mono">@p.Id</MudText></td>
+                    <td>@p.IcaoType</td>
+                    <td>@(own ? "Eigenes Profil" : "Mitgeliefert")</td>
+                    <td>@p.PassengerSeats / @p.MaxCargoKg.ToString("N0") kg</td>
+                    <td>@p.MaxTakeoffKg.ToString("N0") kg</td>
+                    <td>@p.Loading</td>
+                    <td>
+                        @if (issues.Any(i => i.Level == IssueLevel.Error)) { <span class="bad">@issues.Count(i => i.Level == IssueLevel.Error) Fehler</span> }
+                        else if (issues.Count > 0) { <span>@issues.Count Hinweis(e)</span> }
+                        else { <span class="ok">OK</span> }
+                    </td>
+                    <td style="white-space:nowrap">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"aircraft/edit?id={p.Id}")">@(own ? "Bearbeiten" : "Anpassen")</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"aircraft/edit?copy={p.Id}")">Kopieren</MudButton>
+                        @if (own)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Disabled="Busy" OnClick="() => Delete(p)" aria-label="Löschen" />
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+    <MudText Typo="Typo.caption" Class="mt-2 d-block">
+        Eigene Profile liegen unter <span class="mono">@Store.UserAircraftDir</span>. „Anpassen“ eines mitgelieferten Profils legt dort eine eigene Version an, die das Original ersetzt.
+    </MudText>
+</MudPaper>
+
+@code {
+    private string? SimTitle => Monitor.Connection == ConnectionState.Connected && Monitor.Latest is { AircraftTitle.Length: > 0 } t ? t.AircraftTitle : null;
+
+    private AircraftProfile? Recognized => SimTitle is { } title
+        ? Store.Current.Aircraft.FirstOrDefault(a => a.SimMatch.Any(m => m.Length > 0 && title.Contains(m, StringComparison.OrdinalIgnoreCase)))
+        : null;
+
+    protected override Task LoadAsync() => Task.CompletedTask;
+
+    private async Task Delete(AircraftProfile p)
+    {
+        if (await Career.IsProfileInUseAsync(p.Id))
+        {
+            Snackbar.Add($"„{p.Name}“ wird noch von Flugzeugen in einer Karriere genutzt und kann nicht gelöscht werden.", Severity.Warning);
+            return;
+        }
+        if (await Dialogs.ShowMessageBoxAsync("Profil löschen", $"Eigenes Profil „{p.Name}“ löschen?", yesText: "Löschen", cancelText: "Abbrechen") != true)
+            return;
+        await Run(() =>
+        {
+            Store.DeleteUserAircraft(p.Id);
+            return Task.CompletedTask;
+        }, "Profil gelöscht.");
+    }
+}

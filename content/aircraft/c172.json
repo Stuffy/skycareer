@@ -1,0 +1,30 @@
+// Values are approximate; station indices must be verified in the sim (Phase 0 spike).
+{
+  "id": "c172",
+  "name": "Cessna 172 Skyhawk",
+  "icaoType": "C172",
+  "simMatch": ["C172", "Skyhawk"],
+  "operatingEmptyKg": 767,
+  "maxZeroFuelKg": 1111,
+  "maxTakeoffKg": 1111,
+  "maxLandingKg": 1111,
+  "maxFuelKg": 145,
+  "fuelType": "avGas",
+  "passengerSeats": 3,
+  "maxCargoKg": 54,
+  "crewCount": 1,
+  "cruiseKtas": 120,
+  "fuelBurnKgPerHour": 23,
+  "taxiFuelKg": 3,
+  "minRunwayM": 500,
+  "surfaces": ["paved", "grass", "gravel", "dirt"],
+  "tags": ["pax", "piston", "single_engine", "unpaved_ok", "trainer"],
+  "loading": "simConnectStations",
+  "stations": [
+    { "index": 1, "name": "Pilot", "kind": "crew", "seats": 1 },
+    { "index": 2, "name": "Front passenger", "kind": "passengers", "seats": 1 },
+    { "index": 3, "name": "Rear passengers", "kind": "passengers", "seats": 2 },
+    { "index": 4, "name": "Baggage", "kind": "baggage", "maxKg": 54 }
+  ],
+  "economics": { "purchasePriceNew": 450000, "leasePerMonth": 4500, "rentPerBlockHour": 190, "maintenancePerFlightHour": 45, "insurancePerMonth": 350 }
+}

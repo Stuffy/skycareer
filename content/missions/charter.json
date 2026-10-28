@@ -1,0 +1,15 @@
+{
+  "id": "charter",
+  "name": "Charter",
+  "description": "Geschäftsreisen und Gruppenflüge auf Bestellung – ohne VIP-Ansprüche, aber pünktlich.",
+  "category": "charter",
+  "requirements": { "requiredTags": ["pax"], "anyOfTags": ["jet", "turboprop", "business"], "forbiddenTags": ["helicopter"] },
+  "passengers": { "min": 2, "max": 50, "childShare": 0.03, "infantShare": 0, "baggage": "european" },
+  "distance": { "minNm": 150, "maxNm": 2500 },
+  "destinations": {"sizeWeights": {"large": 5, "medium": 3}, "minLargeShare": 0.3, "cityWeight": 3, "distanceInfluence": 0.5, "minCapitalShare": 0.35},
+  "pay": { "base": 1500, "perNm": 2, "perPax": 90, "hourlyRateFactor": 1.5, "onTimeBonus": 0.15 },
+  "scoring": { "landingRateWeight": 1.5, "gForceWeight": 1, "punctualityWeight": 2, "maxTouchdownFpm": 400, "maxGForce": 1.6 },
+  "simBrief": "optional",
+  "flightRules": "ifr",
+  "weight": 2
+}

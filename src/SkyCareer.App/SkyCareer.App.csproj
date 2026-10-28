@@ -1,0 +1,57 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkyCareer.Domain\SkyCareer.Domain.csproj" />
+    <ProjectReference Include="..\SkyCareer.Sim\SkyCareer.Sim.csproj" />
+    <ProjectReference Include="..\SkyCareer.Missions\SkyCareer.Missions.csproj" />
+    <ProjectReference Include="..\SkyCareer.Integrations.SimBrief\SkyCareer.Integrations.SimBrief.csproj" />
+    <ProjectReference Include="..\SkyCareer.Application\SkyCareer.Application.csproj" />
+    <ProjectReference Include="..\SkyCareer.Data\SkyCareer.Data.csproj" />
+    <ProjectReference Include="..\SkyCareer.Integrations.Gsx\SkyCareer.Integrations.Gsx.csproj" />
+    <ProjectReference Include="..\SkyCareer.Integrations.BeyondAtc\SkyCareer.Integrations.BeyondAtc.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.120" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageReference Include="MudBlazor" Version="9.11.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- A versioned Windows TFM pulls in Microsoft.Windows.SDK.NET, which the WebView2 composition control needs. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- SimConnect's managed wrapper and native DLL are x64-only. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>SkyCareer.App</RootNamespace>
+    <!-- Regenerate with tools/make_icon.py. -->
+    <ApplicationIcon>Assets\SkyCareer.ico</ApplicationIcon>
+    <!-- Program.Main runs Velopack's hooks before WPF starts. -->
+    <StartupObject>SkyCareer.App.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Read by UpdateService; set in Directory.Build.props. -->
+    <AssemblyMetadata Include="RepoUrl" Value="$(SkyCareerRepoUrl)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\SkyCareer.ico" />
+  </ItemGroup>
+
+  <!-- WPF's implicit usings leave these out. -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!-- Data-driven content (aircraft profiles, mission types) ships next to the exe so users can mod it. -->
+  <ItemGroup>
+    <None Include="..\..\content\**\*.json" LinkBase="content" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

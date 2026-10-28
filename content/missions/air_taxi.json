@@ -1,0 +1,14 @@
+{
+  "id": "air_taxi",
+  "name": "Air Taxi",
+  "description": "Kurzer Bedarfsflug für wenige Passagiere, auch zu kleinen Plätzen.",
+  "category": "charter",
+  "requirements": { "requiredTags": ["pax"], "forbiddenTags": ["airliner"] },
+  "passengers": { "min": 1, "max": 6, "childShare": 0.05, "baggage": "domestic" },
+  "distance": { "minNm": 30, "maxNm": 350 },
+  "destinations": {"sizeWeights": {"large": 2, "medium": 2}, "cityWeight": 2, "distanceInfluence": 0.5, "minCapitalShare": 0.2},
+  "pay": { "base": 400, "perNm": 1, "perPax": 60, "hourlyRateFactor": 1.4 },
+  "simBrief": "optional",
+  "flightRules": "any",
+  "weight": 2
+}

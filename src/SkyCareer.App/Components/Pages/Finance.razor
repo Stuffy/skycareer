@@ -1,0 +1,90 @@
+@page "/finance"
+@inherits CareerPageBase
+
+<MudText Typo="Typo.h5" Class="mb-4">Finanzen</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.caption">Kontostand</MudText>
+            <MudText Typo="Typo.h5" Class="@(_cash < 0 ? "bad" : "")">@Eur(_cash)</MudText>
+        </MudPaper>
+        <MudPaper Class="pa-4 mt-4">
+            <MudSelect T="string" @bind-Value="_month" Label="Monat" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+                @foreach (var m in _months)
+                {
+                    <MudSelectItem Value="@m">@m</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSimpleTable Dense="true">
+                <tbody>
+                    @foreach (var g in MonthEntries.Where(l => l.Category != LedgerCategory.StartingCapital).GroupBy(l => l.Category).OrderByDescending(g => g.Sum(l => l.Amount)))
+                    {
+                        <tr><td>@CategoryText(g.Key)</td><td style="text-align:right" class="@(g.Sum(l => l.Amount) < 0 ? "bad" : "ok")">@Eur(g.Sum(l => l.Amount))</td></tr>
+                    }
+                    <tr><td><b>Ergebnis</b></td><td style="text-align:right"><b>@Eur(MonthEntries.Where(l => l.Category != LedgerCategory.StartingCapital).Sum(l => l.Amount))</b></td></tr>
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="8">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Buchungen</MudText>
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th style="text-align:right">Betrag</th></tr></thead>
+                <tbody>
+                    @foreach (var l in MonthEntries)
+                    {
+                        <tr>
+                            <td>@l.GameTime.ToString("dd.MM. HH:mm")</td>
+                            <td>@CategoryText(l.Category)</td>
+                            <td>@l.Description</td>
+                            <td style="text-align:right" class="@(l.Amount < 0 ? "bad" : "ok")">@l.Amount.ToString("N2") €</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<LedgerEntry> _ledger = [];
+    private List<string> _months = [];
+    private string? _month;
+    private decimal _cash;
+
+    private IEnumerable<LedgerEntry> MonthEntries => _ledger.Where(l => l.GameTime.ToString("MM/yyyy") == _month);
+
+    protected override async Task LoadAsync()
+    {
+        var career = await Career.GetCareerAsync();
+        _cash = career.Cash;
+        _ledger = await Career.GetLedgerAsync();
+        _months = _ledger.Select(l => l.GameTime.ToString("MM/yyyy")).Distinct().ToList();
+        _month ??= career.GameTime.ToString("MM/yyyy");
+        if (!_months.Contains(_month)) _months.Insert(0, _month);
+    }
+
+    private static string CategoryText(LedgerCategory c) => c switch
+    {
+        LedgerCategory.MissionRevenue => "Auftragserlöse",
+        LedgerCategory.Bonus => "Boni",
+        LedgerCategory.Penalty => "Strafen",
+        LedgerCategory.Fuel => "Treibstoff",
+        LedgerCategory.LandingFee => "Landegebühren",
+        LedgerCategory.Handling => "Abfertigung",
+        LedgerCategory.Navigation => "Streckengebühren",
+        LedgerCategory.Catering => "Catering",
+        LedgerCategory.Crew => "Personal",
+        LedgerCategory.Maintenance => "Wartung",
+        LedgerCategory.Repair => "Reparaturen",
+        LedgerCategory.Lease => "Leasing",
+        LedgerCategory.Rent => "Miete",
+        LedgerCategory.Insurance => "Versicherung",
+        LedgerCategory.AircraftPurchase => "Flugzeugkauf",
+        LedgerCategory.AircraftSale => "Flugzeugverkauf",
+        LedgerCategory.StartingCapital => "Startkapital",
+        _ => c.ToString()
+    };
+}

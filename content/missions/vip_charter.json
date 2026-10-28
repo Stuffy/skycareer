@@ -1,0 +1,15 @@
+{
+  "id": "vip_charter",
+  "name": "VIP-Charter",
+  "description": "Anspruchsvolle Gäste – sanfte Landung und Pünktlichkeit zählen doppelt.",
+  "category": "charter",
+  "requirements": { "requiredTags": ["pax"], "anyOfTags": ["business", "jet"], "forbiddenTags": ["airliner"] },
+  "passengers": { "min": 1, "max": 8, "childShare": 0, "baggage": "leisure" },
+  "distance": { "minNm": 100, "maxNm": 2500 },
+  "destinations": {"sizeWeights": {"large": 5, "medium": 3}, "minLargeShare": 0.3, "cityWeight": 4, "distanceInfluence": 0.5, "minCapitalShare": 0.4},
+  "pay": { "base": 3000, "perNm": 3, "perPax": 250, "hourlyRateFactor": 1.9, "onTimeBonus": 0.25 },
+  "scoring": { "landingRateWeight": 3, "gForceWeight": 2, "punctualityWeight": 2, "maxTouchdownFpm": 250, "maxGForce": 1.4 },
+  "simBrief": "optional",
+  "flightRules": "ifr",
+  "minReputation": 20
+}

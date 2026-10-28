@@ -1,0 +1,16 @@
+{
+  "id": "bush_supply",
+  "name": "Busch-Versorgung",
+  "description": "Versorgungsflug zu unbefestigten Pisten. Keine SimBrief-Planung – VFR nach Sicht.",
+  "category": "bush",
+  "requirements": { "requiredTags": ["unpaved_ok"], "forbiddenTags": ["jet"], "maxMtowKg": 6000, "surfaces": ["gravel", "grass", "dirt"] },
+  "cargo": { "minKg": 50, "maxKg": 800, "kinds": ["food", "fuel_drums", "tools", "medical_supplies"] },
+  "passengers": { "min": 0, "max": 2, "childShare": 0, "baggage": "domestic" },
+  "distance": { "minNm": 20, "maxNm": 250 },
+  "destinations": {"sizes": ["small"]},
+  "pay": { "base": 500, "perNm": 2, "perPax": 40, "perCargoKg": 1.5, "hourlyRateFactor": 1.4 },
+  "scoring": { "landingRateWeight": 0.5, "punctualityWeight": 0.5, "maxTouchdownFpm": 500 },
+  "simBrief": "none",
+  "flightRules": "vfr",
+  "weight": 2
+}

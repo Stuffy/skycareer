@@ -1,0 +1,201 @@
+@page "/fleet"
+@inherits CareerPageBase
+@inject IDialogService Dialogs
+@using Microsoft.AspNetCore.Components.Web
+
+<MudText Typo="Typo.h5" Class="mb-4">Flotte</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" Class="mb-2">Eigene Flugzeuge</MudText>
+    @if (_fleet.Count == 0)
+    {
+        <MudText Typo="Typo.body2">Noch keine Flugzeuge. Unten kaufen, leasen oder mieten – neue Flugzeuge stehen an der Heimatbasis.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>Kennzeichen</th><th>Typ</th><th>Status</th><th>Standort</th><th>Stunden / Zyklen</th><th>Zustand</th><th>Nächster Check</th><th>Wert / Rate</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var f in _fleet)
+                {
+                    var p = Career.Profile(f.ProfileId);
+                    <tr>
+                        <td><b>@f.Registration</b></td>
+                        <td>@p.Name</td>
+                        <td>
+                            @OwnershipText(f.Ownership)
+                            @if (!f.IsAvailable(_gameTime)) { <br /><span class="bad">@(f.UnavailableReason ?? "Wartung") bis @f.UnavailableUntil?.ToString("dd.MM. HH:mm")</span> }
+                        </td>
+                        <td>@f.Location</td>
+                        <td>@f.AirframeHours.ToString("N1") h / @f.Cycles</td>
+                        <td class="@(f.Condition < 70 ? "bad" : "")">@f.Condition.ToString("N0") %</td>
+                        <td>@(f.Ownership == Ownership.Rented ? "inkl." : $"in {Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck):N0} h")</td>
+                        <td>@ValueText(f, p)</td>
+                        <td style="white-space:nowrap">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => StartRelocation(f)">Standort ändern</MudButton>
+                            @if (f.Condition < 99.5 && f.Ownership != Ownership.Rented)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Repair(f)">Reparieren (@Eur(FleetEconomics.RepairCost(p, f.Condition)))</MudButton>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => DisposeAircraft(f)">@DisposeText(f.Ownership)</MudButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@if (_relocating is { } moving)
+{
+    <MudPaper Class="pa-4 mb-4" id="relocation">
+        <MudText Typo="Typo.h6">Standort ändern: @moving.Registration (@Career.ProfileName(moving.ProfileId)), derzeit in @moving.Location</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Überführung: Eine angeheuerte Crew fliegt das Flugzeug leer zum Ziel. Treibstoff, Gebühren, Crew und Miete bzw. Wartungsrücklage
+            werden gebucht, und das Flugzeug ist für die Blockzeit nicht verfügbar. „Ohne Kosten versetzen“ ist für Flugzeuge gedacht,
+            die du im Simulator schon selbst dorthin geflogen hast. Offene Angebote ab dem alten Standort entfallen.
+        </MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudTextField T="string" @bind-Value="_target" Label="Zielflughafen (ICAO)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Immediate="true" OnKeyUp="TargetKeyUp" Style="max-width:220px" />
+            <MudButton Variant="Variant.Outlined" Disabled="@(Busy || string.IsNullOrWhiteSpace(_target))" OnClick="Estimate">Kosten berechnen</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Text" OnClick="CancelRelocation">Abbrechen</MudButton>
+        </MudStack>
+        @if (_estimate is { } est && _estimateFor is { } dest)
+        {
+            <MudText Typo="Typo.subtitle1" Class="mt-3">
+                @moving.Location → @dest.Ident @dest.Name · @est.DistanceNm.ToString("N0") nm · Blockzeit @est.BlockHours.ToString("0.0") h
+            </MudText>
+            <MudSimpleTable Dense="true" Class="mt-1" Style="max-width:640px">
+                <tbody>
+                    @foreach (var line in est.Costs)
+                    {
+                        <tr><td>@line.Description</td><td style="text-align:right">@Eur(line.Amount)</td></tr>
+                    }
+                    <tr><td><b>Summe</b></td><td style="text-align:right"><b>@Eur(est.Total)</b></td></tr>
+                </tbody>
+            </MudSimpleTable>
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _cash < est.Total)" OnClick="() => Relocate(true)">
+                    Überführen (@Eur(est.Total))
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Relocate(false)">Ohne Kosten versetzen</MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+}
+
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.h6">Flugzeugmarkt</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">
+        Kauf: einmaliger Preis, danach Versicherung und Wartung. Leasing: @CareerService.LeaseTermMonths Monate, Rate + Versicherung monatlich, vorzeitige Rückgabe kostet 3 Raten.
+        Miete: nur Kosten pro Blockstunde (inkl. Wartung und Versicherung), jederzeit rückgabefähig.
+    </MudText>
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>Typ</th><th>Sitze / Fracht</th><th>Reichweite</th><th>Missionen</th><th>Kaufpreis</th><th>Leasing / Monat</th><th>Miete / h</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var p in Career.Content.Aircraft)
+            {
+                <tr>
+                    <td><b>@p.Name</b><br /><MudText Typo="Typo.caption">@string.Join(", ", p.Tags)</MudText></td>
+                    <td>@p.PassengerSeats / @p.MaxCargoKg.ToString("N0") kg</td>
+                    <td>@RequirementEvaluator.EstimatedRangeNm(p).ToString("N0") nm</td>
+                    <td>@string.Join(", ", RequirementEvaluator.AvailableFor(Career.Content.MissionTypes, p).Select(m => m.Name))</td>
+                    <td>@Eur(p.Economics.PurchasePriceNew)</td>
+                    <td>@Eur(p.Economics.LeasePerMonth)</td>
+                    <td>@Eur(p.Economics.RentPerBlockHour)</td>
+                    <td style="white-space:nowrap">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || _cash < p.Economics.PurchasePriceNew)" OnClick="() => Acquire(p, Ownership.Owned)">Kaufen</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Acquire(p, Ownership.Leased)">Leasen</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Acquire(p, Ownership.Rented)">Mieten</MudButton>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    private List<FleetAircraft> _fleet = [];
+    private DateTime _gameTime;
+    private decimal _cash;
+
+    protected override async Task LoadAsync()
+    {
+        var career = await Career.GetCareerAsync();
+        _gameTime = career.GameTime;
+        _cash = career.Cash;
+        _fleet = await Career.GetFleetAsync();
+    }
+
+    private Task Acquire(AircraftProfile p, Ownership ownership) => Run(async () =>
+    {
+        var a = await Career.AcquireAircraftAsync(p.Id, ownership);
+        Snackbar.Add($"{a.Registration} ({p.Name}) steht in {a.Location} bereit.", Severity.Success);
+    });
+
+    private FleetAircraft? _relocating;
+    private string _target = "";
+    private FerryEstimate? _estimate;
+    private SkyCareer.Domain.World.Airport? _estimateFor;
+
+    private void StartRelocation(FleetAircraft f)
+    {
+        _relocating = f;
+        _target = "";
+        _estimate = null;
+        _estimateFor = null;
+    }
+
+    private void CancelRelocation() => _relocating = null;
+
+    private async Task TargetKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_target)) await Estimate();
+        else if (_estimateFor is { } a && !string.Equals(a.Ident, _target.Trim(), StringComparison.OrdinalIgnoreCase)) _estimate = null;
+    }
+
+    private Task Estimate() => Run(async () =>
+    {
+        _estimate = null;
+        _estimate = await Career.EstimateRelocationAsync(_relocating!.Id, _target);
+        _estimateFor = await Career.FindAirportAsync(_target.Trim());
+    });
+
+    private Task Relocate(bool ferry) => Run(async () =>
+    {
+        var f = _relocating!;
+        string to = _target.Trim().ToUpperInvariant();
+        var done = await Career.RelocateAircraftAsync(f.Id, to, ferry);
+        Snackbar.Add(done is null
+            ? $"{f.Registration} steht jetzt in {to}."
+            : $"{f.Registration} wird nach {to} überführt ({Eur(done.Total)}, verfügbar in {done.BlockHours:0.0} h).", Severity.Success);
+        _relocating = null;
+    });
+
+    private Task Repair(FleetAircraft f) => Run(() => Career.RepairAsync(f.Id), $"{f.Registration} wird repariert (1 Tag).");
+
+    private string ValueText(FleetAircraft f, AircraftProfile p) => f.Ownership switch
+    {
+        Ownership.Owned => Eur(FleetEconomics.MarketValue(p, f, _gameTime)),
+        Ownership.Leased => $"{Eur(f.MonthlyRate)}/Monat bis {f.LeaseEndsAt:MM/yyyy}",
+        _ => $"{Eur(f.RentPerBlockHour)}/Blockstunde"
+    };
+
+    private async Task DisposeAircraft(FleetAircraft f)
+    {
+        var p = Career.Profile(f.ProfileId);
+        string text = f.Ownership switch
+        {
+            Ownership.Owned => $"{f.Registration} für {Eur(FleetEconomics.SaleValue(p, f, _gameTime))} verkaufen?",
+            Ownership.Leased => $"Leasing für {f.Registration} vorzeitig beenden? Gebühr: {Eur(f.MonthlyRate * 3)}.",
+            _ => $"Mietflugzeug {f.Registration} zurückgeben?"
+        };
+        if (await Dialogs.ShowMessageBoxAsync("Bestätigen", text, yesText: "Ja", cancelText: "Abbrechen") == true)
+            await Run(() => Career.DisposeAircraftAsync(f.Id), "Erledigt.");
+    }
+
+    private static string OwnershipText(Ownership o) => o switch { Ownership.Owned => "Eigentum", Ownership.Leased => "Geleast", _ => "Gemietet" };
+    private static string DisposeText(Ownership o) => o switch { Ownership.Owned => "Verkaufen", _ => "Zurückgeben" };
+}

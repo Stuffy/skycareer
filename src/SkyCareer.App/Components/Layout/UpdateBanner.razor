@@ -1,0 +1,67 @@
+@implements IDisposable
+@inject UpdateService Updates
+@inject FlightMonitorService Monitor
+@inject ISnackbar Snackbar
+
+@if (Updates.Status == UpdateStatus.Ready && _dismissed != Updates.AvailableVersion)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="Dismiss">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.body2">Update <b>@Updates.AvailableVersion</b> ist bereit.</MudText>
+            @if (Updates.CanRestartNow)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Restart">Neu starten</MudButton>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2">Wird nach dem Flug installiert (oder beim Beenden der App).</MudText>
+            }
+            @if (Updates.ReleaseUrl is { } url)
+            {
+                <MudLink Href="@url" Target="_blank" Typo="Typo.body2">Was ist neu?</MudLink>
+            }
+        </MudStack>
+    </MudAlert>
+}
+
+@code {
+    // Hidden for this version until the next app start.
+    private static string? _dismissed;
+
+    protected override void OnInitialized()
+    {
+        Updates.Changed += OnChanged;
+        Monitor.Changed += OnFlightChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    // Telemetry arrives several times a second; only the "can restart" switch matters here.
+    private bool _couldRestart = true;
+    private void OnFlightChanged()
+    {
+        if (Updates.Status != UpdateStatus.Ready || Updates.CanRestartNow == _couldRestart) return;
+        _couldRestart = Updates.CanRestartNow;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Dismiss() => _dismissed = Updates.AvailableVersion;
+
+    private void Restart()
+    {
+        try
+        {
+            Updates.RestartAndApply();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    public void Dispose()
+    {
+        Updates.Changed -= OnChanged;
+        Monitor.Changed -= OnFlightChanged;
+    }
+}

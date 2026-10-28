@@ -1,0 +1,120 @@
+@* Job search: the criteria filter the list and steer "Aufträge suchen". *@
+@inject CareerService Career
+
+<MudPaper Class="pa-4 mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudIconButton Icon="@(Filter.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small"
+                       OnClick="() => Filter.Expanded = !Filter.Expanded" aria-label="Filter ein-/ausklappen" />
+        <MudText Typo="Typo.h6">Auftragssuche</MudText>
+        @if (Filter.ActiveCount > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@Filter.ActiveCount Filter aktiv</MudChip>
+        }
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Disabled="@(Busy || Filter.ActiveCount == 0)" OnClick="Reset">Filter zurücksetzen</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" Disabled="@(Busy || !HasFleet)" OnClick="OnSearch">
+            Aufträge suchen
+        </MudButton>
+    </MudStack>
+
+    @if (Filter.Expanded)
+    {
+        <MudGrid Class="mt-1" Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudSelect T="Guid?" @bind-Value="Filter.AircraftId" @bind-Value:after="Changed" Label="Flugzeug" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                           ToStringFunc="AircraftLabel">
+                    @foreach (var f in Fleet)
+                    {
+                        <MudSelectItem T="Guid?" Value="@f.Id">@AircraftLabel(f.Id)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="Filter.MissionTypeIds" @bind-SelectedValues:after="Changed"
+                           Label="Missionstypen (leer = alle)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="@(id => id is null ? "" : TypeName(id))">
+                    @foreach (var t in MissionTypes)
+                    {
+                        <MudSelectItem T="string" Value="@t.Id">@MissionTexts.TypeOption(t, Reputation)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.DistanceMinNm" @bind-Value:after="Changed" Label="Distanz min (nm)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.DistanceMaxNm" @bind-Value:after="Changed" Label="Distanz max (nm)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+
+            <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMin" @bind-Value:after="Changed" Label="Passagiere min" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMax" @bind-Value:after="Changed" Label="Passagiere max" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.CargoMinKg" @bind-Value:after="Changed" Label="Fracht min (kg)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="decimal?" @bind-Value="Filter.PayoutMin" @bind-Value:after="Changed" Label="Vergütung min (€)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.MinRunwayM" @bind-Value:after="Changed" Label="Zielpiste min (m)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2">
+                <MudSelect T="AirportSize" MultiSelection="true" @bind-SelectedValues="Filter.Sizes" @bind-SelectedValues:after="Changed"
+                           Label="Zielgröße (leer = alle)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="SizeText">
+                    @foreach (var s in Enum.GetValues<AirportSize>())
+                    {
+                        <MudSelectItem T="AirportSize" Value="@s">@SizeText(s)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudStack Row="true" Spacing="4" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                    <MudCheckBox T="bool" @bind-Value="Filter.RequirePaved" @bind-Value:after="Changed" Label="Befestigte Piste" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.RequireLighted" @bind-Value:after="Changed" Label="Befeuerte Piste" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.ScheduledServiceOnly" @bind-Value:after="Changed" Label="Nur mit Linienverkehr" Dense="true" />
+                    <MudTooltip Text="@(IlsAvailable ? "ILS-Daten kommen aus dem Sim; unbekannte Ziele werden bei der Suche abgefragt." : "Nur bekannte ILS-Flughäfen – für neue Abfragen MSFS starten.")">
+                        <MudCheckBox T="bool" @bind-Value="Filter.RequireIls" @bind-Value:after="Changed" Label="@(IlsAvailable ? "ILS am Ziel" : "ILS am Ziel (Sim nicht verbunden)")" Dense="true" />
+                    </MudTooltip>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+        @if (AirportDataOutdated)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                Die Flughafendaten stammen aus einer älteren Version: Es fehlen Angaben wie Befeuerung, Linienverkehr, die zugehörige Stadt (für Großstadt- und Hauptstadtziele) oder die Kennzeichnung von Militärflugplätzen.
+                Unter „Einstellungen“ → „Flughafendaten aktualisieren“ neu importieren.
+            </MudAlert>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public MarketFilter Filter { get; set; } = null!;
+    [Parameter] public IReadOnlyList<FleetAircraft> Fleet { get; set; } = [];
+    [Parameter] public IReadOnlyList<MissionType> MissionTypes { get; set; } = [];
+    [Parameter] public bool IlsAvailable { get; set; }
+    /// <summary>Current career reputation; types above it are marked as not yet available.</summary>
+    [Parameter] public int Reputation { get; set; }
+    [Parameter] public bool AirportDataOutdated { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnSearch { get; set; }
+    /// <summary>Raised whenever a criterion changes so the page can re-filter the list and the map.</summary>
+    [Parameter] public EventCallback OnFilterChanged { get; set; }
+
+    private bool HasFleet => Fleet.Count > 0;
+
+    private Task Changed() => OnFilterChanged.InvokeAsync();
+
+    private Task Reset()
+    {
+        Filter.Reset();
+        return Changed();
+    }
+
+    private string AircraftLabel(Guid? id) =>
+        Fleet.FirstOrDefault(f => f.Id == id) is { } f ? $"{f.Registration} · {Career.ProfileName(f.ProfileId)} ({f.Location})" : "";
+
+    private string TypeName(string id) =>
+        MissionTypes.FirstOrDefault(t => t.Id == id) is { } t ? MissionTexts.TypeOption(t, Reputation) : id;
+
+    public static string SizeText(AirportSize s) => s switch
+    {
+        AirportSize.Large => "Groß",
+        AirportSize.Medium => "Mittel",
+        AirportSize.Small => "Klein",
+        AirportSize.Heliport => "Hubschrauberlandeplatz",
+        AirportSize.Seaplane => "Wasserflugplatz",
+        _ => s.ToString()
+    };
+}

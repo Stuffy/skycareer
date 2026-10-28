@@ -1,0 +1,26 @@
+// The default A320neo manages payload through its own EFB, so the app verifies instead of writing stations.
+{
+  "id": "a20n",
+  "name": "Airbus A320neo",
+  "icaoType": "A20N",
+  "simMatch": ["A320neo", "A20N"],
+  "operatingEmptyKg": 42600,
+  "maxZeroFuelKg": 64300,
+  "maxTakeoffKg": 79000,
+  "maxLandingKg": 67400,
+  "maxFuelKg": 18730,
+  "fuelType": "jetA",
+  "passengerSeats": 174,
+  "maxCargoKg": 6000,
+  "crewCount": 2,
+  "cabinCrewCount": 4,
+  "cruiseKtas": 450,
+  "fuelBurnKgPerHour": 2400,
+  "taxiFuelKg": 200,
+  "minRunwayM": 1800,
+  "surfaces": ["paved"],
+  "tags": ["pax", "jet", "airliner", "multi_engine", "pressurized"],
+  "loading": "manual",
+  "stations": [],
+  "economics": { "purchasePriceNew": 110000000, "leasePerMonth": 380000, "rentPerBlockHour": 9500, "maintenancePerFlightHour": 1100, "insurancePerMonth": 45000 }
+}

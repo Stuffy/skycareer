@@ -1,0 +1,31 @@
+@inherits CareerPageBase
+
+@* Career status and time controls in the app bar (replaces the former "Karriere" page). *@
+@if (_career is { } c)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+        <MudText Typo="Typo.subtitle1"><b>@c.AirlineName</b></MudText>
+        <MudTooltip Text="Kontostand">
+            <MudText Typo="Typo.body2" Class="@(c.Cash < 0 ? "bad" : "")"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" Style="vertical-align:middle" /> @Eur(c.Cash)</MudText>
+        </MudTooltip>
+        <MudTooltip Text="Reputation (0–100)">
+            <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" Style="vertical-align:middle" /> @c.Reputation</MudText>
+        </MudTooltip>
+        <MudTooltip Text="Spielzeit (UTC) – vergeht nur durch Flüge und Warten">
+            <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Style="vertical-align:middle" /> @c.GameTime.ToString("dd.MM.yyyy HH:mm")</MudText>
+        </MudTooltip>
+        <MudMenu Icon="@Icons.Material.Filled.MoreTime" Color="Color.Inherit" Dense="true" AriaLabel="Zeit vergehen lassen" Disabled="Busy">
+            <MudMenuItem OnClick="() => Wait(TimeSpan.FromHours(1))">1 Stunde warten</MudMenuItem>
+            <MudMenuItem OnClick="() => Wait(TimeSpan.FromHours(6))">6 Stunden warten</MudMenuItem>
+            <MudMenuItem OnClick="() => Wait(TimeSpan.FromDays(1))">1 Tag warten</MudMenuItem>
+        </MudMenu>
+    </MudStack>
+}
+
+@code {
+    private Career? _career;
+
+    protected override async Task LoadAsync() => _career = await Career.GetCareerAsync();
+
+    private Task Wait(TimeSpan span) => Run(() => Career.WaitAsync(span));
+}

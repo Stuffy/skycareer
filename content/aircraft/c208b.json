@@ -1,0 +1,31 @@
+{
+  "id": "c208b",
+  "name": "Cessna 208B Grand Caravan EX",
+  "icaoType": "C208",
+  "simMatch": ["C208", "Caravan"],
+  "operatingEmptyKg": 2145,
+  "maxZeroFuelKg": 3995,
+  "maxTakeoffKg": 3995,
+  "maxLandingKg": 3856,
+  "maxFuelKg": 1009,
+  "fuelType": "jetA",
+  "passengerSeats": 9,
+  "maxCargoKg": 1100,
+  "crewCount": 1,
+  "cruiseKtas": 175,
+  "fuelBurnKgPerHour": 175,
+  "taxiFuelKg": 20,
+  "minRunwayM": 700,
+  "surfaces": ["paved", "grass", "gravel", "dirt"],
+  "tags": ["pax", "cargo", "turboprop", "single_engine", "unpaved_ok", "utility"],
+  "loading": "simConnectStations",
+  "stations": [
+    { "index": 1, "name": "Pilot", "kind": "crew", "seats": 1 },
+    { "index": 2, "name": "Copilot seat", "kind": "passengers", "seats": 1 },
+    { "index": 3, "name": "Cabin rows 1-2", "kind": "passengers", "seats": 4 },
+    { "index": 4, "name": "Cabin rows 3-4", "kind": "passengers", "seats": 4 },
+    { "index": 5, "name": "Cabin cargo", "kind": "cargo", "maxKg": 600 },
+    { "index": 6, "name": "Cargo pod", "kind": "cargo", "maxKg": 500 }
+  ],
+  "economics": { "purchasePriceNew": 2900000, "leasePerMonth": 28000, "rentPerBlockHour": 1100, "maintenancePerFlightHour": 260, "insurancePerMonth": 2200 }
+}

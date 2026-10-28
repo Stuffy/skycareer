@@ -1,0 +1,285 @@
+@page "/spike"
+@implements IDisposable
+@using SkyCareer.Domain.Loading
+@inject FlightMonitorService Monitor
+@inject GameContent Content
+
+<MudText Typo="Typo.h5" Class="mb-1">Beladungs-Spike</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Prüft, ob Payload und Treibstoff per SimConnect geschrieben und korrekt zurückgelesen werden, und hilft beim Erstellen von Flugzeugprofilen.
+</MudText>
+
+@if (Monitor.Connection != ConnectionState.Connected)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        Nicht mit MSFS verbunden (Status: @Monitor.Connection). Auf „Live-Flug“ verbinden und im Simulator ein Flugzeug am Gate/Parkplatz laden.
+    </MudAlert>
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
+}
+
+<MudPaper Class="pa-4 mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudText Typo="Typo.h6">1. Flugzeug auslesen</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Monitor.Inspector is null || _busy)" OnClick="ReadAircraft">Auslesen</MudButton>
+    </MudStack>
+
+    @if (_snapshot is { } s)
+    {
+        <MudSimpleTable Dense="true" Class="mt-2">
+            <tbody>
+                <tr><td>Titel</td><td>@s.Title</td></tr>
+                <tr><td>ATC Model / Type</td><td class="mono">@s.AtcModel / @s.AtcType</td></tr>
+                <tr><td>Leergewicht / Max. Gross</td><td>@Kg(s.EmptyWeightKg) / @Kg(s.MaxGrossWeightKg)</td></tr>
+                <tr><td>Gesamtgewicht</td><td>@Kg(s.TotalWeightKg)</td></tr>
+                <tr><td>Treibstoff</td><td>@Kg(s.FuelKg) (@s.FuelKgPerGallon.ToString("0.00") kg/gal, Tanks gesamt @s.TankCapacityGallons.ToString("N0") gal)</td></tr>
+                <tr><td>Payload (Summe Stationen)</td><td>@Kg(s.PayloadKg)</td></tr>
+                <tr><td>Erkanntes Profil</td><td>@(_matched?.Name ?? "keins – unten ein neues Profil anlegen")</td></tr>
+            </tbody>
+        </MudSimpleTable>
+
+        @if (s.Tanks.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                Keine klassischen Tanks gemeldet – das Flugzeug nutzt vermutlich ein eigenes oder das neue Treibstoffsystem. Treibstoff kann so nicht geschrieben werden.
+            </MudAlert>
+        }
+
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" md="7">
+                <MudText Typo="Typo.subtitle2">Payload-Stationen</MudText>
+                <MudSimpleTable Dense="true">
+                    <thead><tr><th>#</th><th>Name</th><th>Gewicht</th><th>Vermutete Art</th></tr></thead>
+                    <tbody>
+                        @foreach (var st in s.Stations)
+                        {
+                            <tr><td>@st.Index</td><td>@st.Name</td><td>@Kg(st.WeightKg)</td><td>@ProfileDraftBuilder.GuessKind(st.Name)</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+            <MudItem xs="12" md="5">
+                <MudText Typo="Typo.subtitle2">Tanks</MudText>
+                <MudSimpleTable Dense="true">
+                    <thead><tr><th>Tank</th><th>Kapazität</th><th>Inhalt</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in s.Tanks)
+                        {
+                            <tr><td>@t.Name</td><td>@t.CapacityGallons.ToString("N1") gal</td><td>@t.QuantityGallons.ToString("N1") gal</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+        </MudGrid>
+
+        <MudButton Variant="Variant.Outlined" Class="mt-2" Href="aircraft/edit?fromSim=true">Neues Profil aus diesem Flugzeug anlegen</MudButton>
+    }
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" Class="mb-2">2. Load-Sheet berechnen und in den Sim schreiben</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudSelect T="string" @bind-Value="_profileId" Label="Profil" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var a in Content.Aircraft)
+                {
+                    <MudSelectItem Value="@a.Id">@a.Name (@a.Loading)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="4" md="1"><MudNumericField @bind-Value="_adults" Label="Erwachsene" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="4" md="1"><MudNumericField @bind-Value="_children" Label="Kinder" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="4" md="1"><MudNumericField @bind-Value="_infants" Label="Babys" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="BaggageProfile" @bind-Value="_baggage" Label="Gepäck" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var b in Enum.GetValues<BaggageProfile>())
+                {
+                    <MudSelectItem Value="@b">@b</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="1"><MudNumericField @bind-Value="_cargoKg" Label="Fracht kg" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" md="1"><MudNumericField @bind-Value="_distanceNm" Label="Strecke nm" Min="1" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" md="1">
+            <MudSelect T="PassengerMassMode" @bind-Value="_massMode" Label="Massen" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="PassengerMassMode.Standard">Standard</MudSelectItem>
+                <MudSelectItem Value="PassengerMassMode.Randomized">Zufall</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+    <MudStack Row="true" Spacing="2" Class="mt-3">
+        <MudButton Variant="Variant.Outlined" OnClick="Calculate">Berechnen</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyAndVerify"
+                   Disabled="@(_sheet is null || Monitor.Loader is null || _busy || _sheet.Aircraft.Loading != LoadingMethod.SimConnectStations)">
+            In den Sim schreiben &amp; prüfen
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="VerifyOnly" Disabled="@(_sheet is null || Monitor.Inspector is null || _busy)">Nur prüfen</MudButton>
+    </MudStack>
+
+    @if (_sheet is { } sheet)
+    {
+        @if (sheet.Aircraft.Loading != LoadingMethod.SimConnectStations)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                Dieses Profil lädt über @sheet.Aircraft.Loading – Werte im EFB/Lademenü des Flugzeugs eintragen und dann „Nur prüfen“.
+            </MudAlert>
+        }
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" md="5">
+                <MudSimpleTable Dense="true">
+                    <tbody>
+                        <tr><td>Passagiere</td><td>@sheet.Passengers.Total (@Kg(sheet.PassengerMass.Kg))</td></tr>
+                        <tr><td>Gepäck / Fracht</td><td>@Kg(sheet.BaggageMass.Kg) / @Kg(sheet.CargoMass.Kg)</td></tr>
+                        <tr><td>Crew</td><td>@Kg(sheet.Crew.Kg)</td></tr>
+                        <tr><td>ZFW (max)</td><td>@Kg(sheet.ZeroFuelWeight.Kg) (@Kg(sheet.Aircraft.MaxZeroFuelKg))</td></tr>
+                        <tr><td>Block Fuel</td><td>@Kg(sheet.Fuel.Block.Kg)</td></tr>
+                        <tr><td>TOW (max)</td><td>@Kg(sheet.TakeoffWeight.Kg) (@Kg(sheet.Aircraft.MaxTakeoffKg))</td></tr>
+                        <tr><td>LW (max)</td><td>@Kg(sheet.LandingWeight.Kg) (@Kg(sheet.Aircraft.MaxLandingKg))</td></tr>
+                        <tr><td>Limits</td><td class="@(sheet.IsWithinLimits ? "ok" : "bad")">@(sheet.IsWithinLimits ? "OK" : string.Join(", ", sheet.Violations))</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+            <MudItem xs="12" md="7">
+                <MudSimpleTable Dense="true">
+                    <thead><tr><th>#</th><th>Station</th><th>Soll</th><th>Ist (Sim)</th><th>Δ</th></tr></thead>
+                    <tbody>
+                        @foreach (var st in sheet.Stations)
+                        {
+                            var actual = _readBack?.Stations.FirstOrDefault(x => x.Index == st.Index);
+                            <tr>
+                                <td>@st.Index</td><td>@st.Name</td><td>@Kg(st.Mass.Kg)</td>
+                                <td>@(actual is null ? "–" : Kg(actual.WeightKg))</td>
+                                <td class="@(actual is null ? "" : Math.Abs(actual.WeightKg - st.Mass.Kg) <= 2 ? "ok" : "bad")">
+                                    @(actual is null ? "" : (actual.WeightKg - st.Mass.Kg).ToString("+0.0;-0.0;0"))
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+        </MudGrid>
+    }
+
+    @if (_verification is not null)
+    {
+        @if (_verification.Count == 0)
+        {
+            <MudAlert Severity="Severity.Success" Class="mt-2">Payload und Treibstoff stimmen mit dem Load-Sheet überein (±2 %).</MudAlert>
+        }
+        else
+        {
+            @foreach (var d in _verification)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@d.Item: Soll @Kg(d.Expected.Kg), Ist @Kg(d.Actual.Kg) (Δ @d.Difference.Kg.ToString("+0;-0") kg)</MudAlert>
+            }
+        }
+    }
+</MudPaper>
+
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.h6" Class="mb-2">3. Variable lesen (L:Var-Test)</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">
+        SimConnect in MSFS 2024 liest L:Vars direkt – Grundlage für FBW/PMDG-Beladung und GSX.
+        Achtung: Eine nicht existierende L:Var liefert 0 statt eines Fehlers; 0 heißt also nicht automatisch „vorhanden“.
+        Beispiele: <span class="mono">L:FSDT_GSX_BOARDING_STATE</span>, <span class="mono">L:FSDT_GSX_NUMPASSENGERS</span>, <span class="mono">PAYLOAD STATION WEIGHT:1</span> (Einheit pounds).
+    </MudText>
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        <MudTextField @bind-Value="_varName" Label="Variable" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:360px" />
+        <MudTextField @bind-Value="_varUnit" Label="Einheit" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:140px" />
+        <MudButton Variant="Variant.Outlined" OnClick="ReadVariable" Disabled="@(Monitor.Inspector is null || _busy)">Lesen</MudButton>
+        <MudText Class="mono">@_varResult</MudText>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private AircraftSnapshot? _snapshot, _readBack;
+    private AircraftProfile? _matched;
+    private LoadSheet? _sheet;
+    private IReadOnlyList<LoadDeviation>? _verification;
+    private string? _error, _profileId, _varResult;
+    private string _varName = "L:FSDT_GSX_BOARDING_STATE", _varUnit = "number";
+    private int _adults = 4, _children, _infants;
+    private double _cargoKg, _distanceNm = 150;
+    private BaggageProfile _baggage = BaggageProfile.Domestic;
+    private PassengerMassMode _massMode = PassengerMassMode.Standard;
+    private bool _busy;
+
+    private AircraftProfile? Profile => Content.Aircraft.FirstOrDefault(a => a.Id == _profileId);
+
+    protected override void OnInitialized()
+    {
+        _profileId = Content.Aircraft.FirstOrDefault()?.Id;
+        Monitor.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private Task ReadAircraft() => Run(async () =>
+    {
+        _snapshot = await Monitor.Inspector!.ReadAircraftAsync();
+        _matched = Content.Aircraft.FirstOrDefault(a => a.SimMatch.Any(m =>
+            _snapshot.Title.Contains(m, StringComparison.OrdinalIgnoreCase) ||
+            _snapshot.AtcModel.Contains(m, StringComparison.OrdinalIgnoreCase) ||
+            _snapshot.AtcType.Contains(m, StringComparison.OrdinalIgnoreCase)));
+        if (_matched is not null) _profileId = _matched.Id;
+    });
+
+    private void Calculate()
+    {
+        _error = null;
+        _readBack = null;
+        _verification = null;
+        if (Profile is not { } ac) return;
+        try
+        {
+            var rules = ac.FuelType == FuelType.AvGas ? FlightRules.Vfr : FlightRules.Ifr;
+            var fuel = FuelPlanner.Plan(ac, _distanceNm, rules, rules == FlightRules.Ifr ? 50 : 0);
+            _sheet = LoadSheetBuilder.Build(ac, new PassengerCount(_adults, _children, _infants), _baggage, Mass.FromKg(_cargoKg), fuel, _massMode);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private Task ApplyAndVerify() => Run(async () =>
+    {
+        await Monitor.Loader!.ApplyPayloadAsync(_sheet!.Stations);
+        await Monitor.Loader.ApplyFuelAsync(_sheet.Fuel.Block);
+        // The sim recalculates weights on its next frames; give it a moment before reading back.
+        await Task.Delay(1500);
+        await Verify();
+    });
+
+    private Task VerifyOnly() => Run(Verify);
+
+    private async Task Verify()
+    {
+        _readBack = await Monitor.Inspector!.ReadAircraftAsync();
+        _verification = LoadVerifier.Verify(_sheet!, Mass.FromKg(_readBack.PayloadKg), Mass.FromKg(_readBack.FuelKg));
+    }
+
+    private Task ReadVariable() => Run(async () =>
+    {
+        _varResult = "…";
+        try { _varResult = (await Monitor.Inspector!.ReadVariableAsync(_varName.Trim(), _varUnit.Trim())).ToString("0.###"); }
+        catch (Exception ex) { _varResult = ex.Message; }
+    });
+
+    private async Task Run(Func<Task> action)
+    {
+        _error = null;
+        _busy = true;
+        try { await action(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private static string Kg(double kg) => $"{kg:N0} kg";
+
+    public void Dispose() => Monitor.Changed -= OnChanged;
+}

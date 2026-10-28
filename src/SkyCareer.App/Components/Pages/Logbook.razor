@@ -1,0 +1,46 @@
+@page "/logbook"
+@inherits CareerPageBase
+
+<MudText Typo="Typo.h5" Class="mb-4">Flugbuch</MudText>
+
+@if (_flights.Count == 0)
+{
+    <MudText Typo="Typo.body2">Noch keine Flüge.</MudText>
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mb-2">
+        @_flights.Count Flüge · @_flights.Sum(f => f.BlockHours).ToString("N1") Blockstunden · Ø Score @_flights.Average(f => f.Score).ToString("N0")
+        · Ergebnis @Eur(_flights.Sum(f => f.Revenue - f.Costs))
+    </MudText>
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>Ankunft</th><th>Auftrag</th><th>Strecke</th><th>Flugzeug</th><th>Block</th><th>Landung</th><th>Score</th><th>Ergebnis</th><th>Status</th></tr></thead>
+        <tbody>
+            @foreach (var f in _flights)
+            {
+                <tr title="@f.Notes">
+                    <td>@f.ArrivedGameTime.ToString("dd.MM.yy HH:mm")</td>
+                    <td>@(Career.Content.MissionTypes.FirstOrDefault(m => m.Id == f.MissionTypeId)?.Name ?? f.MissionTypeId)</td>
+                    <td>@f.Origin → @f.Destination@(f.ArrivedAt != f.Destination ? $" (gelandet {f.ArrivedAt})" : "")</td>
+                    <td>@(_registrations.GetValueOrDefault(f.AircraftId, "–"))</td>
+                    <td>@f.BlockHours.ToString("N1") h</td>
+                    <td>@f.TouchdownFpm.ToString("N0") fpm / @f.MaxGForce.ToString("N2") G</td>
+                    <td>@f.Score</td>
+                    <td class="@(f.Revenue - f.Costs < 0 ? "bad" : "ok")">@Eur(f.Revenue - f.Costs)</td>
+                    <td>@f.Outcome</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    private List<FlightRecord> _flights = [];
+    private Dictionary<Guid, string> _registrations = [];
+
+    protected override async Task LoadAsync()
+    {
+        _flights = await Career.GetFlightsAsync();
+        _registrations = (await Career.GetFleetAsync()).ToDictionary(f => f.Id, f => f.Registration);
+    }
+}

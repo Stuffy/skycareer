@@ -1,0 +1,325 @@
+@page "/aircraft/edit"
+@inherits CareerPageBase
+@inject ContentStore Store
+@inject FlightMonitorService Monitor
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5">@_title</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Text" Href="aircraft">Abbrechen</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || HasErrors)" OnClick="Save">Speichern</MudButton>
+</MudStack>
+
+@if (_hint is not null)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_hint</MudAlert>
+}
+
+<MudGrid>
+    <MudItem xs="12" lg="8">
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Allgemein</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="6"><MudTextField T="string" Value="_form.Name" ValueChanged="NameChanged" Label="Name" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                <MudItem xs="12" sm="4"><MudTextField @bind-Value="_form.Id" Label="ID (Dateiname)" Variant="Variant.Outlined" Immediate="true" @bind-Value:after="() => _idTouched = true" /></MudItem>
+                <MudItem xs="12" sm="2"><MudTextField @bind-Value="_form.IcaoType" Label="ICAO-Typ" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_form.SimMatch" Label="Sim-Erkennung (Teile des Titels/ATC-Modells, kommagetrennt)" Variant="Variant.Outlined" Immediate="true"
+                                  HelperText="@SimMatchHelper" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Gewichte &amp; Treibstoff</MudText>
+            <MudGrid>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.OperatingEmptyKg" Label="Leergewicht kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.MaxZeroFuelKg" Label="MZFW kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.MaxTakeoffKg" Label="MTOW kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.MaxLandingKg" Label="MLW kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.MaxFuelKg" Label="Tankkapazität kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudSelect @bind-Value="_form.FuelType" Label="Treibstoff" Variant="Variant.Outlined">
+                        <MudSelectItem Value="FuelType.JetA">Jet-A</MudSelectItem>
+                        <MudSelectItem Value="FuelType.AvGas">AvGas</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.CrewCount" Label="Piloten" Variant="Variant.Outlined" Min="1" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.CabinCrewCount" Label="Kabinenpersonal" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.CrewMassKg" Label="Gewicht je Pilot (kg)" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.CabinCrewMassKg" Label="Gewicht je Flugbegleiter (kg)" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_form.CrewIncludedInEmptyWeight" Label="Crew ist im Leergewicht enthalten (keine Crew-Stationen beladen)" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Leistung &amp; Einsatz</MudText>
+            <MudGrid>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.CruiseKtas" Label="Reise-TAS kt" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.FuelBurnKgPerHour" Label="Verbrauch kg/h" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.TaxiFuelKg" Label="Rollen kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.MinRunwayM" Label="Min. Piste m" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_form.SimBriefAirframe" Label="SimBrief-Airframe-ID (optional)" Variant="Variant.Outlined"
+                                                      HelperText="Eigenes Airframe aus SimBrief statt des Standardtyps, z. B. 123456_1700000000000" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.PassengerSeats" Label="Passagiersitze" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField @bind-Value="_form.MaxCargoKg" Label="Gepäck/Fracht kg" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="RunwaySurface" MultiSelection="true" @bind-SelectedValues="_form.Surfaces" Label="Pistenoberflächen" Variant="Variant.Outlined">
+                        @foreach (var s in Enum.GetValues<RunwaySurface>())
+                        {
+                            <MudSelectItem Value="@s">@SurfaceText(s)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_form.Tags" Label="Fähigkeiten (Tags)" Variant="Variant.Outlined">
+                        @foreach (var t in KnownTags)
+                        {
+                            <MudSelectItem Value="@t">@t</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_form.ExtraTags" Label="Weitere Tags (kommagetrennt)" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Spacing="2">
+                <MudText Typo="Typo.h6">Beladung</MudText>
+                <MudSelect @bind-Value="_form.Loading" Label="Methode" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px">
+                    <MudSelectItem Value="LoadingMethod.SimConnectStations">SimConnect-Stationen (App belädt)</MudSelectItem>
+                    <MudSelectItem Value="LoadingMethod.Manual">Manuell im EFB (App prüft nur)</MudSelectItem>
+                    <MudSelectItem Value="LoadingMethod.LVar">L:Vars des Flugzeugs</MudSelectItem>
+                </MudSelect>
+                <MudSpacer />
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || Monitor.Inspector is null)" OnClick="StationsFromSim">Stationen aus Sim übernehmen</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="AddStation">Station hinzufügen</MudButton>
+            </MudStack>
+            @if (_form.Stations.Count > 0)
+            {
+                <MudSimpleTable Dense="true">
+                    <thead><tr><th style="width:70px">#</th><th>Name</th><th style="width:170px">Art</th><th style="width:110px">Sitze</th><th style="width:130px">Max. kg</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var st in _form.Stations)
+                        {
+                            <tr>
+                                <td><MudNumericField @bind-Value="st.Index" Min="1" Margin="Margin.Dense" /></td>
+                                <td><MudTextField @bind-Value="st.Name" Margin="Margin.Dense" /></td>
+                                <td>
+                                    <MudSelect @bind-Value="st.Kind" Margin="Margin.Dense">
+                                        <MudSelectItem Value="StationKind.Crew">Crew</MudSelectItem>
+                                        <MudSelectItem Value="StationKind.Passengers">Passagiere</MudSelectItem>
+                                        <MudSelectItem Value="StationKind.Baggage">Gepäck</MudSelectItem>
+                                        <MudSelectItem Value="StationKind.Cargo">Fracht</MudSelectItem>
+                                    </MudSelect>
+                                </td>
+                                <td><MudNumericField @bind-Value="st.Seats" Min="0" Margin="Margin.Dense" Disabled="@(st.Kind is StationKind.Baggage or StationKind.Cargo)" /></td>
+                                <td><MudNumericField @bind-Value="st.MaxKg" Min="0" Margin="Margin.Dense" Disabled="@(st.Kind is StationKind.Passengers or StationKind.Crew)" /></td>
+                                <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _form.Stations.Remove(st)" aria-label="Station entfernen" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_form.SeatsFromStations == _form.PassengerSeats)"
+                               OnClick="() => _form.PassengerSeats = _form.SeatsFromStations">Sitze übernehmen (@_form.SeatsFromStations)</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_form.CargoFromStations <= 0 || _form.CargoFromStations == _form.MaxCargoKg)"
+                               OnClick="() => _form.MaxCargoKg = _form.CargoFromStations">Frachtkapazität übernehmen (@_form.CargoFromStations.ToString("N0") kg)</MudButton>
+                </MudStack>
+            }
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudText Typo="Typo.h6">Wirtschaft</MudText>
+                <MudSpacer />
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Estimate" Disabled="@(Reference is null)">
+                    Leere Werte schätzen@(Reference is { } r ? $" (aus {r.Name})" : "")
+                </MudButton>
+            </MudStack>
+            <MudGrid>
+                <MudItem xs="6" sm="4"><MudNumericField @bind-Value="_form.PurchasePriceNew" Label="Kaufpreis €" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField @bind-Value="_form.LeasePerMonth" Label="Leasing €/Monat" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField @bind-Value="_form.RentPerBlockHour" Label="Miete €/Blockstunde" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField @bind-Value="_form.MaintenancePerFlightHour" Label="Wartung €/Flugstunde" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField @bind-Value="_form.InsurancePerMonth" Label="Versicherung €/Monat" Variant="Variant.Outlined" Min="0" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" lg="4">
+        <div style="position:sticky; top:72px">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Prüfung</MudText>
+                @if (Issues.Count == 0)
+                {
+                    <MudText Class="ok">Keine Probleme gefunden.</MudText>
+                }
+                @foreach (var i in Issues)
+                {
+                    <MudAlert Severity="@(i.Level == IssueLevel.Error ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-1">@i.Message</MudAlert>
+                }
+            </MudPaper>
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Kennzahlen</MudText>
+                <MudSimpleTable Dense="true">
+                    <tbody>
+                        <tr><td>Max. Zuladung (MZFW − Leer − Crew)</td><td>@Math.Max(0, Preview.MaxZeroFuelKg - Preview.OperatingEmptyKg - Preview.CrewMass.Kg).ToString("N0") kg</td></tr>
+                        <tr><td>Reichweite (volle Tanks, 45 min Reserve)</td><td>@RequirementEvaluator.EstimatedRangeNm(Preview).ToString("N0") nm</td></tr>
+                        <tr><td>Ausdauer</td><td>@(Preview.FuelBurnKgPerHour > 0 ? (Preview.MaxFuelKg / Preview.FuelBurnKgPerHour).ToString("0.0") + " h" : "–")</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Verfügbare Missionen</MudText>
+                @foreach (var m in Store.Current.MissionTypes)
+                {
+                    var r = RequirementEvaluator.Evaluate(m, Preview);
+                    <MudText Typo="Typo.body2" Class="@(r.Eligible ? "ok" : "")">
+                        @(r.Eligible ? "✔" : "✘") @m.Name
+                        @if (!r.Eligible) { <MudText Typo="Typo.caption" Inline="true"> – @string.Join("; ", r.Reasons)</MudText> }
+                    </MudText>
+                }
+            </MudPaper>
+        </div>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [SupplyParameterFromQuery] public string? Id { get; set; }
+    [SupplyParameterFromQuery] public string? Copy { get; set; }
+    [SupplyParameterFromQuery] public bool FromSim { get; set; }
+
+    private ProfileForm _form = new();
+    private string _title = "Neues Flugzeugprofil";
+    private string? _hint, _originalId;
+    private bool _idTouched, _loaded;
+
+    protected override bool NeedsCareer => false;
+
+    private AircraftProfile Preview => _form.ToProfile();
+    private IReadOnlyList<ProfileIssue> Issues => AircraftProfileValidator.Validate(Preview);
+    private bool HasErrors => Issues.Any(i => i.Level == IssueLevel.Error);
+    private AircraftProfile? Reference => AircraftProfileEstimator.MostSimilar(Preview, Store.Current.Aircraft);
+
+    private IEnumerable<string> KnownTags =>
+        new[] { "pax", "cargo", "jet", "turboprop", "piston", "helicopter", "turbine", "single_engine", "multi_engine", "pressurized",
+                "airliner", "business", "utility", "medevac", "hoist", "unpaved_ok", "stol", "float", "amphibian", "ski", "trainer", "military", "single_pilot" }
+            .Concat(Store.Current.Aircraft.SelectMany(a => a.Tags))
+            .Concat(Store.Current.MissionTypes.SelectMany(m => m.Requirements.RequiredTags.Concat(m.Requirements.AnyOfTags)))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order();
+
+    private string SimMatchHelper => Monitor.Latest is { AircraftTitle.Length: > 0 } t && Monitor.Connection == ConnectionState.Connected
+        ? $"Aktuell im Sim: „{t.AircraftTitle}“ – {(Preview.MatchesSimTitle(t.AircraftTitle) ? "wird erkannt ✔" : "wird nicht erkannt")}"
+        : "Wird mit dem Titel des geladenen Flugzeugs verglichen.";
+
+    // Only the first load initialises the form; later career/content changes must not discard edits.
+    protected override async Task LoadAsync()
+    {
+        if (_loaded) return;
+        _loaded = true;
+
+        if (Id is not null && Store.Current.Aircraft.FirstOrDefault(a => a.Id == Id) is { } existing)
+        {
+            _form = ProfileForm.From(existing);
+            _originalId = existing.Id;
+            _idTouched = true;
+            bool own = Store.IsUserProfile(existing.Id);
+            _title = own ? $"Profil bearbeiten: {existing.Name}" : $"Mitgeliefertes Profil anpassen: {existing.Name}";
+            if (!own) _hint = "Beim Speichern entsteht ein eigenes Profil mit derselben ID, das das mitgelieferte ersetzt. Löschen stellt das Original wieder her.";
+        }
+        else if (Copy is not null && Store.Current.Aircraft.FirstOrDefault(a => a.Id == Copy) is { } source)
+        {
+            _form = ProfileForm.From(source with { Id = source.Id + "_kopie", Name = source.Name + " (Kopie)" });
+            _title = $"Kopie von {source.Name}";
+        }
+        else if (FromSim)
+        {
+            await FillFromSim();
+        }
+    }
+
+    private async Task FillFromSim()
+    {
+        if (Monitor.Inspector is not { } inspector)
+        {
+            _hint = "Nicht mit MSFS verbunden – Profil manuell ausfüllen oder Sim starten und erneut versuchen.";
+            return;
+        }
+        await Run(async () =>
+        {
+            var snap = await inspector.ReadAircraftAsync();
+            var draft = ProfileDraftBuilder.Build(snap, Store.Current.Aircraft);
+            _form = ProfileForm.From(draft);
+            _title = $"Neues Profil: {snap.Title}";
+            var reference = AircraftProfileEstimator.MostSimilar(draft, Store.Current.Aircraft);
+            _hint = "Aus dem Sim übernommen: Leergewicht, max. Abfluggewicht, Tankkapazität, Stationen" +
+                    (snap.Design is not null ? ", Triebwerkstyp und Reisegeschwindigkeit" : "") + ". " +
+                    (reference is null ? "" : $"Verbrauch, Frachtkapazität und Preise sind aus „{reference.Name}“ geschätzt. ") +
+                    "MZFW und MLW meldet der Sim nicht – bitte aus dem Handbuch des Flugzeugs eintragen.";
+        });
+    }
+
+    private void NameChanged(string name)
+    {
+        _form.Name = name;
+        if (!_idTouched) _form.Id = AircraftProfileEstimator.Slug(name);
+    }
+
+    private void Estimate()
+    {
+        if (Reference is not { } r) return;
+        // Rebuild the form from the filled profile; extra tags are already merged into its tag list.
+        var stations = _form.Stations;
+        _form = ProfileForm.From(AircraftProfileEstimator.FillFrom(Preview, r));
+        _form.Stations = stations;
+        Snackbar.Add($"Leere Werte aus „{r.Name}“ geschätzt (skaliert nach MTOW).", Severity.Info);
+    }
+
+    private Task StationsFromSim() => Run(async () =>
+    {
+        var snap = await Monitor.Inspector!.ReadAircraftAsync();
+        var draft = ProfileDraftBuilder.Build(snap, []);
+        _form.Stations = ProfileForm.From(draft).Stations;
+        Snackbar.Add($"{_form.Stations.Count} Stationen aus dem Sim übernommen.", Severity.Info);
+    });
+
+    private void AddStation() =>
+        _form.Stations.Add(new ProfileForm.StationRow { Index = _form.Stations.Select(s => s.Index).DefaultIfEmpty(0).Max() + 1, Name = "Station" });
+
+    private async Task Save()
+    {
+        var profile = Preview;
+        bool overwritesOther = !profile.Id.Equals(_originalId, StringComparison.OrdinalIgnoreCase) &&
+                               Store.Current.Aircraft.Any(a => a.Id.Equals(profile.Id, StringComparison.OrdinalIgnoreCase));
+        if (overwritesOther &&
+            await Dialogs.ShowMessageBoxAsync("ID bereits vergeben", $"Es gibt schon ein Profil „{profile.Id}“. Ersetzen?", yesText: "Ersetzen", cancelText: "Abbrechen") != true)
+            return;
+        if (_originalId is not null && !profile.Id.Equals(_originalId, StringComparison.OrdinalIgnoreCase) && await Career.IsProfileInUseAsync(_originalId))
+        {
+            Snackbar.Add("Die ID kann nicht geändert werden, weil Flugzeuge in einer Karriere dieses Profil nutzen.", Severity.Warning);
+            return;
+        }
+
+        await Run(async () =>
+        {
+            await Store.SaveAircraftAsync(profile, _originalId);
+            Nav.NavigateTo("aircraft");
+        }, $"„{profile.Name}“ gespeichert.");
+    }
+
+    private static string SurfaceText(RunwaySurface s) => s switch
+    {
+        RunwaySurface.Paved => "Asphalt/Beton",
+        RunwaySurface.Gravel => "Schotter",
+        RunwaySurface.Grass => "Gras",
+        RunwaySurface.Dirt => "Erde/Sand",
+        RunwaySurface.Water => "Wasser",
+        RunwaySurface.Snow => "Schnee/Eis",
+        _ => s.ToString()
+    };
+}

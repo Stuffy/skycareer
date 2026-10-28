@@ -1,0 +1,16 @@
+{
+  "id": "scheduled_pax",
+  "name": "Linienflug",
+  "description": "Planmäßiger Passagierflug zwischen Verkehrsflughäfen.",
+  "category": "airline",
+  "requirements": { "requiredTags": ["pax"], "forbiddenTags": ["helicopter"], "minSeats": 50, "surfaces": ["paved"] },
+  "passengers": { "min": 60, "max": 220, "childShare": 0.06, "infantShare": 0.01, "baggage": "european" },
+  "cargo": { "minKg": 0, "maxKg": 2500, "kinds": ["mail", "general"] },
+  "distance": { "minNm": 150, "maxNm": 2500 },
+  "destinations": {"sizes": ["large", "medium"], "sizeWeights": {"large": 4}, "minLargeShare": 0.5, "cityWeight": 4, "distanceInfluence": 0.5, "minCapitalShare": 0.3},
+  "pay": { "base": 2500, "perNm": 2, "perPax": 45, "perCargoKg": 1.2, "hourlyRateFactor": 1.1, "onTimeBonus": 0.1 },
+  "scoring": { "landingRateWeight": 1.5, "punctualityWeight": 2, "maxTouchdownFpm": 400 },
+  "simBrief": "optional",
+  "flightRules": "ifr",
+  "weight": 3
+}

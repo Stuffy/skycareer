@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SkyCareer</title>
+    <base href="/" />
+    <!-- Loading screen styles are inline so they paint on the very first frame, before any stylesheet loads. -->
+    <style>
+        html, body { margin: 0; height: 100%; background: #32333d; }
+        .sc-loader {
+            position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-family: Roboto, "Segoe UI", sans-serif; color: rgba(255, 255, 255, 0.7); user-select: none;
+        }
+        .sc-sky {
+            position: relative; width: 360px; height: 150px; overflow: hidden;
+            -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+        }
+        .sc-cloud {
+            position: absolute; left: 100%; border-radius: 50%; background: #fff; filter: blur(2px);
+            animation: sc-drift linear infinite;
+        }
+        .sc-cloud::before, .sc-cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+        .sc-cloud::before { width: 55%; height: 140%; left: 18%; bottom: 20%; }
+        .sc-cloud::after { width: 40%; height: 110%; left: 50%; bottom: 25%; }
+        .sc-cloud.c1 { top: 22px; width: 70px; height: 18px; opacity: 0.18; animation-duration: 7s; }
+        .sc-cloud.c2 { top: 96px; width: 100px; height: 24px; opacity: 0.12; animation-duration: 10s; animation-delay: -4s; }
+        .sc-cloud.c3 { top: 58px; width: 54px; height: 14px; opacity: 0.22; animation-duration: 5.5s; animation-delay: -2.5s; }
+        .sc-cloud.c4 { top: 120px; width: 64px; height: 16px; opacity: 0.15; animation-duration: 8s; animation-delay: -6s; }
+        .sc-craft { position: absolute; left: 50%; top: 50%; width: 0; height: 0; animation: sc-bob 2.6s ease-in-out infinite; }
+        .sc-plane { position: absolute; width: 58px; height: 58px; left: -29px; top: -29px; fill: #fff; transform: rotate(90deg);
+            filter: drop-shadow(0 0 6px rgba(119, 107, 231, 0.6)); }
+        .sc-trail {
+            position: absolute; right: 26px; top: -1px; width: 200px; height: 2px;
+            background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.55) 0 14px, transparent 14px 24px);
+            -webkit-mask-image: linear-gradient(90deg, transparent, #000);
+            mask-image: linear-gradient(90deg, transparent, #000);
+            animation: sc-trail 0.6s linear infinite;
+        }
+        .sc-title { margin-top: 12px; font-size: 28px; font-weight: 300; letter-spacing: 1px; color: #fff; }
+        .sc-msg { margin-top: 6px; font-size: 14px; min-height: 20px; transition: opacity 0.3s; }
+        .sc-bar { margin-top: 18px; width: 220px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+        .sc-bar span { display: block; width: 35%; height: 100%; border-radius: 2px; background: #776be7; animation: sc-progress 1.4s ease-in-out infinite; }
+        @keyframes sc-drift { from { transform: translateX(0); } to { transform: translateX(-520px); } }
+        @keyframes sc-bob { 0%, 100% { transform: translateY(-5px) rotate(-2deg); } 50% { transform: translateY(5px) rotate(2deg); } }
+        @keyframes sc-trail { from { background-position: 0 0; } to { background-position: -24px 0; } }
+        @keyframes sc-progress { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+        @media (prefers-reduced-motion: reduce) {
+            .sc-cloud, .sc-craft, .sc-trail, .sc-bar span { animation: none; }
+            .sc-cloud { left: 60%; }
+        }
+    </style>
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <!-- Leaflet from CDN (the map needs internet for its tiles anyway). Loaded without blocking the first paint. -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" rel="stylesheet" media="print" onload="this.media='all'" />
+    <link href="css/app.css" rel="stylesheet" />
+</head>
+<body>
+    <!-- Blazor replaces the content of #app with the app on its first render. -->
+    <div id="app">
+        <div class="sc-loader" role="status" aria-live="polite">
+            <div class="sc-sky" aria-hidden="true">
+                <div class="sc-cloud c1"></div>
+                <div class="sc-cloud c2"></div>
+                <div class="sc-cloud c3"></div>
+                <div class="sc-cloud c4"></div>
+                <div class="sc-craft">
+                    <div class="sc-trail"></div>
+                    <!-- Material Icons "flight" (Apache License 2.0), rotated to fly to the right. -->
+                    <svg class="sc-plane" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" /></svg>
+                </div>
+            </div>
+            <div class="sc-title">SkyCareer</div>
+            <div class="sc-msg" id="sc-msg">Vorflugkontrolle läuft …</div>
+            <div class="sc-bar"><span></span></div>
+        </div>
+    </div>
+    <div id="blazor-error-ui">
+        Ein unerwarteter Fehler ist aufgetreten. <a href="" class="reload">Neu laden</a> <a class="dismiss">🗙</a>
+    </div>
+    <script>
+        // Cycle cockpit-style status lines until Blazor replaces the loading screen.
+        (() => {
+            const lines = ["Vorflugkontrolle läuft …", "Checkliste wird abgearbeitet …", "Triebwerke werden angelassen …",
+                "Rollfreigabe wird eingeholt …", "Flugplan wird geladen …"];
+            let i = 0;
+            const timer = setInterval(() => {
+                const el = document.getElementById("sc-msg");
+                if (!el) { clearInterval(timer); return; }
+                el.style.opacity = 0;
+                setTimeout(() => { el.textContent = lines[++i % lines.length]; el.style.opacity = 1; }, 300);
+            }, 1600);
+        })();
+    </script>
+    <script src="_framework/blazor.webview.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
+    <script src="js/missionMap.js" defer></script>
+</body>
+</html>

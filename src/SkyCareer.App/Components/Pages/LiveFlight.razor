@@ -1,0 +1,141 @@
+@page "/live"
+@implements IDisposable
+@inject FlightMonitorService Monitor
+@inject DepartureCoordinator Departure
+
+<MudText Typo="Typo.h5" Class="mb-4">Live-Flug</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudText>Quelle: <b>@Monitor.SourceName</b> – @Monitor.Connection</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!Monitor.LiveAvailable)" OnClick="ConnectLive">
+            Mit MSFS verbinden
+        </MudButton>
+        <MudTextField @bind-Value="_replayPath" Label="Replay-Datei (.jsonl)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:320px" />
+        <MudButton Variant="Variant.Outlined" OnClick="StartReplay">Replay starten</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="() => Monitor.BeginFlight()">Test-Tracking starten</MudButton>
+    </MudStack>
+    @if (!Monitor.LiveAvailable)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2">
+            Dieser Build enthält keine SimConnect-Unterstützung. MSFS 2024 SDK installieren und neu bauen – bis dahin funktioniert der Replay-Modus.
+        </MudAlert>
+    }
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+    }
+</MudPaper>
+
+@if (Monitor.ContractId is { } jobId)
+{
+    var readiness = Departure.Automation.Readiness.GetValueOrDefault(jobId);
+    <MudPaper Class="pa-3 mb-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            @if (readiness is not null)
+            {
+                <span class="@MissionTexts.LightClass(readiness.Overall) sc-light-big"></span>
+                <MudText><b>Abflug-Check: @MissionTexts.LightText(readiness.Overall)</b></MudText>
+                <MudText Typo="Typo.body2" Class="ml-2">
+                    @string.Join(" · ", readiness.Items.Where(i => i.Light is SkyCareer.Missions.Departure.Light.Red or SkyCareer.Missions.Departure.Light.Yellow).Select(i => i.Label))
+                </MudText>
+            }
+            else
+            {
+                <MudText><b>Auftrag im Flug</b></MudText>
+            }
+            <MudSpacer />
+            <MudText>Phase: <b>@MissionTexts.Phase(Monitor.Phase)</b></MudText>
+        </MudStack>
+    </MudPaper>
+}
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6">Telemetrie</MudText>
+            @if (Monitor.Latest is { } t)
+            {
+                <MudSimpleTable Dense="true">
+                    <tbody>
+                        <tr><td>Flugzeug</td><td>@t.AircraftTitle</td></tr>
+                        <tr><td>Position</td><td class="mono">@t.Latitude.ToString("0.0000"), @t.Longitude.ToString("0.0000")</td></tr>
+                        <tr><td>Höhe / AGL</td><td>@t.AltitudeFt.ToString("N0") ft / @t.AltitudeAglFt.ToString("N0") ft</td></tr>
+                        <tr><td>GS / IAS</td><td>@t.GroundSpeedKt.ToString("N0") kt / @t.IndicatedAirspeedKt.ToString("N0") kt</td></tr>
+                        <tr><td>V/S</td><td>@t.VerticalSpeedFpm.ToString("N0") fpm</td></tr>
+                        <tr><td>Treibstoff</td><td>@t.FuelKg.ToString("N0") kg</td></tr>
+                        <tr><td>Payload</td><td>@t.PayloadKg.ToString("N0") kg</td></tr>
+                        <tr><td>Gesamtgewicht</td><td>@t.TotalWeightKg.ToString("N0") kg</td></tr>
+                        <tr><td>Am Boden / Parkbremse</td><td>@(t.OnGround ? "ja" : "nein") / @(t.ParkingBrake ? "gesetzt" : "gelöst")</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2">Noch keine Daten.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6">Flug</MudText>
+            @if (Monitor.Summarize() is { } sum)
+            {
+                <MudSimpleTable Dense="true">
+                    <tbody>
+                        <tr><td>Phase</td><td><b>@sum.FinalPhase</b></td></tr>
+                        <tr><td>Block-Off / Takeoff</td><td>@Time(sum.BlockOff) / @Time(sum.TakeoffTime)</td></tr>
+                        <tr><td>Landung / Block-On</td><td>@Time(sum.LandingTime) / @Time(sum.BlockOn)</td></tr>
+                        <tr><td>Distanz</td><td>@sum.DistanceFlownNm.ToString("N1") nm</td></tr>
+                        <tr><td>Verbrauch</td><td>@sum.FuelUsedKg.ToString("N0") kg</td></tr>
+                        <tr><td>G min / max</td><td>@sum.MinGForce.ToString("N2") / @sum.MaxGForce.ToString("N2")</td></tr>
+                        @if (sum.FinalTouchdown is { } td)
+                        {
+                            <tr><td>Aufsetzen</td><td>@td.VerticalSpeedFpm.ToString("N0") fpm, @td.GForce.ToString("N2") G, @td.Bounces Bounce(s)</td></tr>
+                        }
+                        <tr><td>Verstöße</td><td class="@(sum.Violations.Count == 0 ? "ok" : "bad")">@sum.Violations.Count</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2">Kein aktiver Flug. Ein angenommener Auftrag wird automatisch verfolgt, sobald das Flugzeug am Abflughafen steht; „Test-Tracking starten“ verfolgt einen Flug ohne Auftrag.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6">Ereignisse</MudText>
+            @foreach (var line in Monitor.EventLog.Take(50))
+            {
+                <div class="mono">@line</div>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string _replayPath = "";
+    private string? _error;
+
+    protected override void OnInitialized() => Monitor.Changed += OnChanged;
+
+    // Telemetry arrives ~4×/s from a background thread; marshal to the renderer.
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task ConnectLive() => await Run(Monitor.ConnectLiveAsync);
+
+    private async Task StartReplay() => await Run(() => Monitor.StartReplayAsync(_replayPath, speed: 10));
+
+    private async Task Run(Func<Task> action)
+    {
+        _error = null;
+        try { await action(); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string Time(DateTimeOffset? t) => t?.ToLocalTime().ToString("HH:mm:ss") ?? "–";
+
+    public void Dispose() => Monitor.Changed -= OnChanged;
+}

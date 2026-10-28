@@ -1,0 +1,167 @@
+@page "/settings"
+@using SkyCareer.Domain.Loading
+@inherits CareerPageBase
+@inject HttpClient Http
+@inject GsxCoordinator Gsx
+@inject UpdateService Updates
+
+<MudText Typo="Typo.h5" Class="mb-4">Einstellungen</MudText>
+
+@if (_career is { } c)
+{
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">Karriere</MudText>
+        <MudSimpleTable Dense="true">
+            <tbody>
+                <tr><td>Airline</td><td>@c.AirlineName</td></tr>
+                <tr><td>Pilot</td><td>@c.Name</td></tr>
+                <tr><td>Heimatbasis</td><td>@c.HomeBase</td></tr>
+                <tr><td>Schwierigkeit</td><td>@c.Difficulty</td></tr>
+                <tr><td>Angelegt</td><td>@c.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td></tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">Integrationen</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudTextField @bind-Value="_simBriefUser" Label="SimBrief-Benutzername oder Pilot-ID" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveSimBrief">Speichern</MudButton>
+        </MudStack>
+        <MudSwitch T="bool" Value="c.GsxSyncEnabled" ValueChanged="SetGsxSync" Color="Color.Primary" Class="mt-3"
+                   Label="Beladung mit GSX synchronisieren (wenn GSX Pro läuft)" />
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">Beladung</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudNumericField T="double" @bind-Value="_paxWeightLb" Label="Gewicht je Passagier (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Min="@(Math.Round(CareerService.MinPassengerWeightKg * LbPerKg))" Max="@(Math.Round(CareerService.MaxPassengerWeightKg * LbPerKg))"
+                             HelperText="@($"= {_paxWeightLb / LbPerKg:N1} kg")" Style="max-width:200px" />
+            <MudNumericField T="double" @bind-Value="_bagWeightLb" Label="Gewicht je Gepäckstück (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Min="0" Max="@(Math.Round(CareerService.MaxBagWeightKg * LbPerKg))"
+                             HelperText="@($"= {_bagWeightLb / LbPerKg:N1} kg")" Style="max-width:200px" />
+            <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveWeights">Speichern</MudButton>
+            <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="ResetWeights">SimBrief-Standard (175 / 50 lbs)</MudButton>
+        </MudStack>
+        <MudText Typo="Typo.body2" Class="mt-2">
+            Jeder Passagier (auch Kinder) zählt mit diesem Gewicht und hat ein Gepäckstück, außer bei Aufträgen nur mit Handgepäck – so rechnet auch SimBrief.
+            SimBrief übernimmt keine Gewichte aus dem Planungslink, sondern nimmt die Werte deines SimBrief-Flugzeugs: trag hier dieselben ein.
+            Gilt für neue Aufträge; bereits angebotene und angenommene Aufträge behalten ihre Gewichte.
+        </MudText>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">Updates</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Installierte Version: <b>@Updates.CurrentVersion</b> –
+            @(Updates.Status switch
+            {
+                UpdateStatus.Disabled => "Entwicklungsversion, Updates nur in der installierten App",
+                UpdateStatus.Checking => "suche nach Updates …",
+                UpdateStatus.Downloading => $"lade Version {Updates.AvailableVersion} ({Updates.Progress} %)",
+                UpdateStatus.Ready => $"Version {Updates.AvailableVersion} ist bereit und wird beim Neustart installiert",
+                UpdateStatus.Error => $"Update-Prüfung fehlgeschlagen: {Updates.Error}",
+                _ => Updates.LastCheckUtc is { } t ? $"aktuell (geprüft {t.ToLocalTime():HH:mm})" : "aktuell"
+            })
+        </MudText>
+        @if (Updates.Status == UpdateStatus.Downloading)
+        {
+            <MudProgressLinear Value="Updates.Progress" Class="mb-2" />
+        }
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" Disabled="@(Updates.Status is UpdateStatus.Disabled or UpdateStatus.Checking or UpdateStatus.Downloading or UpdateStatus.Ready)"
+                       OnClick="CheckUpdates">Nach Updates suchen</MudButton>
+            @if (Updates.Status == UpdateStatus.Ready)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!Updates.CanRestartNow)" OnClick="RestartForUpdate">Neu starten und installieren</MudButton>
+            }
+            @if (!string.IsNullOrEmpty(Updates.RepoUrl))
+            {
+                <MudButton Variant="Variant.Text" Href="@($"{Updates.RepoUrl}/releases")" Target="_blank">Alle Versionen</MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">Flughafendaten</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">@_airportCount.ToString("N0") Flughäfen aus OurAirports, Städte von GeoNames (CC BY 4.0). Aktualisieren lädt die aktuellen Daten (ca. 18 MB) neu.</MudText>
+        <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="ImportAirports">Flughafendaten aktualisieren</MudButton>
+        @if (_importing)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-2" />
+        }
+    </MudPaper>
+}
+
+@code {
+    private Career? _career;
+    private string? _simBriefUser;
+    private int _airportCount;
+    private bool _importing;
+    private double _paxWeightLb, _bagWeightLb;
+    private bool _weightsLoaded;
+    private const double LbPerKg = 2.20462;
+
+    protected override void OnInitialized() => Updates.Changed += OnUpdatesChanged;
+
+    private void OnUpdatesChanged() => InvokeAsync(StateHasChanged);
+
+    public override void Dispose()
+    {
+        Updates.Changed -= OnUpdatesChanged;
+        base.Dispose();
+    }
+
+    private Task CheckUpdates() => Updates.CheckAndDownloadAsync();
+
+    private Task RestartForUpdate() => Run(() =>
+    {
+        Updates.RestartAndApply();
+        return Task.CompletedTask;
+    });
+
+    protected override async Task LoadAsync()
+    {
+        _career = await Career.GetCareerAsync();
+        _simBriefUser ??= _career.SimBriefUser;
+        if (!_weightsLoaded)
+        {
+            _paxWeightLb = Math.Round(_career.PassengerWeightKg * LbPerKg, 1);
+            _bagWeightLb = Math.Round(_career.BagWeightKg * LbPerKg, 1);
+            _weightsLoaded = true;
+        }
+        _airportCount = await Career.AirportCountAsync();
+    }
+
+    private Task SaveSimBrief() => Run(() => Career.UpdateSimBriefUserAsync(_simBriefUser), "Gespeichert.");
+
+    private Task SaveWeights() => Run(() => Career.UpdateLoadWeightsAsync(_paxWeightLb / LbPerKg, _bagWeightLb / LbPerKg), "Gespeichert.");
+
+    private Task ResetWeights()
+    {
+        _paxWeightLb = 175;
+        _bagWeightLb = 50;
+        return Run(() => Career.UpdateLoadWeightsAsync(PassengerMassTable.SimBriefAdultKg, PassengerMassTable.SimBriefBagKg), "Gespeichert.");
+    }
+
+    private Task SetGsxSync(bool enabled) => Run(async () =>
+    {
+        await Career.UpdateGsxSyncAsync(enabled);
+        Gsx.SetSyncEnabled(enabled);
+    });
+
+    private Task ImportAirports() => Run(async () =>
+    {
+        _importing = true;
+        try
+        {
+            int n = await AirportDownloader.DownloadAndImportAsync(Http, Career);
+            Snackbar.Add($"{n:N0} Flughäfen importiert.", Severity.Success);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    });
+}

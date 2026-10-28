@@ -1,0 +1,53 @@
+html, body { margin: 0; height: 100%; font-family: Roboto, "Segoe UI", sans-serif; }
+
+#blazor-error-ui {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 0.6rem 1.25rem;
+    background: #ffd54f; color: #000;
+    z-index: 2000;
+}
+#blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 0.75rem; }
+
+.mono { font-family: Consolas, monospace; }
+.ok { color: var(--mud-palette-success); }
+.bad { color: var(--mud-palette-error); }
+
+/* Sortable table headers on the market page */
+th.sc-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sc-sortable:hover { color: var(--mud-palette-primary); }
+th.sc-sorted { color: var(--mud-palette-primary); }
+
+/* Mission map: job count on destination pins and the destination popup (dark, like the app) */
+.leaflet-tooltip.sc-pin-count {
+    background: transparent; border: none; box-shadow: none; padding: 0;
+    color: #111; font-weight: 700; font-size: 11px;
+}
+.leaflet-tooltip.sc-pin-count::before { display: none; }
+.sc-popup .leaflet-popup-content-wrapper, .sc-popup .leaflet-popup-tip { background: #2b2c36; color: rgba(255, 255, 255, 0.85); }
+.sc-popup .leaflet-popup-content { margin: 10px 12px; font-family: Roboto, "Segoe UI", sans-serif; }
+.sc-popup a.leaflet-popup-close-button { color: rgba(255, 255, 255, 0.6); }
+.sc-pop-head { font-weight: 600; font-size: 14px; color: #fff; }
+.sc-pop-sub { font-size: 11px; opacity: 0.7; margin-bottom: 6px; }
+.sc-pop-list { max-height: 280px; overflow-y: auto; }
+.sc-pop-item { border-top: 1px solid rgba(255, 255, 255, 0.1); padding: 6px 0; }
+.sc-pop-selected { background: rgba(119, 107, 231, 0.15); }
+.sc-pop-title { font-weight: 500; display: flex; gap: 6px; }
+.sc-pop-pay { margin-left: auto; font-weight: 600; color: #fff; }
+.sc-pop-line { font-size: 12px; opacity: 0.8; }
+.sc-pop-actions { margin-top: 4px; display: flex; gap: 6px; align-items: center; }
+.sc-pop-btn {
+    font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    background: transparent; color: rgba(255, 255, 255, 0.85); border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.sc-pop-btn:hover { border-color: #fff; }
+.sc-pop-primary { background: #776be7; border-color: #776be7; color: #fff; }
+
+/* Departure traffic light */
+.sc-light { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; flex-shrink: 0; }
+.sc-light-big { width: 18px; height: 18px; }
+.sc-light-green { background: #3fb950; box-shadow: 0 0 6px #3fb95099; }
+.sc-light-yellow { background: #d29922; box-shadow: 0 0 6px #d2992299; }
+.sc-light-red { background: var(--mud-palette-error); box-shadow: 0 0 6px var(--mud-palette-error); }
+.sc-light-unknown { background: #6e7681; }
+.sc-checks td { padding: 2px 12px 2px 0; vertical-align: top; }

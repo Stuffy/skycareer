@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkyCareer.Domain\SkyCareer.Domain.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    SimConnect comes from the MSFS 2024 SDK, which may not be installed on every dev machine (or CI).
+    Set SimConnectSdkDir (or the MSFS2024_SDK environment variable from the SDK installer) to enable the real
+    SimConnect source; without it the project still builds and the app falls back to replay mode.
+  -->
+  <PropertyGroup>
+    <SimConnectSdkDir Condition="'$(SimConnectSdkDir)' == '' and '$(MSFS2024_SDK)' != ''">$([MSBuild]::EnsureTrailingSlash('$(MSFS2024_SDK)'))SimConnect SDK</SimConnectSdkDir>
+    <!-- Shells opened before the SDK install don't see the variable yet; fall back to the installer's default path. -->
+    <SimConnectSdkDir Condition="'$(SimConnectSdkDir)' == '' and Exists('C:\MSFS 2024 SDK\SimConnect SDK')">C:\MSFS 2024 SDK\SimConnect SDK</SimConnectSdkDir>
+    <SimConnectManagedDll>$(SimConnectSdkDir)\lib\managed\Microsoft.FlightSimulator.SimConnect.dll</SimConnectManagedDll>
+    <HasSimConnect Condition="'$(SimConnectSdkDir)' != '' and Exists('$(SimConnectManagedDll)')">true</HasSimConnect>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(HasSimConnect)' == 'true'">
+    <DefineConstants>$(DefineConstants);HAS_SIMCONNECT</DefineConstants>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(HasSimConnect)' == 'true'">
+    <Reference Include="Microsoft.FlightSimulator.SimConnect">
+      <HintPath>$(SimConnectManagedDll)</HintPath>
+    </Reference>
+    <None Include="$(SimConnectSdkDir)\lib\SimConnect.dll" Link="SimConnect.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

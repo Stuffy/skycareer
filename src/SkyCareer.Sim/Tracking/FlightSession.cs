@@ -15,7 +15,8 @@ public sealed record FlightSummary(
     TouchdownReport? FinalTouchdown,
     IReadOnlyList<IntegrityViolation> Violations,
     double FinalLatitude,
-    double FinalLongitude)
+    double FinalLongitude,
+    bool Resumed = false)
 {
     public TimeSpan? BlockTime => BlockOn - BlockOff;
     public TimeSpan? AirTime => LandingTime - TakeoffTime;
@@ -48,6 +49,20 @@ public sealed class FlightSession
     public IntegrityMonitor Integrity { get; }
     public IReadOnlyList<Telemetry> Samples => _samples;
     public bool IsFinished => Phases.Phase is FlightPhase.Arrived or FlightPhase.Crashed;
+
+    /// <summary>Picks up a flight in progress without its earlier samples (see <see cref="FlightPhaseTracker.Resume"/>).</summary>
+    public void Resume(Telemetry current, DateTimeOffset startedAt)
+    {
+        Phases.Resume(current, startedAt);
+        Resumed = true;
+        if (Phases.Phase != FlightPhase.Arrived) Integrity.LockPayload(current.PayloadKg);
+        _first ??= current;
+        _samples.Add(current);
+        _last = current;
+    }
+
+    /// <summary>True when the flight was picked up without its full history; the result notes the gap.</summary>
+    public bool Resumed { get; private set; }
 
     public void Process(Telemetry t)
     {
@@ -86,5 +101,6 @@ public sealed class FlightSession
         Phases.Touchdowns.Count > 0 ? Phases.Touchdowns[^1] : null,
         Integrity.Violations,
         _last?.Latitude ?? 0,
-        _last?.Longitude ?? 0);
+        _last?.Longitude ?? 0,
+        Resumed);
 }

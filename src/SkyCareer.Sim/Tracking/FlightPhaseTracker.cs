@@ -60,6 +60,29 @@ public sealed class FlightPhaseTracker
     public event EventHandler<PhaseChange>? PhaseChanged;
     public event EventHandler<TouchdownReport>? TouchedDown;
 
+    /// <summary>
+    /// Continues a flight whose earlier samples are lost (app restarted without a journal): airborne → Cruise, on the
+    /// ground → TaxiIn, or Arrived when already parked. Times before the restart are taken from <paramref name="startedAt"/>.
+    /// </summary>
+    public void Resume(Telemetry current, DateTimeOffset startedAt)
+    {
+        BlockOff ??= startedAt;
+        TakeoffTime ??= startedAt;
+        if (current.OnGround)
+        {
+            LandingTime ??= current.Timestamp;
+            bool parked = !current.AnyEngineRunning && current.ParkingBrake && current.GroundSpeedKt < _opt.TaxiSpeedKt;
+            if (parked) BlockOn ??= current.Timestamp;
+            Phase = parked ? FlightPhase.Arrived : FlightPhase.TaxiIn;
+        }
+        else
+        {
+            Phase = FlightPhase.Cruise;
+        }
+        _since.Clear();
+        _last = current;
+    }
+
     public void Process(Telemetry t)
     {
         if (Phase is FlightPhase.Crashed or FlightPhase.Arrived)

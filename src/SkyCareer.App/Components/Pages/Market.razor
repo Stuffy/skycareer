@@ -203,7 +203,7 @@
             {
                 @if (!tracking)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => Monitor.BeginFlight(c.Id)">Tracking neu starten</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ResumeTracking(c)">Tracking neu starten</MudButton>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || !tracking)" OnClick="() => Complete(c)"
                            title="Für Abbruch oder Ausweichlandung; nach dem Parken am Ziel wird automatisch abgerechnet.">Flug vorzeitig abrechnen</MudButton>
@@ -600,6 +600,14 @@
             await Career.CancelAsync(c.Id);
             if (Monitor.ContractId == c.Id) Monitor.EndFlight();
         }, "Auftrag storniert.");
+    }
+
+    // Normally automatic after a restart; continues from the flight journal when there is one.
+    private void ResumeTracking(MissionContract c)
+    {
+        var startedAt = c.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : DateTimeOffset.UtcNow;
+        if (!Monitor.ResumeFlight(c.Id, startedAt))
+            Snackbar.Add("Keine Flugdaten: erst mit MSFS verbinden.", Severity.Warning);
     }
 
     private void OpenSimBrief(MissionContract c, AircraftProfile p)

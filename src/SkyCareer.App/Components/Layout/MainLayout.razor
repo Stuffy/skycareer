@@ -52,13 +52,45 @@ else
         <MudMainContent>
             <div class="pa-4">
                 <UpdateBanner />
-                @Body
+                <ErrorBoundary @ref="_errorBoundary">
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent Context="ex">
+                        @{ LogPageError(ex); }
+                        <MudAlert Severity="Severity.Error" Class="mb-3">
+                            <MudText><b>Hier ist ein Fehler aufgetreten:</b> @ex.Message</MudText>
+                            <MudText Typo="Typo.body2" Class="mt-1">Details stehen im Fehlerprotokoll. Über „Einstellungen → Erweitert → Diagnose kopieren“ kannst du den Fehler melden.</MudText>
+                            <MudStack Row="true" Spacing="2" Class="mt-2">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="RecoverFromError">Weiter</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Diagnostics.OpenLogFolder">Log-Ordner öffnen</MudButton>
+                            </MudStack>
+                        </MudAlert>
+                    </ErrorContent>
+                </ErrorBoundary>
             </div>
         </MudMainContent>
     </MudLayout>
 }
 
 @code {
+    private ErrorBoundary? _errorBoundary;
+    private Exception? _loggedError;
+
+    // ErrorContent renders repeatedly; log each exception once.
+    private void LogPageError(Exception ex)
+    {
+        if (ReferenceEquals(ex, _loggedError)) return;
+        _loggedError = ex;
+        AppLog.Error("UI", $"Fehler auf Seite {Nav.Uri}", ex);
+    }
+
+    private void RecoverFromError()
+    {
+        _errorBoundary?.Recover();
+        Nav.NavigateTo("");
+    }
+
     protected override void OnInitialized()
     {
         Career.Changed += OnCareerChanged;

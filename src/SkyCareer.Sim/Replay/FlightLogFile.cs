@@ -12,6 +12,26 @@ public static class FlightLogFile
         await writer.WriteLineAsync(JsonSerializer.Serialize(t, Json));
     }
 
+    public static void Append(StreamWriter writer, Telemetry t) => writer.WriteLine(JsonSerializer.Serialize(t, Json));
+
+    /// <summary>Reads all samples; a torn last line (crash while writing) is skipped instead of failing.</summary>
+    public static List<Telemetry> ReadAll(string path)
+    {
+        var samples = new List<Telemetry>();
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            try
+            {
+                if (JsonSerializer.Deserialize<Telemetry>(line, Json) is { } t) samples.Add(t);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+        return samples;
+    }
+
     public static async IAsyncEnumerable<Telemetry> ReadAsync(string path)
     {
         using var reader = new StreamReader(path);

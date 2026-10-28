@@ -1,3 +1,4 @@
+using SkyCareer.Application.Logging;
 using SkyCareer.Domain.Loading;
 using SkyCareer.Integrations.Gsx;
 using SkyCareer.Sim;
@@ -80,6 +81,7 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
             }
             catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
             {
+                if (ex.Message != LastError) AppLog.Warn("GSX", ex.Message, ex);
                 LastError = ex.Message;
             }
             Changed?.Invoke();

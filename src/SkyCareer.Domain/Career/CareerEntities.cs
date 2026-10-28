@@ -102,8 +102,14 @@ public sealed class MissionContract
     public double? OfpBlockFuelKg { get; set; }
     public double? OfpTripFuelKg { get; set; }
     public string? OfpRoute { get; set; }
+    /// <summary>Real time (UTC) of the liftoff that started the job; used to resume tracking after an app restart.</summary>
+    public DateTime? FlightStartedAtUtc { get; set; }
+    /// <summary>Departure checks that were red at liftoff, one per line; each costs part of the payout at settlement.</summary>
+    public string? DepartureIssues { get; set; }
 
     public int TotalPassengers => Adults + Children + Infants;
+    public IReadOnlyList<string> DepartureIssueList =>
+        string.IsNullOrEmpty(DepartureIssues) ? [] : DepartureIssues.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 }
 
 public sealed class FlightRecord

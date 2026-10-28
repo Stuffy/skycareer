@@ -147,7 +147,8 @@
         ("Datenbank", Path.GetDirectoryName(SkyCareerDb.DefaultPath)!),
         ("Eigene Inhalte", ContentStore.DefaultUserRoot),
         ("Flugpläne", PlnExporter.DefaultDirectory),
-        ("Flug-Logs", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SkyCareer", "tracks"))
+        ("Flug-Aufzeichnungen", FlightMonitorService.TracksDirectory),
+        ("Fehlerprotokoll", App.LogDirectory)
     ];
 
     protected override async Task LoadAsync()

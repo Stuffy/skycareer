@@ -517,7 +517,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         Changed?.Invoke();
     }
 
-    public async Task StartFlightAsync(Guid contractId)
+    /// <summary>Marks the job as flying (at liftoff) and stores the red departure checks for the settlement.</summary>
+    public async Task StartFlightAsync(Guid contractId, IReadOnlyList<string>? departureIssues = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
@@ -527,6 +528,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         if (aircraft.Location != c.Origin) throw new CareerException($"{aircraft.Registration} steht in {aircraft.Location}, nicht in {c.Origin}.");
         if (!aircraft.IsAvailable(career.GameTime)) throw new CareerException($"{aircraft.Registration} ist bis {aircraft.UnavailableUntil:g} nicht verfügbar ({aircraft.UnavailableReason ?? "Wartung"}).");
         c.Status = ContractStatus.InProgress;
+        c.FlightStartedAtUtc = DateTime.UtcNow;
+        c.DepartureIssues = departureIssues is { Count: > 0 } ? string.Join('\n', departureIssues) : null;
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }

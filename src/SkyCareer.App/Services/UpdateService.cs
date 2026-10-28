@@ -1,3 +1,4 @@
+using SkyCareer.Application.Logging;
 using System.Reflection;
 using SkyCareer.Sim.Tracking;
 using Velopack;
@@ -43,6 +44,7 @@ public sealed class UpdateService : IDisposable
         {
             // A broken install must not keep the app from starting.
             Error = ex.Message;
+            AppLog.Warn("Updates", "Updater nicht verfügbar", ex);
         }
     }
 
@@ -105,6 +107,7 @@ public sealed class UpdateService : IDisposable
                 Changed?.Invoke();
             }, _stop.Token).ConfigureAwait(false);
             _pending = info;
+            AppLog.Info("Updates", $"Version {AvailableVersion} geladen");
             Set(UpdateStatus.Ready);
         }
         catch (OperationCanceledException)
@@ -113,6 +116,7 @@ public sealed class UpdateService : IDisposable
         catch (Exception ex)
         {
             Error = ex.Message;
+            AppLog.Warn("Updates", "Update-Prüfung fehlgeschlagen", ex);
             Set(UpdateStatus.Error);
         }
         finally

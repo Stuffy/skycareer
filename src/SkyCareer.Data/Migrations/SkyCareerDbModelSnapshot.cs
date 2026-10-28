@@ -393,6 +393,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<DateTime>("Deadline")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DepartureIssues")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Destination")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -401,6 +404,9 @@ namespace SkyCareer.Data.Migrations
                         .HasColumnType("REAL");
 
                     b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FlightStartedAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Infants")

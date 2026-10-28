@@ -407,6 +407,57 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Contains(s.Notes, n => n.Contains("Zuladung"));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Flight_is_resumed_after_an_app_restart_mid_flight(bool withJournal)
+    {
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        var dest = (await _svc.FindAirportAsync(job.Destination))!;
+
+        // Taxi with far too much payload (red at liftoff → penalty), take off and cruise half way.
+        var taxi = Segment(parked with { AnyEngineRunning = true, PayloadKg = parked.PayloadKg + 400, TotalWeightKg = parked.TotalWeightKg + 400 },
+            30, t => t with { ParkingBrake = false, GroundSpeedKt = 12 }).ToList();
+        foreach (var t in taxi) host.Feed(t);
+        await automation.TickAsync();
+        var roll = Segment(taxi[^1], 10, t => t with { GroundSpeedKt = 70 }).ToList();
+        var climb = Segment(roll[^1], 10, t => t with { OnGround = false, GroundSpeedKt = 100, VerticalSpeedFpm = 800, AltitudeAglFt = 500 }).ToList();
+        foreach (var t in roll.Concat(climb)) host.Feed(t);
+        await automation.TickAsync();
+        Assert.Equal(ContractStatus.InProgress, (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single().Status);
+        var takeoff = host.Summarize()!.TakeoffTime;
+
+        double nm = climb[^1].Position.DistanceNmTo(dest.Position);
+        int seconds = (int)Math.Ceiling(nm / 300.0 * 3600);
+        var cruise = Segment(climb[^1], seconds, t => t with { GroundSpeedKt = 300, VerticalSpeedFpm = 0, AltitudeAglFt = 5000 }, dest.Position).ToList();
+        int half = cruise.Count / 2;
+        foreach (var t in cruise.Take(half)) host.Feed(t);
+
+        // "Restart": new host and automation; the journal survives only in the first case.
+        var restarted = new FakeHost { Journal = withJournal ? [.. host.Journal] : [] };
+        var automation2 = new FlightAutomation(_svc, restarted);
+        restarted.Feed(cruise[half]);
+        await automation2.TickAsync();
+        Assert.Equal(job.Id, restarted.ContractId);
+        Assert.Contains(restarted.Log, l => l.Contains("nach Neustart fortgesetzt"));
+
+        var landing = Segment(cruise[^1], 1, t => t with { OnGround = true, AltitudeAglFt = 0, VerticalSpeedFpm = 0, TouchdownVsFpm = -150, GForce = 1.2, GroundSpeedKt = 60 })
+            .Concat(Segment(cruise[^1] with { OnGround = true, AltitudeAglFt = 0 }, 20, t => t with { GForce = 1, GroundSpeedKt = 10, TouchdownVsFpm = 0 }))
+            .ToList();
+        var park = Segment(landing[^1], 10, t => t with { GroundSpeedKt = 0, ParkingBrake = true, AnyEngineRunning = false }).ToList();
+        foreach (var t in cruise.Skip(half + 1).Concat(landing).Concat(park)) restarted.Feed(t);
+        if (withJournal) Assert.Equal(takeoff, restarted.Summarize()!.TakeoffTime);
+        Assert.Empty(restarted.Summarize()!.Violations);
+        await automation2.TickAsync();
+
+        var s = automation2.LastSettlement;
+        Assert.NotNull(s);
+        Assert.Contains(s!.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
+        // Departure issues come from the job, not from the (new) host.
+        Assert.Contains(s.Lines, l => l.Category == LedgerCategory.Penalty && l.Description.Contains("Zuladung"));
+        Assert.Equal(!withJournal, s.Notes.Any(n => n.Contains("Tracking war unterbrochen")));
+    }
+
     /// <summary>Stands in for the app's flight monitor: feeds telemetry into a real <see cref="FlightSession"/>.</summary>
     private sealed class FakeHost : IFlightSessionHost
     {
@@ -418,16 +469,31 @@ public sealed class CareerServiceTests : IAsyncLifetime
         public bool HasSession => _session is not null;
         public IReadOnlyList<string> DepartureIssues { get; set; } = [];
         public List<string> Log { get; } = [];
-        public void BeginFlight(Guid? contractId = null) { _session = new FlightSession(); ContractId = contractId; }
-        public void EndFlight() { _session = null; ContractId = null; }
+        /// <summary>Stands in for the on-disk flight journal; survives a simulated app restart when passed to a new host.</summary>
+        public List<Telemetry> Journal { get; init; } = [];
+        public void BeginFlight(Guid? contractId = null) { _session = new FlightSession(); ContractId = contractId; Journal.Clear(); }
+        public void EndFlight() { _session = null; ContractId = null; Journal.Clear(); }
         public FlightSummary? Summarize() => _session?.Summarize();
         public Task<string?> SaveTrackAsync(string name) => Task.FromResult<string?>(null);
         void IFlightSessionHost.Log(string message) => Log.Add(message);
 
+        public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt)
+        {
+            if (Journal.Count == 0 && Latest is null) return false;
+            var session = new FlightSession();
+            foreach (var t in Journal) session.Process(t);
+            if (Journal.Count == 0) session.Resume(Latest!, startedAt);
+            _session = session;
+            ContractId = contractId;
+            return true;
+        }
+
         public void Feed(Telemetry t)
         {
             Latest = t;
-            _session?.Process(t);
+            if (_session is null) return;
+            _session.Process(t);
+            if (ContractId is not null) Journal.Add(t);
         }
     }
 

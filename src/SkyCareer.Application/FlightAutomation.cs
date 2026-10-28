@@ -1,3 +1,4 @@
+using SkyCareer.Application.Logging;
 using SkyCareer.Domain.Career;
 using SkyCareer.Domain.World;
 using SkyCareer.Missions.Departure;
@@ -18,6 +19,8 @@ public interface IFlightSessionHost
     /// <summary>Red departure checks recorded at liftoff; cleared when a new flight begins.</summary>
     IReadOnlyList<string> DepartureIssues { get; set; }
     void BeginFlight(Guid? contractId = null);
+    /// <summary>Continues tracking a job that is already flying (journal replay, or picked up from the current state).</summary>
+    bool ResumeFlight(Guid contractId, DateTimeOffset startedAt);
     void EndFlight();
     FlightSummary? Summarize();
     Task<string?> SaveTrackAsync(string name);
@@ -93,12 +96,14 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
                 _groundReadiness = ground;
 
             if (host.HasSession && host.ContractId is { } current) await FollowAsync(current, t);
-            else if (!host.HasSession && t is { OnGround: true }) TryArm(t);
+            else if (!host.HasSession && t is not null && !TryResume(t) && t.OnGround) TryArm(t);
 
             LastError = null;
         }
         catch (Exception ex) when (ex is CareerException or InvalidOperationException or IOException)
         {
+            // Ticks run every second; log a lasting problem once.
+            if (ex.Message != LastError) AppLog.Warn("Flugautomatik", ex.Message, ex is CareerException ? null : ex);
             LastError = ex.Message;
         }
         Changed?.Invoke();
@@ -156,7 +161,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
 
         _notStarted.Remove(job.Id);
         host.DepartureIssues = check!.Penalised.Select(i => $"{i.Label} ({i.Detail})").ToList();
-        await career.StartFlightAsync(job.Id);
+        await career.StartFlightAsync(job.Id, host.DepartureIssues);
         host.Log(host.DepartureIssues.Count == 0
             ? $"Auftrag {job.Origin} → {job.Destination} gestartet"
             : $"Auftrag gestartet mit {host.DepartureIssues.Count} Abweichung(en): {string.Join("; ", host.DepartureIssues)}");
@@ -167,11 +172,27 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     {
         var summary = host.Summarize() ?? throw new CareerException("Keine Flugdaten vorhanden.");
         var track = await host.SaveTrackAsync($"{job.Origin}-{job.Destination}-{job.Id:N}");
-        LastSettlement = await career.CompleteFlightAsync(job.Id, FlightResultMapper.Map(summary, host.DepartureIssues), track);
+        // Stored with the job at liftoff, so they survive an app restart mid-flight.
+        var issues = job.DepartureIssueList.Count > 0 ? job.DepartureIssueList : host.DepartureIssues;
+        LastSettlement = await career.CompleteFlightAsync(job.Id, FlightResultMapper.Map(summary, issues), track);
         LastSettledContract = job;
         host.Log($"Flug {job.Origin} → {job.Destination} automatisch abgerechnet: {LastSettlement.Outcome}");
         host.EndFlight();
         _dirty = true;
+    }
+
+    /// <summary>After an app restart: picks up a job that is still flying (preferring the one whose aircraft is loaded).</summary>
+    private bool TryResume(Telemetry t)
+    {
+        var job = _jobs
+            .Where(j => j.Status == ContractStatus.InProgress && _fleet.ContainsKey(j.AircraftId))
+            .OrderByDescending(j => career.Profile(_fleet[j.AircraftId].ProfileId).MatchesSimTitle(t.AircraftTitle))
+            .FirstOrDefault();
+        if (job is null) return false;
+        var startedAt = job.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : t.Timestamp;
+        if (!host.ResumeFlight(job.Id, startedAt)) return false;
+        host.Log($"Flug {job.Origin} → {job.Destination} nach Neustart fortgesetzt");
+        return true;
     }
 
     private void TryArm(Telemetry t)

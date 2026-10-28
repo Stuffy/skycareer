@@ -50,6 +50,13 @@ lädt das Release hoch. `-PackOnly` baut nur den Installer lokal unter `releases
 
 `SimConnect.dll` stammt aus dem MSFS SDK und wird nur im Release mitgeliefert, nicht im Repository.
 
+### Fehler melden & Absturzschutz
+
+Die App schreibt ein Fehlerprotokoll (`%LOCALAPPDATA%\SkyCareer\logs`, 14 Tage). Unter **Einstellungen → Erweitert →
+„Diagnose kopieren“** landen Version, Simulator-Status und die letzten Protokollzeilen in der Zwischenablage – bitte jeder
+Fehlermeldung beilegen. Ein laufender Auftrag wird während des Flugs mitgeschrieben (`tracksctive-*.jsonl`); stürzt die
+App ab oder wird sie geschlossen, setzt sie den Flug beim nächsten Start (Sim verbunden) automatisch fort.
+
 ## Eigene Flugzeugprofile
 
 Seite „Flugzeugprofile“: Ist im Sim ein unbekanntes Flugzeug geladen, legt „Aus aktuellem Sim-Flugzeug“ ein Profil an –
@@ -90,3 +97,13 @@ Seite „Beladungs-Spike“ in der App: Flugzeug am Boden laden, mit MSFS verbin
 | `content/` | Flugzeugprofile und Missionstypen – neue Inhalte = neue JSON-Datei |
 
 Die Werte in `content/aircraft/*.json` (Gewichte, Payload-Stationen) sind Näherungen und müssen im Simulator geprüft werden.
+
+## Lizenz & Drittanbieter
+
+Der Code steht unter der [MIT-Lizenz](LICENSE). Nicht davon erfasst sind:
+
+- `SimConnect.dll` – Microsoft, Teil des MSFS 2024 SDK, nur im Release enthalten
+- Flughafendaten von [OurAirports](https://ourairports.com/data/) (Public Domain)
+- Städtedaten von [GeoNames](https://www.geonames.org/) (CC BY 4.0)
+- Karten mit [Leaflet](https://leafletjs.com/) und © OpenStreetMap-Mitwirkende
+

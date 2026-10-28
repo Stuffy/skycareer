@@ -3,11 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using SkyCareer.App.Services;
+using Microsoft.Extensions.Logging;
 using SkyCareer.Application;
+using SkyCareer.Application.Logging;
 using SkyCareer.Data;
 using SkyCareer.Integrations.SimBrief;
 using SkyCareer.Missions;
 using SkyCareer.Missions.Generation;
+using SkyCareer.Sim;
 
 namespace SkyCareer.App;
 
@@ -15,15 +18,39 @@ public partial class App : System.Windows.Application
 {
     private ServiceProvider? _services;
 
+    /// <summary>Daily log files next to the database (so SKYCAREER_DB test setups log separately).</summary>
+    public static string LogDirectory => Path.Combine(Path.GetDirectoryName(SkyCareerDb.DefaultPath)!, "logs");
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        var log = new FileLogger(LogDirectory);
+        AppLog.Initialize(log);
+        AppLog.Info("App", $"SkyCareer {typeof(App).Assembly.GetName().Version?.ToString(3)} gestartet – {Environment.OSVersion}, " +
+                           $"DB {SkyCareerDb.DefaultPath}, SimConnect {(FlightDataSourceFactory.SimConnectAvailable ? "ja" : "nein")}");
+        DispatcherUnhandledException += (_, args) =>
+        {
+            AppLog.Error("App", "Unbehandelter Fehler (UI)", args.Exception);
+            MessageBox.Show($"Es ist ein unerwarteter Fehler aufgetreten:\n\n{args.Exception.Message}\n\nDetails stehen im Fehlerprotokoll " +
+                            $"({LogDirectory}). Die App läuft weiter.", "SkyCareer", MessageBoxButton.OK, MessageBoxImage.Warning);
+            args.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            AppLog.Error("App", $"Unbehandelter Fehler (beendet: {args.IsTerminating})", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            AppLog.Error("App", "Unbeobachteter Fehler in Hintergrundaufgabe", args.Exception);
+            args.SetObserved();
+        };
 
         // WebView2 paints white until the page loads; this makes it start in the app's dark background
         // (ARGB hex, read when the WebView2 environment is created, so it must be set before the window).
         Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF32333D");
 
         var services = new ServiceCollection();
+        // Framework chatter (e.g. every SQL command of EF Core) stays out; warnings and component errors are kept.
+        services.AddLogging(b => b.AddProvider(log).SetMinimumLevel(LogLevel.Information).AddFilter("Microsoft", LogLevel.Warning));
         services.AddWpfBlazorWebView();
 #if DEBUG
         services.AddBlazorWebViewDeveloperTools();
@@ -40,6 +67,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<DepartureCoordinator>();
         services.AddSingleton<UpdateService>();
         services.AddSingleton<AppSettings>();
+        services.AddSingleton<Diagnostics>();
         services.AddSingleton<IAirportIlsLookup, SimIlsLookup>();
         services.AddSingleton<MarketFilter>();
         services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(60) });

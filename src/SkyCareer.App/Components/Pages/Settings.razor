@@ -5,6 +5,7 @@
 @inject GsxCoordinator Gsx
 @inject UpdateService Updates
 @inject AppSettings AppSettings
+@inject Diagnostics Diag
 
 <MudText Typo="Typo.h5" Class="mb-4">Einstellungen</MudText>
 
@@ -92,6 +93,15 @@
             Zeigt das Menü „Debug“ mit Entwickler- und Cheat-Werkzeugen (Kontostand, Reputation, Flotte, Aufträge) sowie Replay und
             kostenloses Versetzen. Änderungen am Kontostand werden im Kassenbuch als Korrektur vermerkt.
         </MudText>
+        <MudText Typo="Typo.subtitle2" Class="mt-4">Fehler melden</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Die App schreibt ein Fehlerprotokoll. „Diagnose kopieren“ legt Version, Simulator-Status und die letzten Protokollzeilen
+            in die Zwischenablage – einfach in die Fehlermeldung einfügen.
+        </MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" Disabled="Busy" OnClick="CopyDiagnostics">Diagnose kopieren</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="Diagnostics.OpenLogFolder">Log-Ordner öffnen</MudButton>
+        </MudStack>
     </MudPaper>
 
     <MudPaper Class="pa-4" Style="max-width:720px">
@@ -125,6 +135,8 @@
     }
 
     private Task CheckUpdates() => Updates.CheckAndDownloadAsync();
+
+    private Task CopyDiagnostics() => Run(Diag.CopyReportAsync, "Diagnose in die Zwischenablage kopiert.");
 
     private Task RestartForUpdate() => Run(() =>
     {

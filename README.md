@@ -1,109 +1,191 @@
 # SkyCareer
 
-Karriere-Addon für Microsoft Flight Simulator 2024 als eigenständige Windows-App (.NET 10, WPF + Blazor Hybrid, MudBlazor).
+**Karrieremodus für Microsoft Flight Simulator 2024** – eine eigenständige Windows-Anwendung, die jeden Flug in eine
+wirtschaftliche Karriere einbettet: Aufträge annehmen, Flotte aufbauen, Kosten im Griff behalten und Reputation sammeln.
 
-## Bauen & Testen
+> **Status:** frühe Testversion (0.x). Rückmeldungen und Fehlerberichte sind ausdrücklich willkommen.
 
-```
-dotnet build SkyCareer.sln
-dotnet test SkyCareer.sln
-```
+## Inhalt
 
-SimConnect wird nur einkompiliert, wenn das MSFS 2024 SDK gefunden wird – über die Umgebungsvariable `MSFS2024_SDK`,
-den Standardpfad `C:\MSFS 2024 SDK` oder `dotnet build -p:SimConnectSdkDir="…\SimConnect SDK"`. Ohne SDK läuft die App im Replay-Modus.
+- [Funktionen](#funktionen)
+- [Voraussetzungen](#voraussetzungen)
+- [Installation und Updates](#installation-und-updates)
+- [Erste Schritte](#erste-schritte)
+- [Integrationen](#integrationen)
+- [Eigene Flugzeugprofile](#eigene-flugzeugprofile)
+- [Datenablage](#datenablage)
+- [Fehler melden](#fehler-melden)
+- [Entwicklung](#entwicklung)
+- [Lizenz und Drittanbieter](#lizenz-und-drittanbieter)
 
-Schemaänderungen: `dotnet ef migrations add <Name> --project src/SkyCareer.Data -o Migrations` (Tool via `dotnet tool restore`).
-Die App migriert die Datenbank beim Start automatisch.
+## Funktionen
 
-## Spielablauf
+- **Auftragsmarkt** – Linien-, Charter-, VIP-, Lufttaxi-, Fracht-, Ambulanz- und Buschflüge, passend zu Flugzeug, Reichweite und
+  Pistenanforderungen. Großstädte und Hauptstädte werden als Ziele bevorzugt; Militärflugplätze stehen nur Militärflugzeugen offen.
+- **Flotte und Finanzen** – Flugzeuge kaufen, leasen oder mieten; Treibstoff, Gebühren, Crew, Wartung und Versicherung
+  werden realistisch verbucht. Flugzeuge lassen sich per Überführungsflug an andere Standorte verlegen.
+- **Load-Sheet und Beladung** – Passagiere, Gepäck, Fracht und Treibstoff werden berechnet, gegen MZFW/MTOW/MLW geprüft
+  und auf Wunsch direkt in den Simulator geschrieben.
+- **Automatischer Flugablauf** – kein Startknopf: Steht das Flugzeug am Abflughafen, wird der Auftrag verfolgt. Eine
+  Abflug-Ampel prüft Typ, Position, Zuladung, Treibstoff, Gewichtsgrenzen und OFP. Der Auftrag beginnt beim Abheben und
+  wird nach dem Abstellen am Ziel automatisch abgerechnet.
+- **Bewertung und Integrität** – Landung, Pünktlichkeit und Flugverhalten fließen in Score und Reputation ein. Slew,
+  Zeitraffer, Betanken in der Luft oder Positionssprünge werden erkannt.
+- **Absturzsicher** – laufende Flüge werden mitgeschrieben und nach einem Neustart der App automatisch fortgesetzt.
+- **Integrationen** – SimBrief (Planung und OFP-Abgleich), GSX Pro (synchrones Boarding) und BeyondATC (Flugplan-Export).
 
-1. **Start**: Beim Öffnen erscheint die Karriereauswahl – bestehende Karriere fortsetzen oder neue mit Heimatbasis anlegen
-   (beim ersten Mal vorher die Flughafendaten von OurAirports importieren). Kontostand, Reputation und Spielzeit stehen danach
-   in der Titelleiste; dort lässt sich auch Zeit vergehen lassen und die Karriere wechseln.
-2. **Flotte**: Flugzeug kaufen, leasen oder mieten – es steht an der Heimatbasis.
-3. **Aufträge**: Markt aktualisieren, Auftrag annehmen, optional SimBrief-OFP laden, im Sim beladen. Steht das Flugzeug am
-   Abflughafen, verfolgt die App den Auftrag automatisch; die Abflug-Ampel zeigt, ob Typ, Position, Gewichte und Treibstoff passen.
-4. Fliegen: Der Auftrag startet beim Abheben und wird nach dem Abstellen am Ziel (Triebwerke aus, Parkbremse) automatisch
-   abgerechnet – Erlöse, Kosten, Score, Reputation, Verschleiß.
+## Voraussetzungen
 
-## Installation & Updates
+- Windows 10 (19041) oder Windows 11, 64 Bit
+- Microsoft Flight Simulator 2024
+- Internetzugang für den einmaligen Import der Flughafendaten, die Kartenansicht und Updates
+- Optional: ein SimBrief-Konto, GSX Pro, BeyondATC
 
-Die fertige App gibt es unter **Releases** auf GitHub: `SkyCareerApp-win-Setup.exe` herunterladen und starten (fehlende
-.NET-Desktop-Runtime und WebView2 werden mitinstalliert). Da der Installer nicht signiert ist, meldet Windows beim ersten
-Start „Der Computer wurde durch Windows geschützt“ → „Weitere Informationen“ → „Trotzdem ausführen“.
+Die .NET-Desktop-Runtime und die WebView2-Runtime installiert der Installer bei Bedarf automatisch.
 
-Die App sucht beim Start und alle 6 Stunden nach neuen Versionen, lädt sie im Hintergrund und bietet „Neu starten“ an
-(nie während eines Flugs; sonst wird das Update beim Beenden installiert). Karrieren (`%LOCALAPPDATA%\SkyCareer`) und eigene
-Inhalte (`Dokumente\SkyCareer`) bleiben bei Updates und bei der Deinstallation erhalten.
+## Installation und Updates
 
-### Release veröffentlichen
+1. Unter [Releases](https://github.com/Stuffy/skycareer/releases/latest) die Datei `SkyCareerApp-win-Setup.exe` herunterladen und ausführen.
+2. Der Installer ist nicht code-signiert. Windows SmartScreen meldet daher beim ersten Start „Der Computer wurde durch
+   Windows geschützt“ – über **Weitere Informationen → Trotzdem ausführen** lässt sich die Installation fortsetzen.
+3. SkyCareer wird für den aktuellen Benutzer installiert (keine Administratorrechte nötig) und legt Verknüpfungen auf dem
+   Desktop und im Startmenü an.
 
-Voraussetzungen: MSFS 2024 SDK (für SimConnect), ein GitHub-Token mit „Contents: Read and write“ für dieses Repo in der
-Umgebungsvariable `SKYCAREER_GH_TOKEN`, alles committet.
+**Updates** werden beim Start und danach alle sechs Stunden geprüft und im Hintergrund geladen. Ein Hinweis bietet den
+Neustart an; während eines Flugs wird nie neu gestartet – das Update wird dann beim Beenden der App installiert.
+Karrieren und eigene Inhalte bleiben bei Updates und bei einer Deinstallation erhalten.
 
-```
-tools/release.ps1 -Version 0.2.0 -Notes notes.md
-```
+## Erste Schritte
 
-Das Skript testet, baut, packt mit [Velopack](https://velopack.io) (inkl. Delta-Update gegen das letzte Release) und
-lädt das Release hoch. `-PackOnly` baut nur den Installer lokal unter `releases/`.
+1. **Flughafendaten importieren** – beim ersten Start einmalig über „Herunterladen & importieren“ (OurAirports und GeoNames, ca. 18 MB).
+2. **Karriere anlegen** – Pilotenname, Airline, Heimatbasis und Schwierigkeitsgrad wählen; optional den SimBrief-Benutzernamen eintragen.
+3. **Flugzeug beschaffen** – unter *Flotte* kaufen, leasen oder mieten. Das Flugzeug steht an der Heimatbasis.
+4. **Auftrag annehmen** – unter *Aufträge* den Markt durchsuchen (Filter nach Flugzeug, Missionstyp, Distanz, Zuladung u. a.)
+   und einen Auftrag annehmen.
+5. **Flug vorbereiten** – im Simulator am Abflughafen mit dem passenden Flugzeug laden. Planung in SimBrief, OFP-Import,
+   Beladung und Flugplan-Export sind bis zum Abheben möglich; die Abflug-Ampel zeigt den Stand.
+6. **Fliegen** – der Auftrag startet beim Abheben. Nach dem Abstellen am Ziel (Parkbremse gesetzt, Triebwerke aus) folgt
+   die Abrechnung mit Erlösen, Kosten, Score, Reputation und Verschleiß.
 
-`SimConnect.dll` stammt aus dem MSFS SDK und wird nur im Release mitgeliefert, nicht im Repository.
+Spielzeit vergeht nur durch Flüge und bewusstes Warten (Titelleiste) – Pausen außerhalb des Simulators kosten nichts.
 
-### Fehler melden & Absturzschutz
+## Integrationen
 
-Die App schreibt ein Fehlerprotokoll (`%LOCALAPPDATA%\SkyCareer\logs`, 14 Tage). Unter **Einstellungen → Erweitert →
-„Diagnose kopieren“** landen Version, Simulator-Status und die letzten Protokollzeilen in der Zwischenablage – bitte jeder
-Fehlermeldung beilegen. Ein laufender Auftrag wird während des Flugs mitgeschrieben (`tracksctive-*.jsonl`); stürzt die
-App ab oder wird sie geschlossen, setzt sie den Flug beim nächsten Start (Sim verbunden) automatisch fort.
+### SimBrief
+„In SimBrief planen“ öffnet die Dispatch-Seite mit Strecke, Passagieren und Fracht. SimBrief übernimmt Passagier- und
+Gepäckgewicht aus dem gewählten Airframe; damit Auftrag und OFP übereinstimmen, sollten unter **Einstellungen → Beladung**
+dieselben Werte eingetragen sein (Standard: 175 lbs je Passagier, 50 lbs je Gepäckstück). „OFP laden“ übernimmt Block Fuel
+und Route und meldet Abweichungen bei Strecke, Typ, Passagieren, Fracht und Gewichten. Für eigene Airframes kann im
+Flugzeugprofil die SimBrief-Airframe-ID hinterlegt werden.
+
+### GSX Pro
+Bei verbundenem Simulator zeigt die Auftragskarte den Status der GSX-Dienste (Boarding, Betankung, Pushback, Deboarding).
+Mit **Beladung mit GSX synchronisieren** füllt SkyCareer Kabine und Frachträume im Takt des Boardings, setzt den Block Fuel
+nach der Betankung und leert das Flugzeug beim Deboarding. Geschrieben wird ausschließlich vor dem Block-Off und nach dem
+Abstellen. Die Passagierzahl übernimmt GSX aus SimBrief; Abweichungen zum Auftrag werden angezeigt.
+
+### BeyondATC
+BeyondATC bietet keine öffentliche Schnittstelle. „Flugplan (.pln)“ speichert einen MSFS-Flugplan unter
+`Dokumente\SkyCareer\Flugplaene`, den BeyondATC (VFR › Datei-Import) und das EFB laden können. Für IFR-Flüge verwendet
+BeyondATC direkt den aktuellen SimBrief-OFP.
 
 ## Eigene Flugzeugprofile
 
-Seite „Flugzeugprofile“: Ist im Sim ein unbekanntes Flugzeug geladen, legt „Aus aktuellem Sim-Flugzeug“ ein Profil an –
-Leergewicht, MTOW, Tanks, Payload-Stationen, Triebwerkstyp und Reisegeschwindigkeit kommen aus dem Sim, Verbrauch,
-Frachtkapazität und Preise werden aus dem ähnlichsten bekannten Profil (nach MTOW skaliert) geschätzt. MZFW und MLW meldet
-der Sim nicht und müssen nachgetragen werden. Der Editor prüft das Profil live und zeigt, welche Missionen möglich sind.
+Mitgeliefert werden Profile für Cessna 172, Cessna 208B, Airbus H145, King Air 350 und Airbus A320neo. Weitere Flugzeuge
+lassen sich unter **Inhalte → Flugzeugprofile → Aus aktuellem Sim-Flugzeug** anlegen:
 
-Eigene Profile liegen unter `Dokumente\SkyCareer\content\aircraft` und überschreiben mitgelieferte Profile mit gleicher ID.
+- Leergewicht, MTOW, Tanks, Payload-Stationen, Triebwerkstyp und Reisegeschwindigkeit werden aus dem Simulator gelesen.
+- Verbrauch, Frachtkapazität und Preise werden aus dem ähnlichsten bekannten Profil abgeleitet; MZFW und MLW geschätzt.
+  Diese Werte sollten mit Handbuch oder SimBrief abgeglichen werden.
+- Der Editor prüft das Profil laufend und zeigt, welche Missionstypen damit möglich sind.
 
-## GSX & BeyondATC
+Eigene Profile liegen unter `Dokumente\SkyCareer\content\aircraft` und ersetzen mitgelieferte Profile gleicher ID. Die
+mitgelieferten Werte sind Näherungen; die Stationsbelegung lässt sich im Profil-Editor über „Stationen aus Sim übernehmen“ prüfen.
 
-- **GSX Pro** (optional): Bei verbundenem Sim zeigt die Auftragskarte die GSX-Dienste (Boarding, Betankung, Pushback, Deboarding).
-  Mit „Beladung mit GSX synchronisieren“ füllt die App Kabine und Frachträume im Takt des GSX-Boardings, setzt den Block Fuel nach der
-  GSX-Betankung (bzw. am Ende des Boardings) und leert das Flugzeug beim Deboarding. Geschrieben wird nur vor dem Block-Off und nach dem Abstellen.
-  Die Passagierzahl übernimmt GSX aus SimBrief („Trust SimBrief“) – weicht sie vom Auftrag ab, zeigt die App eine Warnung.
-- **BeyondATC** hat keine öffentliche API. „Flugplan (.pln)“ speichert einen MSFS-Flugplan unter `Dokumente\SkyCareer\Flugplaene`,
-  den BeyondATC (VFR › Datei-Import) und das EFB laden. Für IFR-Flüge nutzt BeyondATC direkt den letzten SimBrief-OFP.
+## Datenablage
 
-## Beladungs-Spike
-
-Seite „Beladungs-Spike“ in der App: Flugzeug am Boden laden, mit MSFS verbinden, dann
-
-1. **Auslesen** – zeigt Payload-Stationen, Tanks und Gewichte, wie der Sim sie meldet; „Profil-Entwurf erzeugen“ liefert ein JSON für `content/aircraft/`.
-2. **Berechnen → In den Sim schreiben & prüfen** – schreibt die Stationen und den Treibstoff und vergleicht danach Soll/Ist pro Station.
-3. **Variable lesen** – liest SimVars/L:Vars. Unbekannte L:Vars liefern 0, nicht einen Fehler.
-
-## Struktur
-
-| Projekt | Inhalt |
+| Pfad | Inhalt |
 |---|---|
-| `SkyCareer.Domain` | Einheiten (Mass, Money, GeoPosition), Flugzeugprofile, Load-Sheet, Treibstoffplanung, Beladungsprüfung |
-| `SkyCareer.Sim` | `IFlightDataSource`, SimConnect-Quelle, Replay, Flugphasen-Erkennung, Integritätsprüfung |
-| `SkyCareer.Missions` | Missionstypen (JSON), Requirement-Evaluator, Missionsgeneratoren, Content-Loader |
-| `SkyCareer.Integrations.SimBrief` | Dispatch-Link, OFP-Import, OFP-Abgleich |
-| `SkyCareer.Data` | EF Core / SQLite (`%LOCALAPPDATA%\SkyCareer\skycareer.db`), Migrationen, OurAirports-Import |
-| `SkyCareer.Application` | `CareerService`: Karriere, Flotte (Kauf/Leasing/Miete), Missionsmarkt, Flugabrechnung, Spielzeit |
-| `SkyCareer.App` | Desktop-Oberfläche |
-| `content/` | Flugzeugprofile und Missionstypen – neue Inhalte = neue JSON-Datei |
+| `%LOCALAPPDATA%\SkyCareer\skycareer.db` | Karrieren, Flotten, Aufträge, Kassenbuch und Flughafendaten |
+| `%LOCALAPPDATA%\SkyCareer\tracks` | Aufzeichnungen abgeschlossener und laufender Flüge (JSON Lines) |
+| `%LOCALAPPDATA%\SkyCareer\logs` | Fehlerprotokolle (14 Tage) |
+| `Dokumente\SkyCareer\content` | Eigene Flugzeugprofile und Missionstypen |
+| `Dokumente\SkyCareer\Flugplaene` | Exportierte Flugpläne (`.pln`) |
 
-Die Werte in `content/aircraft/*.json` (Gewichte, Payload-Stationen) sind Näherungen und müssen im Simulator geprüft werden.
+Die Programmdateien selbst liegen unter `%LOCALAPPDATA%\SkyCareerApp`.
 
-## Lizenz & Drittanbieter
+## Fehler melden
 
-Der Code steht unter der [MIT-Lizenz](LICENSE). Nicht davon erfasst sind:
+Fehler und Vorschläge bitte als [Issue](https://github.com/Stuffy/skycareer/issues) einreichen. Unter
+**Einstellungen → Erweitert → Diagnose kopieren** legt SkyCareer Version, Simulator-Status und die letzten
+Protokollzeilen in die Zwischenablage – diesen Text bitte jeder Meldung beifügen, zusammen mit einer kurzen Beschreibung
+der Schritte bis zum Fehler.
 
-- `SimConnect.dll` – Microsoft, Teil des MSFS 2024 SDK, nur im Release enthalten
+Der **Debug-Modus** (Einstellungen → Erweitert) schaltet Entwickler- und Testwerkzeuge frei, u. a. das Setzen von Kontostand
+und Reputation. Er ist für Tests gedacht; Korrekturen am Kontostand werden im Kassenbuch vermerkt.
+
+## Entwicklung
+
+### Bauen und testen
+
+Voraussetzung ist das .NET 10 SDK.
+
+```bash
+dotnet tool restore
+dotnet build SkyCareer.sln
+dotnet test SkyCareer.sln
+dotnet run --project src/SkyCareer.App
+```
+
+Die SimConnect-Anbindung wird nur kompiliert, wenn das **MSFS 2024 SDK** gefunden wird – über die Umgebungsvariable
+`MSFS2024_SDK`, den Standardpfad `C:\MSFS 2024 SDK` oder `-p:SimConnectSdkDir="…\SimConnect SDK"`. Ohne SDK lässt sich
+das Projekt vollständig bauen und testen; die Anwendung arbeitet dann nur mit aufgezeichneten Flügen (Replay).
+
+Mit der Umgebungsvariable `SKYCAREER_DB` lässt sich eine separate Datenbank verwenden, etwa zum Testen ohne Einfluss auf
+bestehende Karrieren. Schemaänderungen erfolgen über EF-Core-Migrationen:
+
+```bash
+dotnet ef migrations add <Name> --project src/SkyCareer.Data -o Migrations
+```
+
+Die Anwendung migriert die Datenbank beim Start automatisch.
+
+### Projektstruktur
+
+| Projekt | Verantwortung |
+|---|---|
+| `SkyCareer.Domain` | Einheiten, Flugzeugprofile, Load-Sheet, Treibstoffplanung, Kostenmodell, Karriere-Entitäten |
+| `SkyCareer.Sim` | Datenquellen (SimConnect, Replay), Flugphasenerkennung, Integritätsprüfung, Flugaufzeichnung |
+| `SkyCareer.Missions` | Datengetriebene Missionstypen, Auftragsgenerierung, Abflug-Check, Abrechnung |
+| `SkyCareer.Data` | EF Core mit SQLite, Migrationen, Import von OurAirports und GeoNames |
+| `SkyCareer.Application` | `CareerService` (einzige Stelle für Zustandsänderungen), Flugautomatik, Protokollierung |
+| `SkyCareer.Integrations.*` | SimBrief, GSX, BeyondATC |
+| `SkyCareer.App` | WPF-Host mit Blazor-Hybrid-Oberfläche (MudBlazor), Updater |
+| `content/` | Mitgelieferte Flugzeugprofile und Missionstypen als JSON |
+
+Weitere Architektur- und Implementierungsdetails stehen in [`CLAUDE.md`](CLAUDE.md).
+
+### Releases
+
+Releases werden mit [Velopack](https://velopack.io) über GitHub Releases verteilt; installierte Anwendungen erhalten
+Delta-Updates. Voraussetzungen: MSFS 2024 SDK, ein Fine-grained Token mit *Contents: Read and write* für dieses Repository
+in `SKYCAREER_GH_TOKEN` und ein sauberer Git-Stand.
+
+```bash
+powershell -File tools/release.ps1 -Version 0.2.0 -Notes notes.md
+```
+
+Das Skript führt die Tests aus, veröffentlicht den Build, prüft auf `SimConnect.dll` und mitgelieferte Inhalte, erstellt
+Installer und Update-Pakete und lädt sie hoch. Mit `-PackOnly` wird nur lokal unter `releases/` gepackt.
+
+## Lizenz und Drittanbieter
+
+Der Quellcode steht unter der [MIT-Lizenz](LICENSE). Davon ausgenommen sind:
+
+- `SimConnect.dll` – © Microsoft, Bestandteil des MSFS 2024 SDK, nur in den Release-Paketen enthalten
 - Flughafendaten von [OurAirports](https://ourairports.com/data/) (Public Domain)
-- Städtedaten von [GeoNames](https://www.geonames.org/) (CC BY 4.0)
-- Karten mit [Leaflet](https://leafletjs.com/) und © OpenStreetMap-Mitwirkende
+- Städtedaten von [GeoNames](https://www.geonames.org/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))
+- Kartendarstellung mit [Leaflet](https://leafletjs.com/); Kartenkacheln von Esri, [OpenStreetMap](https://www.openstreetmap.org/copyright)-Mitwirkenden und OpenTopoMap (Quellenangabe in der Karte)
 
+SkyCareer ist ein unabhängiges Projekt und steht in keiner Verbindung zu Microsoft, Asobo Studio, Navigraph/SimBrief,
+FSDreamTeam oder BeyondATC.

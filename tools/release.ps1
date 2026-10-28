@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Builds, packs and publishes a SkyCareer release to GitHub Releases (Velopack).
 

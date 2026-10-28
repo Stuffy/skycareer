@@ -4,6 +4,7 @@
 @inject HttpClient Http
 @inject GsxCoordinator Gsx
 @inject UpdateService Updates
+@inject AppSettings AppSettings
 
 <MudText Typo="Typo.h5" Class="mb-4">Einstellungen</MudText>
 
@@ -81,6 +82,16 @@
                 <MudButton Variant="Variant.Text" Href="@($"{Updates.RepoUrl}/releases")" Target="_blank">Alle Versionen</MudButton>
             }
         </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">Erweitert</MudText>
+        <MudSwitch T="bool" Value="AppSettings.DebugMode" ValueChanged="AppSettings.SetDebugMode" Color="Color.Warning"
+                   Label="Debug-Modus aktivieren" />
+        <MudText Typo="Typo.body2" Class="mt-1">
+            Zeigt das Menü „Debug“ mit Entwickler- und Cheat-Werkzeugen (Kontostand, Reputation, Flotte, Aufträge) sowie Replay und
+            kostenloses Versetzen. Änderungen am Kontostand werden im Kassenbuch als Korrektur vermerkt.
+        </MudText>
     </MudPaper>
 
     <MudPaper Class="pa-4" Style="max-width:720px">

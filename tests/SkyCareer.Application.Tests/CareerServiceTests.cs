@@ -298,6 +298,72 @@ public sealed class CareerServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Debug_cash_and_reputation_changes_keep_the_ledger_consistent()
+    {
+        await NewCareer();
+        await _svc.SetCashAsync(1_000_000m);
+        await _svc.SetCashAsync(250_000m);
+
+        var career = await _svc.GetCareerAsync();
+        Assert.Equal(250_000m, career.Cash);
+        var ledger = await _svc.GetLedgerAsync();
+        Assert.Equal(career.Cash, ledger.Sum(l => l.Amount));
+        Assert.Equal(2, ledger.Count(l => l.Category == LedgerCategory.Adjustment));
+
+        await _svc.SetReputationAsync(80);
+        Assert.Equal(80, (await _svc.GetCareerAsync()).Reputation);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.SetReputationAsync(101));
+    }
+
+    [Fact]
+    public async Task Debug_aircraft_tools_and_instant_completion()
+    {
+        await NewCareer();
+        var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        string home = plane.Location;
+        // A paid ferry flight leaves the aircraft unavailable for its block time.
+        await _svc.RelocateAircraftAsync(plane.Id, "EDDM", ferryFlight: true);
+        Assert.False((await _svc.GetFleetAsync()).Single().IsAvailable((await _svc.GetCareerAsync()).GameTime));
+
+        await _svc.DebugSetAircraftAsync(plane.Id, condition: 40, clearDowntime: true, location: home);
+        var career = await _svc.GetCareerAsync();
+        var moved = (await _svc.GetFleetAsync()).Single();
+        Assert.True(moved.IsAvailable(career.GameTime));
+        Assert.Equal(40, moved.Condition);
+        Assert.Equal(home, moved.Location);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.DebugSetAircraftAsync(plane.Id, location: "XXXX"));
+
+        // Instant completion settles a perfect flight and moves the aircraft.
+        await _svc.RefreshMarketAsync(new Random(3));
+        var offer = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        await _svc.AcceptAsync(offer.Id);
+        var result = await _svc.DebugCompleteContractAsync(offer.Id);
+        Assert.Equal(FlightOutcome.Completed, result.Outcome);
+        Assert.Equal(offer.Destination, (await _svc.GetFleetAsync()).Single().Location);
+        Assert.Single(await _svc.GetContractsAsync(ContractStatus.Completed));
+        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.MissionRevenue);
+    }
+
+    [Fact]
+    public async Task Debug_market_reset_only_removes_offers()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.RefreshMarketAsync(new Random(4));
+        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        await _svc.AcceptAsync(offers[0].Id);
+        var deadline = offers[0].Deadline;
+        await _svc.DebugExtendDeadlineAsync(offers[0].Id, TimeSpan.FromHours(24));
+
+        int removed = await _svc.DebugClearMarketAsync();
+
+        Assert.Equal(offers.Count - 1, removed);
+        Assert.Empty(await _svc.GetContractsAsync(ContractStatus.Offered));
+        var accepted = Assert.Single(await _svc.GetContractsAsync(ContractStatus.Accepted));
+        Assert.Equal(deadline.AddHours(24), accepted.Deadline);
+    }
+
+    [Fact]
     public async Task Free_relocation_and_its_limits()
     {
         await NewCareer();

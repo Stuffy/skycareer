@@ -1,0 +1,24 @@
+@implements IDisposable
+@inject AppSettings Settings
+
+@* Renders its content only while the debug mode is on (pages under the "Debug" menu). *@
+@if (Settings.DebugMode)
+{
+    @ChildContent
+}
+else
+{
+    <MudAlert Severity="Severity.Info">
+        Der Debug-Modus ist deaktiviert. Er lässt sich unter <MudLink Href="settings">Einstellungen → Erweitert</MudLink> einschalten.
+    </MudAlert>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnInitialized() => Settings.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Settings.Changed -= OnChanged;
+}

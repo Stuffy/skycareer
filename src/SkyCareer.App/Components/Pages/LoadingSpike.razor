@@ -4,6 +4,7 @@
 @inject FlightMonitorService Monitor
 @inject GameContent Content
 
+<DebugGate>
 <MudText Typo="Typo.h5" Class="mb-1">Beladungs-Spike</MudText>
 <MudText Typo="Typo.body2" Class="mb-4">
     Prüft, ob Payload und Treibstoff per SimConnect geschrieben und korrekt zurückgelesen werden, und hilft beim Erstellen von Flugzeugprofilen.
@@ -194,6 +195,8 @@
         <MudText Class="mono">@_varResult</MudText>
     </MudStack>
 </MudPaper>
+
+</DebugGate>
 
 @code {
     private AircraftSnapshot? _snapshot, _readBack;

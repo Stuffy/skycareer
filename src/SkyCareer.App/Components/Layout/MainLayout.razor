@@ -3,6 +3,7 @@
 @inject CareerService Career
 @inject NavigationManager Nav
 @inject GsxCoordinator Gsx
+@inject AppSettings Settings
 
 <MudThemeProvider IsDarkMode="true" />
 <MudPopoverProvider />
@@ -30,11 +31,19 @@ else
                 <MudNavLink Href="fleet" Icon="@Icons.Material.Filled.AirplanemodeActive">Flotte</MudNavLink>
                 <MudNavLink Href="finance" Icon="@Icons.Material.Filled.AccountBalance">Finanzen</MudNavLink>
                 <MudNavLink Href="logbook" Icon="@Icons.Material.Filled.MenuBook">Flugbuch</MudNavLink>
-                <MudDivider Class="my-2" />
                 <MudNavLink Href="live" Icon="@Icons.Material.Filled.FlightTakeoff">Live-Flug</MudNavLink>
-                <MudNavLink Href="aircraft" Icon="@Icons.Material.Filled.Tune">Flugzeugprofile</MudNavLink>
-                <MudNavLink Href="missions" Icon="@Icons.Material.Filled.Category">Missionstypen</MudNavLink>
-                <MudNavLink Href="spike" Icon="@Icons.Material.Filled.Scale">Beladungs-Spike</MudNavLink>
+                <MudDivider Class="my-2" />
+                <MudNavGroup Title="Inhalte" Icon="@Icons.Material.Filled.LibraryBooks">
+                    <MudNavLink Href="aircraft" Icon="@Icons.Material.Filled.Tune">Flugzeugprofile</MudNavLink>
+                    <MudNavLink Href="missions" Icon="@Icons.Material.Filled.Category">Missionstypen</MudNavLink>
+                </MudNavGroup>
+                @if (Settings.DebugMode)
+                {
+                    <MudNavGroup Title="Debug" Icon="@Icons.Material.Filled.BugReport" Expanded="true">
+                        <MudNavLink Href="debug" Icon="@Icons.Material.Filled.Build">Debug-Werkzeuge</MudNavLink>
+                        <MudNavLink Href="spike" Icon="@Icons.Material.Filled.Scale">Beladungs-Spike</MudNavLink>
+                    </MudNavGroup>
+                }
                 <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">Einstellungen</MudNavLink>
             </MudNavMenu>
         </MudDrawer>
@@ -50,7 +59,11 @@ else
 }
 
 @code {
-    protected override void OnInitialized() => Career.Changed += OnCareerChanged;
+    protected override void OnInitialized()
+    {
+        Career.Changed += OnCareerChanged;
+        Settings.Changed += OnCareerChanged;
+    }
 
     // Re-render when a career is selected or left so the selection screen and the app swap.
     private void OnCareerChanged() => InvokeAsync(StateHasChanged);
@@ -62,5 +75,9 @@ else
         Nav.NavigateTo("");
     }
 
-    public void Dispose() => Career.Changed -= OnCareerChanged;
+    public void Dispose()
+    {
+        Career.Changed -= OnCareerChanged;
+        Settings.Changed -= OnCareerChanged;
+    }
 }

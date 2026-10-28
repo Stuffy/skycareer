@@ -682,6 +682,113 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         return n;
     }
 
+    // ---------- Debug tools (only reachable with the app's debug mode on) ----------
+
+    /// <summary>Sets the balance by booking the difference as an adjustment, so ledger and cash stay consistent.</summary>
+    public async Task SetCashAsync(decimal amount)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        decimal delta = Math.Round(amount, 2) - career.Cash;
+        if (delta == 0) return;
+        Book(db, career, LedgerCategory.Adjustment, delta, "Korrektur (Debug)");
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    public async Task SetReputationAsync(int value)
+    {
+        if (value is < 0 or > 100) throw new CareerException("Die Reputation muss zwischen 0 und 100 liegen.");
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        career.Reputation = value;
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Changes an aircraft without costs: condition (0–100), ends maintenance/ferry downtime, or puts it at another known
+    /// airport regardless of range and runway. Offers from the old location go, like after a relocation.
+    /// </summary>
+    public async Task DebugSetAircraftAsync(Guid aircraftId, double? condition = null, bool clearDowntime = false, string? location = null)
+    {
+        if (condition is < 0 or > 100) throw new CareerException("Der Zustand muss zwischen 0 und 100 % liegen.");
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await RequireCareer(db);
+        var aircraft = await RequireAircraft(db, aircraftId);
+        if (condition is { } c) aircraft.Condition = c;
+        if (clearDowntime)
+        {
+            aircraft.UnavailableUntil = null;
+            aircraft.UnavailableReason = null;
+        }
+        if (!string.IsNullOrWhiteSpace(location))
+        {
+            string ident = location.Trim().ToUpperInvariant();
+            if (await LoadAirportAsync(db, ident) is null) throw new CareerException($"Flughafen {ident} ist nicht bekannt.");
+            if (!string.Equals(ident, aircraft.Location, StringComparison.OrdinalIgnoreCase))
+            {
+                aircraft.Location = ident;
+                await db.Contracts.Where(x => x.AircraftId == aircraft.Id && x.Status == ContractStatus.Offered).ExecuteDeleteAsync();
+            }
+        }
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Settles an accepted or running job as a perfect, on-time flight without flying it.</summary>
+    public async Task<SettlementResult> DebugCompleteContractAsync(Guid contractId)
+    {
+        double blockHours;
+        GeoPosition destination;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            await RequireCareer(db);
+            var c = await RequireContract(db, contractId);
+            if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress))
+                throw new CareerException("Nur angenommene oder laufende Aufträge lassen sich abschließen.");
+            var aircraft = await RequireAircraft(db, c.AircraftId);
+            blockHours = c.DistanceNm / Math.Max(1, Profile(aircraft.ProfileId).CruiseKtas) + 0.5;
+            destination = (await RequireAirport(db, c.Destination)).Position;
+            // Skips the start checks (location, downtime) on purpose.
+            c.Status = ContractStatus.InProgress;
+            await db.SaveChangesAsync();
+        }
+
+        var result = new FlightResult
+        {
+            BlockTime = TimeSpan.FromHours(blockHours),
+            AirTime = TimeSpan.FromHours(Math.Max(0.1, blockHours - 0.3)),
+            TouchdownFpm = -150,
+            MaxGForce = 1.2,
+            FinalPosition = destination,
+            Parked = true,
+            Notes = ["Mit den Debug-Werkzeugen abgeschlossen."]
+        };
+        return await CompleteFlightAsync(contractId, result);
+    }
+
+    public async Task DebugExtendDeadlineAsync(Guid contractId, TimeSpan by)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await RequireCareer(db);
+        var c = await RequireContract(db, contractId);
+        c.Deadline += by;
+        if (c.Status == ContractStatus.Offered) c.ExpiresAt += by;
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Removes all open offers of the career (accepted and running jobs stay).</summary>
+    public async Task<int> DebugClearMarketAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var id = RequireCareerId();
+        int removed = await db.Contracts.Where(c => c.CareerId == id && c.Status == ContractStatus.Offered).ExecuteDeleteAsync();
+        Changed?.Invoke();
+        return removed;
+    }
+
     // ---------- Internals ----------
 
     /// <summary>

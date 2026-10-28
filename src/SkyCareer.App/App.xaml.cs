@@ -39,6 +39,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<GsxCoordinator>();
         services.AddSingleton<DepartureCoordinator>();
         services.AddSingleton<UpdateService>();
+        services.AddSingleton<AppSettings>();
         services.AddSingleton<IAirportIlsLookup, SimIlsLookup>();
         services.AddSingleton<MarketFilter>();
         services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(60) });

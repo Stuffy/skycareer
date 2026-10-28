@@ -18,11 +18,11 @@
             </MudSelect>
             <MudSimpleTable Dense="true">
                 <tbody>
-                    @foreach (var g in MonthEntries.Where(l => l.Category != LedgerCategory.StartingCapital).GroupBy(l => l.Category).OrderByDescending(g => g.Sum(l => l.Amount)))
+                    @foreach (var g in MonthEntries.Where(l => IsOperating(l.Category)).GroupBy(l => l.Category).OrderByDescending(g => g.Sum(l => l.Amount)))
                     {
                         <tr><td>@CategoryText(g.Key)</td><td style="text-align:right" class="@(g.Sum(l => l.Amount) < 0 ? "bad" : "ok")">@Eur(g.Sum(l => l.Amount))</td></tr>
                     }
-                    <tr><td><b>Ergebnis</b></td><td style="text-align:right"><b>@Eur(MonthEntries.Where(l => l.Category != LedgerCategory.StartingCapital).Sum(l => l.Amount))</b></td></tr>
+                    <tr><td><b>Ergebnis</b></td><td style="text-align:right"><b>@Eur(MonthEntries.Where(l => IsOperating(l.Category)).Sum(l => l.Amount))</b></td></tr>
                 </tbody>
             </MudSimpleTable>
         </MudPaper>
@@ -66,6 +66,9 @@
         if (!_months.Contains(_month)) _months.Insert(0, _month);
     }
 
+    // Starting capital and debug corrections aren't earned, so they stay out of the monthly result.
+    private static bool IsOperating(LedgerCategory c) => c is not (LedgerCategory.StartingCapital or LedgerCategory.Adjustment);
+
     private static string CategoryText(LedgerCategory c) => c switch
     {
         LedgerCategory.MissionRevenue => "Auftragserlöse",
@@ -85,6 +88,7 @@
         LedgerCategory.AircraftPurchase => "Flugzeugkauf",
         LedgerCategory.AircraftSale => "Flugzeugverkauf",
         LedgerCategory.StartingCapital => "Startkapital",
+        LedgerCategory.Adjustment => "Korrekturen",
         _ => c.ToString()
     };
 }

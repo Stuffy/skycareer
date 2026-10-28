@@ -13,7 +13,9 @@ public enum LedgerCategory
     MissionRevenue, Bonus, Penalty,
     Fuel, LandingFee, Handling, Navigation, Catering, Crew,
     Maintenance, Repair, Lease, Rent, Insurance,
-    AircraftPurchase, AircraftSale, StartingCapital
+    AircraftPurchase, AircraftSale, StartingCapital,
+    /// <summary>Manual balance correction from the debug tools; not part of the operating result.</summary>
+    Adjustment
 }
 
 /// <summary>

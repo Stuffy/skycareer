@@ -6,6 +6,7 @@ using SkyCareer.Domain.Career;
 using SkyCareer.Domain.Finance;
 using SkyCareer.Domain.Loading;
 using SkyCareer.Domain.World;
+using SkyCareer.Integrations.Gsx;
 using SkyCareer.Missions;
 using SkyCareer.Missions.Generation;
 using SkyCareer.Missions.Settlement;
@@ -137,6 +138,18 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         career.GsxSyncEnabled = enabled;
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Switches booking of GSX receipts on or off; receipts written before switching on are never booked.</summary>
+    public async Task UpdateGsxCostsAsync(bool enabled)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        if (career.GsxCostsEnabled == enabled) return;
+        career.GsxCostsEnabled = enabled;
+        if (enabled) career.GsxCostsSinceUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }
@@ -564,7 +577,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var departure = career.GameTime;
 
         var s = FlightSettlement.Settle(new SettlementInput(type, c, profile, aircraft, origin, destination, nearest, result,
-            departure, EconomyTables.For(career.Difficulty)));
+            departure, EconomyTables.For(career.Difficulty), ExternalGroundCosts: career.GsxCostsEnabled));
 
         var flight = new FlightRecord
         {
@@ -594,6 +607,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
 
         career.GameTime = s.ArrivalGameTime;
         foreach (var line in s.Lines) Book(db, career, line.Category, line.Amount, line.Description, aircraft.Id, flight.Id);
+        await AttachGsxReceiptsAsync(db, c.Id, flight);
         career.Reputation = Math.Clamp(career.Reputation + s.ReputationChange, 0, 100);
 
         aircraft.Location = s.FinalLocation;
@@ -641,6 +655,116 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var id = RequireCareerId();
         return (await db.Flights.Where(f => f.CareerId == id).ToListAsync()).OrderByDescending(f => f.ArrivedGameTime).ToList();
     }
+
+    public async Task<List<GsxReceiptRecord>> GetGsxReceiptsAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var id = RequireCareerId();
+        return (await db.GsxReceipts.Where(r => r.CareerId == id).ToListAsync()).OrderByDescending(r => r.CreatedUtc).ToList();
+    }
+
+    // ---------- GSX receipts ----------
+
+    /// <summary>
+    /// Books new GSX receipts as costs (only while <see cref="Career.GsxCostsEnabled"/>). Each receipt goes to the active job
+    /// when it was written at that job's origin or destination, else to the last flight that arrived at its airport (deboarding),
+    /// else to an aircraft parked there. Receipts that match nothing stay unbooked and are offered again on the next scan.
+    /// The HTML invoice is copied to <paramref name="storeDirectory"/> so it survives GSX tidying up.
+    /// </summary>
+    public async Task<List<GsxReceiptRecord>> BookGsxReceiptsAsync(IReadOnlyList<GsxReceipt> receipts, Guid? activeContractId, string? storeDirectory)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        if (!career.GsxCostsEnabled || receipts.Count == 0) return [];
+
+        var known = (await db.GsxReceipts.Where(r => r.CareerId == career.Id).Select(r => r.ReceiptId).ToListAsync()).ToHashSet();
+        var fresh = receipts.Where(r => !known.Contains(r.ReceiptId) && r.CreatedUtc > (career.GsxCostsSinceUtc ?? DateTime.MaxValue)).ToList();
+        if (fresh.Count == 0) return [];
+
+        var active = activeContractId is { } aid ? await db.Contracts.FirstOrDefaultAsync(c => c.Id == aid && c.CareerId == career.Id) : null;
+        var fleet = await db.Fleet.Where(f => f.CareerId == career.Id).ToListAsync();
+        var flights = await db.Flights.Where(f => f.CareerId == career.Id).ToListAsync();
+
+        var booked = new List<GsxReceiptRecord>();
+        foreach (var r in fresh)
+        {
+            Guid? contractId = null, aircraftId = null;
+            FlightRecord? flight = null;
+            if (active is not null && (Same(active.Origin, r.Icao) || Same(active.Destination, r.Icao)))
+            {
+                contractId = active.Id;
+                aircraftId = active.AircraftId;
+                flight = flights.FirstOrDefault(f => f.ContractId == active.Id);
+            }
+            else if (flights.Where(f => Same(f.ArrivedAt, r.Icao) && fleet.Any(a => a.Id == f.AircraftId && Same(a.Location, r.Icao)))
+                         .MaxBy(f => f.ArrivedGameTime) is { } arrived)
+            {
+                flight = arrived;
+                contractId = arrived.ContractId;
+                aircraftId = arrived.AircraftId;
+            }
+            else if (fleet.Where(a => Same(a.Location, r.Icao)).OrderByDescending(a => Same(a.Registration, r.Tail)).FirstOrDefault() is { } parked)
+            {
+                aircraftId = parked.Id;
+            }
+            else
+            {
+                continue;
+            }
+
+            var category = r.Kind switch
+            {
+                GsxReceiptKind.Fuel => LedgerCategory.Fuel,
+                GsxReceiptKind.Catering => LedgerCategory.Catering,
+                _ => LedgerCategory.Handling
+            };
+            string description = $"GSX {r.Title} {r.Icao}" + (r.Operator.Length > 0 ? $" ({r.Operator})" : "");
+            var entry = BookAt(db, career, career.GameTime, category, -r.AmountEur, description, aircraftId, flight?.Id);
+            if (flight is not null) flight.Costs += r.AmountEur;
+            var record = new GsxReceiptRecord
+            {
+                CareerId = career.Id, ReceiptId = r.ReceiptId, Category = category, Icao = r.Icao, Operator = r.Operator, Title = r.Title,
+                AmountEur = r.AmountEur, CreatedUtc = r.CreatedUtc, Lines = string.Join('\n', r.Lines), AircraftId = aircraftId,
+                ContractId = contractId, LedgerEntryId = entry.Id, StoredHtml = StoreReceiptHtml(r, storeDirectory)
+            };
+            db.GsxReceipts.Add(record);
+            booked.Add(record);
+        }
+        if (booked.Count == 0) return [];
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+        return booked;
+    }
+
+    /// <summary>Links receipts booked for a job before it was settled (origin services) to its flight record.</summary>
+    private static async Task AttachGsxReceiptsAsync(SkyCareerDb db, Guid contractId, FlightRecord flight)
+    {
+        var entryIds = await db.GsxReceipts.Where(r => r.ContractId == contractId).Select(r => r.LedgerEntryId).ToListAsync();
+        if (entryIds.Count == 0) return;
+        foreach (var entry in await db.Ledger.Where(l => entryIds.Contains(l.Id) && l.FlightId == null).ToListAsync())
+        {
+            entry.FlightId = flight.Id;
+            flight.Costs -= entry.Amount;
+        }
+    }
+
+    private static string? StoreReceiptHtml(GsxReceipt r, string? directory)
+    {
+        if (r.HtmlPath is null || directory is null) return r.HtmlPath;
+        try
+        {
+            Directory.CreateDirectory(directory);
+            string target = Path.Combine(directory, string.Concat(r.ReceiptId.Split(Path.GetInvalidFileNameChars())) + ".html");
+            File.Copy(r.HtmlPath, target, overwrite: true);
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return r.HtmlPath;
+        }
+    }
+
+    private static bool Same(string? a, string? b) => a is not null && b is not null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     // ---------- Airports ----------
 
@@ -844,15 +968,17 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         Guid? aircraftId = null, Guid? flightId = null) =>
         BookAt(db, career, career.GameTime, category, amount, description, aircraftId, flightId);
 
-    private static void BookAt(SkyCareerDb db, Career career, DateTime time, LedgerCategory category, decimal amount, string description,
+    private static LedgerEntry BookAt(SkyCareerDb db, Career career, DateTime time, LedgerCategory category, decimal amount, string description,
         Guid? aircraftId = null, Guid? flightId = null)
     {
         career.Cash += amount;
-        db.Ledger.Add(new LedgerEntry
+        var entry = new LedgerEntry
         {
             CareerId = career.Id, GameTime = time, Category = category, Amount = amount,
             Description = description, AircraftId = aircraftId, FlightId = flightId
-        });
+        };
+        db.Ledger.Add(entry);
+        return entry;
     }
 
     private static MissionContract ToContract(MissionOffer o, Career career, FleetAircraft aircraft) => new()

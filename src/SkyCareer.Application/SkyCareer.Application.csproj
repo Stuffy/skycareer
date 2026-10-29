@@ -5,6 +5,7 @@
     <ProjectReference Include="..\SkyCareer.Missions\SkyCareer.Missions.csproj" />
     <ProjectReference Include="..\SkyCareer.Data\SkyCareer.Data.csproj" />
     <ProjectReference Include="..\SkyCareer.Sim\SkyCareer.Sim.csproj" />
+    <ProjectReference Include="..\SkyCareer.Integrations.Gsx\SkyCareer.Integrations.Gsx.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

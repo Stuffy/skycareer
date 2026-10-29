@@ -32,6 +32,13 @@
         </MudStack>
         <MudSwitch T="bool" Value="c.GsxSyncEnabled" ValueChanged="SetGsxSync" Color="Color.Primary" Class="mt-3"
                    Label="Beladung mit GSX synchronisieren (wenn GSX Pro läuft)" />
+        <MudSwitch T="bool" Value="c.GsxCostsEnabled" ValueChanged="SetGsxCosts" Color="Color.Primary" Class="mt-1"
+                   Label="GSX-Belege als Kosten verwenden" />
+        <MudText Typo="Typo.caption" Style="display:block">
+            Abfertigung, Busse, Catering und Betankung werden mit den Beträgen aus den GSX-Rechnungen gebucht
+            (umgerechnet in Euro); die Modellkosten dafür entfallen bei der Abrechnung. Ohne GSX getankter Treibstoff ist
+            dann kostenlos. Es zählen nur Belege ab dem Einschalten.
+        </MudText>
     </MudPaper>
 
     <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
@@ -173,6 +180,8 @@
         await Career.UpdateGsxSyncAsync(enabled);
         Gsx.SetSyncEnabled(enabled);
     });
+
+    private Task SetGsxCosts(bool enabled) => Run(() => Career.UpdateGsxCostsAsync(enabled));
 
     private Task ImportAirports() => Run(async () =>
     {

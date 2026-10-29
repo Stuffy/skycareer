@@ -32,7 +32,7 @@ wirtschaftliche Karriere einbettet: Aufträge annehmen, Flotte aufbauen, Kosten 
 - **Bewertung und Integrität** – Landung, Pünktlichkeit und Flugverhalten fließen in Score und Reputation ein. Slew,
   Zeitraffer, Betanken in der Luft oder Positionssprünge werden erkannt.
 - **Absturzsicher** – laufende Flüge werden mitgeschrieben und nach einem Neustart der App automatisch fortgesetzt.
-- **Integrationen** – SimBrief (Planung und OFP-Abgleich), GSX Pro (synchrones Boarding) und BeyondATC (Flugplan-Export).
+- **Integrationen** – SimBrief (Planung und OFP-Abgleich), GSX Pro (synchrones Boarding, GSX-Rechnungen als Kosten) und BeyondATC (Flugplan-Export).
 
 ## Voraussetzungen
 
@@ -83,6 +83,11 @@ Bei verbundenem Simulator zeigt die Auftragskarte den Status der GSX-Dienste (Bo
 Mit **Beladung mit GSX synchronisieren** füllt SkyCareer Kabine und Frachträume im Takt des Boardings, setzt den Block Fuel
 nach der Betankung und leert das Flugzeug beim Deboarding. Geschrieben wird ausschließlich vor dem Block-Off und nach dem
 Abstellen. Die Passagierzahl übernimmt GSX aus SimBrief; Abweichungen zum Auftrag werden angezeigt.
+
+Mit **GSX-Belege als Kosten verwenden** bucht SkyCareer die Rechnungen, die GSX für Abfertigung, Busse, Catering und
+Betankung ausstellt, mit ihrem Betrag (in Euro umgerechnet) ins Kassenbuch. Die Modellkosten für Treibstoff, Abfertigung und
+Catering entfallen dann bei der Abrechnung; ohne GSX getankter Treibstoff ist kostenlos. Die Rechnungen lassen sich in
+Finanzen und im Flugbuch öffnen und von dort drucken oder als PDF speichern.
 
 ### BeyondATC
 BeyondATC bietet keine öffentliche Schnittstelle. „Flugplan (.pln)“ speichert einen MSFS-Flugplan unter

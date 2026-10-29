@@ -16,7 +16,8 @@ public sealed record SettlementInput(
     Airport? ActualArrival, // airport nearest to where the aircraft ended up (diversions); null if unknown
     FlightResult Result,
     DateTime DepartureGameTime,
-    EconomyTables Economy);
+    EconomyTables Economy,
+    bool ExternalGroundCosts = false); // fuel, handling and catering are paid from GSX receipts instead
 
 public sealed record SettlementResult(
     FlightOutcome Outcome,
@@ -116,15 +117,20 @@ public static class FlightSettlement
 
         // Variable costs are always due: the flight happened, whatever the outcome.
         var fuelPrice = CostModel.FuelPricePerKg(t, i.Profile.FuelType, i.Origin, i.DepartureGameTime);
-        AddCost(lines, LedgerCategory.Fuel, fuelPrice * (decimal)r.FuelUsedKg, $"Treibstoff {r.FuelUsedKg:N0} kg à {fuelPrice:0.000} €/kg");
+        if (!i.ExternalGroundCosts)
+            AddCost(lines, LedgerCategory.Fuel, fuelPrice * (decimal)r.FuelUsedKg, $"Treibstoff {r.FuelUsedKg:N0} kg à {fuelPrice:0.000} €/kg");
         if (airHours > 0)
             AddCost(lines, LedgerCategory.LandingFee, CostModel.LandingFee(t, i.Profile, landedAt), $"Landegebühr {landedAt.Ident}");
-        AddCost(lines, LedgerCategory.Handling,
-            CostModel.Handling(t, i.Origin, c.TotalPassengers, c.CargoKg + c.BaggageKg) + CostModel.Handling(t, landedAt, c.TotalPassengers, c.CargoKg + c.BaggageKg),
-            $"Abfertigung {i.Origin.Ident} / {landedAt.Ident}");
+        if (!i.ExternalGroundCosts)
+            AddCost(lines, LedgerCategory.Handling,
+                CostModel.Handling(t, i.Origin, c.TotalPassengers, c.CargoKg + c.BaggageKg) + CostModel.Handling(t, landedAt, c.TotalPassengers, c.CargoKg + c.BaggageKg),
+                $"Abfertigung {i.Origin.Ident} / {landedAt.Ident}");
         AddCost(lines, LedgerCategory.Navigation, CostModel.Navigation(t, i.Profile, r.DistanceFlownNm, i.Type.FlightRules != FlightRulesRequirement.Vfr),
             "Streckengebühren");
-        AddCost(lines, LedgerCategory.Catering, CostModel.Catering(t, c.TotalPassengers, blockHours), "Catering");
+        if (!i.ExternalGroundCosts)
+            AddCost(lines, LedgerCategory.Catering, CostModel.Catering(t, c.TotalPassengers, blockHours), "Catering");
+        else
+            notes.Add("Treibstoff, Abfertigung und Catering laut GSX-Belegen.");
         AddCost(lines, LedgerCategory.Crew, CostModel.Crew(t, i.Profile, blockHours), "Crew");
 
         if (i.Aircraft.Ownership == Ownership.Rented)

@@ -64,6 +64,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<MissionGeneratorRegistry>();
         services.AddSingleton<FlightMonitorService>();
         services.AddSingleton<GsxCoordinator>();
+        services.AddSingleton<GsxReceiptWatcher>();
         services.AddSingleton<DepartureCoordinator>();
         services.AddSingleton<UpdateService>();
         services.AddSingleton<AppSettings>();
@@ -86,6 +87,7 @@ public partial class App : System.Windows.Application
         // No career is preselected: the app opens on the career selection screen.
         // Created eagerly so flights are armed, started and settled whichever page is open.
         _services.GetRequiredService<DepartureCoordinator>();
+        _services.GetRequiredService<GsxReceiptWatcher>();
 
         // Closing the main window ends the app even if another window (e.g. WebView dev tools) is still open.
         ShutdownMode = ShutdownMode.OnMainWindowClose;

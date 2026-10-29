@@ -4,6 +4,7 @@ using SkyCareer.Data;
 using SkyCareer.Domain;
 using SkyCareer.Domain.Career;
 using SkyCareer.Domain.World;
+using SkyCareer.Integrations.Gsx;
 using SkyCareer.Missions;
 using SkyCareer.Missions.Departure;
 using SkyCareer.Missions.Generation;
@@ -817,5 +818,53 @@ public sealed class CareerServiceTests : IAsyncLifetime
     private sealed class TestDbFactory(DbContextOptions<SkyCareerDb> options) : IDbContextFactory<SkyCareerDb>
     {
         public SkyCareerDb CreateDbContext() => new(options);
+    }
+
+    [Fact]
+    public async Task Gsx_receipts_replace_the_model_ground_costs()
+    {
+        await NewCareer();
+        var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.RefreshMarketAsync(new Random(3));
+        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        await _svc.AcceptAsync(job.Id);
+
+        static GsxReceipt Receipt(string id, GsxReceiptKind kind, string icao, DateTime created, decimal eur) =>
+            new(id, kind, icao, null, "Op", kind.ToString(), created, eur, ["line"], null);
+
+        // Off: nothing is booked.
+        var now = DateTime.UtcNow;
+        Assert.Empty(await _svc.BookGsxReceiptsAsync([Receipt("r0", GsxReceiptKind.Fuel, job.Origin, now.AddMinutes(1), 10)], job.Id, null));
+
+        await _svc.UpdateGsxCostsAsync(true);
+        decimal cash = (await _svc.GetCareerAsync()).Cash;
+        var booked = await _svc.BookGsxReceiptsAsync(
+        [
+            Receipt("old", GsxReceiptKind.Handling, job.Origin, now.AddDays(-1), 50),      // before switching on
+            Receipt("fuel", GsxReceiptKind.Fuel, job.Origin, now.AddMinutes(1), 100),      // active job's origin
+            Receipt("cat", GsxReceiptKind.Catering, job.Origin, now.AddMinutes(2), 20),
+            Receipt("elsewhere", GsxReceiptKind.Handling, "LOWW", now.AddMinutes(3), 30)  // no job or aircraft there
+        ], job.Id, null);
+        Assert.Equal(["fuel", "cat"], booked.Select(r => r.ReceiptId));
+        Assert.All(booked, r => Assert.Equal(job.Id, r.ContractId));
+        Assert.Equal(cash - 120, (await _svc.GetCareerAsync()).Cash);
+        // Booked once only.
+        Assert.Empty(await _svc.BookGsxReceiptsAsync([Receipt("fuel", GsxReceiptKind.Fuel, job.Origin, now.AddMinutes(1), 100)], job.Id, null));
+
+        var result = await _svc.DebugCompleteContractAsync(job.Id);
+        Assert.DoesNotContain(result.Lines, l => l.Category is LedgerCategory.Fuel or LedgerCategory.Handling or LedgerCategory.Catering);
+        Assert.Contains(result.Notes, n => n.Contains("GSX"));
+        var flight = Assert.Single(await _svc.GetFlightsAsync());
+        Assert.Equal(result.Costs + 120, flight.Costs);
+        var ledger = await _svc.GetLedgerAsync();
+        Assert.All(ledger.Where(l => l.Description.StartsWith("GSX")), l => Assert.Equal(flight.Id, l.FlightId));
+
+        // Deboarding at the destination after parking goes to that flight.
+        var deboard = Assert.Single(await _svc.BookGsxReceiptsAsync([Receipt("deb", GsxReceiptKind.Bus, job.Destination, now.AddHours(2), 15)], null, null));
+        Assert.Equal(job.Id, deboard.ContractId);
+        Assert.Equal(LedgerCategory.Handling, deboard.Category);
+        Assert.Equal(result.Costs + 135, (await _svc.GetFlightsAsync()).Single().Costs);
+        Assert.Equal(3, (await _svc.GetGsxReceiptsAsync()).Count);
+        Assert.Equal(plane.Id, deboard.AircraftId);
     }
 }

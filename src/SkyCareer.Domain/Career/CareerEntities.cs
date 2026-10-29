@@ -43,6 +43,10 @@ public sealed class Career
     public double PassengerWeightKg { get; set; } = Loading.PassengerMassTable.SimBriefAdultKg;
     /// <summary>Mass of the one checked bag per passenger for new offers (default SimBrief's 50 lb).</summary>
     public double BagWeightKg { get; set; } = Loading.PassengerMassTable.SimBriefBagKg;
+    /// <summary>Book GSX receipts (handling, buses, catering, fuel) instead of the model's costs for them.</summary>
+    public bool GsxCostsEnabled { get; set; }
+    /// <summary>When the GSX cost option was switched on; older receipts are never booked.</summary>
+    public DateTime? GsxCostsSinceUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
@@ -149,4 +153,25 @@ public sealed class LedgerEntry
     public required string Description { get; set; }
     public Guid? AircraftId { get; set; }
     public Guid? FlightId { get; set; }
+}
+
+/// <summary>A GSX receipt booked into the ledger; the unique (CareerId, ReceiptId) keeps it from being booked twice.</summary>
+public sealed class GsxReceiptRecord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CareerId { get; set; }
+    public required string ReceiptId { get; set; }
+    public LedgerCategory Category { get; set; }
+    public required string Icao { get; set; }
+    public string Operator { get; set; } = "";
+    public required string Title { get; set; }
+    public decimal AmountEur { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    /// <summary>Item and tax lines of the receipt, one per line.</summary>
+    public string Lines { get; set; } = "";
+    public Guid? AircraftId { get; set; }
+    public Guid? ContractId { get; set; }
+    public Guid LedgerEntryId { get; set; }
+    /// <summary>Copy of the GSX HTML invoice next to the database, if GSX wrote one.</summary>
+    public string? StoredHtml { get; set; }
 }

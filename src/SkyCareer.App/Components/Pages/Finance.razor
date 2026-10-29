@@ -38,7 +38,16 @@
                         <tr>
                             <td>@l.GameTime.ToString("dd.MM. HH:mm")</td>
                             <td>@CategoryText(l.Category)</td>
-                            <td>@l.Description</td>
+                            <td>
+                                @l.Description
+                                @if (_receipts.TryGetValue(l.Id, out var receipt))
+                                {
+                                    <MudTooltip Text="@($"GSX-Rechnung öffnen\n{receipt.Lines}")">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Receipt" Size="Size.Small" Disabled="@(receipt.StoredHtml is null)"
+                                                       OnClick="() => GsxReceiptWatcher.Open(receipt.StoredHtml)" />
+                                    </MudTooltip>
+                                }
+                            </td>
                             <td style="text-align:right" class="@(l.Amount < 0 ? "bad" : "ok")">@l.Amount.ToString("N2") €</td>
                         </tr>
                     }
@@ -50,6 +59,7 @@
 
 @code {
     private List<LedgerEntry> _ledger = [];
+    private Dictionary<Guid, GsxReceiptRecord> _receipts = [];
     private List<string> _months = [];
     private string? _month;
     private decimal _cash;
@@ -61,6 +71,7 @@
         var career = await Career.GetCareerAsync();
         _cash = career.Cash;
         _ledger = await Career.GetLedgerAsync();
+        _receipts = (await Career.GetGsxReceiptsAsync()).ToDictionary(r => r.LedgerEntryId);
         _months = _ledger.Select(l => l.GameTime.ToString("MM/yyyy")).Distinct().ToList();
         _month ??= career.GameTime.ToString("MM/yyyy");
         if (!_months.Contains(_month)) _months.Insert(0, _month);

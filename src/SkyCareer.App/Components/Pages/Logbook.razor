@@ -14,7 +14,7 @@ else
         · Ergebnis @Eur(_flights.Sum(f => f.Revenue - f.Costs))
     </MudText>
     <MudSimpleTable Dense="true" Hover="true">
-        <thead><tr><th>Ankunft</th><th>Auftrag</th><th>Strecke</th><th>Flugzeug</th><th>Block</th><th>Landung</th><th>Score</th><th>Ergebnis</th><th>Status</th></tr></thead>
+        <thead><tr><th>Ankunft</th><th>Auftrag</th><th>Strecke</th><th>Flugzeug</th><th>Block</th><th>Landung</th><th>Score</th><th>Ergebnis</th><th>Status</th><th>GSX</th></tr></thead>
         <tbody>
             @foreach (var f in _flights)
             {
@@ -28,7 +28,31 @@ else
                     <td>@f.Score</td>
                     <td class="@(f.Revenue - f.Costs < 0 ? "bad" : "ok")">@Eur(f.Revenue - f.Costs)</td>
                     <td>@f.Outcome</td>
+                    <td>
+                        @if (_receipts.TryGetValue(f.ContractId, out var list))
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Receipt"
+                                       OnClick="() => Toggle(f.Id)">@list.Count</MudButton>
+                        }
+                    </td>
                 </tr>
+                @if (_open.Contains(f.Id) && _receipts.TryGetValue(f.ContractId, out var shown))
+                {
+                    <tr>
+                        <td colspan="10" style="background:var(--mud-palette-background-gray)">
+                            @foreach (var r in shown)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.body2" Style="min-width:320px">@r.Title @r.Icao@(r.Operator.Length > 0 ? $" ({r.Operator})" : "")</MudText>
+                                    <MudText Typo="Typo.body2" Style="min-width:100px;text-align:right">@Eur(-r.AmountEur)</MudText>
+                                    <MudText Typo="Typo.caption" Style="flex:1">@r.Lines.Replace("\n", " · ")</MudText>
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(r.StoredHtml is null)"
+                                               OnClick="() => GsxReceiptWatcher.Open(r.StoredHtml)">Öffnen</MudButton>
+                                </MudStack>
+                            }
+                        </td>
+                    </tr>
+                }
             }
         </tbody>
     </MudSimpleTable>
@@ -37,10 +61,19 @@ else
 @code {
     private List<FlightRecord> _flights = [];
     private Dictionary<Guid, string> _registrations = [];
+    private Dictionary<Guid, List<GsxReceiptRecord>> _receipts = [];
+    private readonly HashSet<Guid> _open = [];
 
     protected override async Task LoadAsync()
     {
         _flights = await Career.GetFlightsAsync();
         _registrations = (await Career.GetFleetAsync()).ToDictionary(f => f.Id, f => f.Registration);
+        _receipts = (await Career.GetGsxReceiptsAsync()).Where(r => r.ContractId is not null)
+            .GroupBy(r => r.ContractId!.Value).ToDictionary(g => g.Key, g => g.OrderBy(r => r.CreatedUtc).ToList());
+    }
+
+    private void Toggle(Guid flightId)
+    {
+        if (!_open.Remove(flightId)) _open.Add(flightId);
     }
 }

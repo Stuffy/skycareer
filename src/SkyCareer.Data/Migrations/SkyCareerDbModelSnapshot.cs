@@ -141,6 +141,12 @@ namespace SkyCareer.Data.Migrations
                     b.Property<DateTime>("GameTime")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("GsxCostsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("GsxCostsSinceUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("GsxSyncEnabled")
                         .HasColumnType("INTEGER");
 
@@ -324,6 +330,69 @@ namespace SkyCareer.Data.Migrations
                     b.ToTable("Flights");
                 });
 
+            modelBuilder.Entity("SkyCareer.Domain.Career.GsxReceiptRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AircraftId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AmountEur")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CareerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icao")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LedgerEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Lines")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Operator")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceiptId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StoredHtml")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CareerId", "ReceiptId")
+                        .IsUnique();
+
+                    b.ToTable("GsxReceipts");
+                });
+
             modelBuilder.Entity("SkyCareer.Domain.Career.LedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -464,6 +533,15 @@ namespace SkyCareer.Data.Migrations
                 });
 
             modelBuilder.Entity("SkyCareer.Domain.Career.FlightRecord", b =>
+                {
+                    b.HasOne("SkyCareer.Domain.Career.Career", null)
+                        .WithMany()
+                        .HasForeignKey("CareerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SkyCareer.Domain.Career.GsxReceiptRecord", b =>
                 {
                     b.HasOne("SkyCareer.Domain.Career.Career", null)
                         .WithMany()

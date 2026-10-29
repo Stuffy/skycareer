@@ -153,6 +153,28 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         get { lock (_sessionLock) return Session?.Phases.Phase; }
     }
 
+    /// <summary>True while a debug override holds the phase against the telemetry.</summary>
+    public bool PhaseFrozen
+    {
+        get { lock (_sessionLock) return Session?.Phases.Frozen ?? false; }
+    }
+
+    /// <summary>Debug mode: sets the current flight's phase by hand; the flight automation reacts as to a detected change.</summary>
+    public void ForcePhase(FlightPhase phase, bool freeze)
+    {
+        FlightPhase? from;
+        lock (_sessionLock)
+        {
+            if (Session is null) throw new InvalidOperationException("Es läuft kein Flug.");
+            from = Session.Phases.Phase;
+            Session.ForcePhase(phase, Latest ?? new Telemetry { Timestamp = DateTimeOffset.Now }, freeze);
+        }
+        Log(from == phase
+            ? $"Debug: Phase {phase} {(freeze ? "eingefroren" : "freigegeben")}"
+            : $"Debug: Phase manuell {from} → {phase}{(freeze ? " (eingefroren)" : "")}");
+        Changed?.Invoke();
+    }
+
     /// <summary>Writes the recorded samples as JSON Lines (replayable) and returns the file path.</summary>
     public async Task<string?> SaveTrackAsync(string name)
     {

@@ -83,8 +83,45 @@ public sealed class FlightPhaseTracker
         _last = current;
     }
 
+    /// <summary>While true, telemetry no longer changes the phase (debug: hold a forced phase).</summary>
+    public bool Frozen { get; set; }
+
+    /// <summary>
+    /// Debug: jumps to <paramref name="phase"/> regardless of telemetry. Times of milestones the flight now has passed are
+    /// filled with <paramref name="at"/>'s timestamp (earlier ones are kept), those it hasn't reached yet are cleared.
+    /// Raises <see cref="PhaseChanged"/> like a detected change.
+    /// </summary>
+    public void ForcePhase(FlightPhase phase, Telemetry at)
+    {
+        if (phase == Phase) return;
+        var now = at.Timestamp;
+        int target = (int)phase;
+        bool passed(FlightPhase milestone) => phase != FlightPhase.Crashed && target >= (int)milestone;
+
+        BlockOff = passed(FlightPhase.TaxiOut) ? BlockOff ?? now : null;
+        TakeoffTime = passed(FlightPhase.Climb) ? TakeoffTime ?? now : null;
+        LandingTime = passed(FlightPhase.Rollout) ? LandingTime ?? now : null;
+        BlockOn = passed(FlightPhase.Arrived) ? BlockOn ?? now : null;
+        if (phase == FlightPhase.Crashed)
+        {
+            // A crash keeps whatever the flight reached.
+            BlockOff ??= now;
+        }
+        _pendingTouchdown = null;
+        _touchdownAt = null;
+        _airborneDuringRollout = false;
+        _last = at;
+        SetPhase(phase, at);
+    }
+
     public void Process(Telemetry t)
     {
+        if (Frozen)
+        {
+            _last = t;
+            return;
+        }
+
         if (Phase is FlightPhase.Crashed or FlightPhase.Arrived)
         {
             _last = t;

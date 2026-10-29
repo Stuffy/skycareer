@@ -28,6 +28,7 @@ public static class FlightResultMapper
         MinorViolations = s.Violations.Count(v => !Severe.Contains(v.Kind)),
         Notes = s.Violations.Select(v => $"{v.Kind}: {v.Detail}")
             .Concat(s.Resumed ? ["Tracking war unterbrochen (App-Neustart ohne Flugaufzeichnung); Zeiten teils geschätzt."] : [])
+            .Concat(s.ManualPhaseChanges > 0 ? [$"Flugphase {s.ManualPhaseChanges}× manuell gesetzt (Debug-Modus)."] : [])
             .ToList(),
         DepartureIssues = departureIssues ?? []
     };

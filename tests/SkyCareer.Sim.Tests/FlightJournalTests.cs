@@ -35,6 +35,38 @@ public class FlightJournalTests
     }
 
     [Fact]
+    public void Forced_phases_set_milestones_lock_payload_and_can_be_frozen()
+    {
+        var t = new Telemetry { Timestamp = DateTimeOffset.UnixEpoch, OnGround = true, ParkingBrake = true, PayloadKg = 500 };
+        var session = new Sim.Tracking.FlightSession();
+        var changes = new List<Sim.Tracking.FlightPhase>();
+        session.Phases.PhaseChanged += (_, c) => changes.Add(c.To);
+
+        session.ForcePhase(Sim.Tracking.FlightPhase.Cruise, t, freeze: true);
+        Assert.Equal([Sim.Tracking.FlightPhase.Cruise], changes);
+        Assert.Equal(t.Timestamp, session.Phases.BlockOff);
+        Assert.Equal(t.Timestamp, session.Phases.TakeoffTime);
+        Assert.Null(session.Phases.LandingTime);
+        Assert.True(session.Integrity.PayloadLocked);
+
+        // Frozen: a parked aircraft on the ground doesn't move the phase on.
+        for (int i = 1; i <= 30; i++) session.Process(t with { Timestamp = t.Timestamp.AddSeconds(i) });
+        Assert.Equal(Sim.Tracking.FlightPhase.Cruise, session.Phases.Phase);
+
+        // Back to taxi: later milestones are cleared and the load may change again.
+        session.ForcePhase(Sim.Tracking.FlightPhase.TaxiOut, t with { Timestamp = t.Timestamp.AddMinutes(1) }, freeze: false);
+        Assert.Null(session.Phases.TakeoffTime);
+        Assert.Equal(t.Timestamp, session.Phases.BlockOff);
+        Assert.False(session.Integrity.PayloadLocked);
+
+        session.ForcePhase(Sim.Tracking.FlightPhase.Arrived, t with { Timestamp = t.Timestamp.AddMinutes(2) }, freeze: false);
+        var summary = session.Summarize();
+        Assert.Equal(Sim.Tracking.FlightPhase.Arrived, summary.FinalPhase);
+        Assert.NotNull(summary.BlockOn);
+        Assert.Equal(3, summary.ManualPhaseChanges);
+    }
+
+    [Fact]
     public void Resume_without_history_picks_the_phase_from_the_current_state()
     {
         var started = DateTimeOffset.UnixEpoch;

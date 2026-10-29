@@ -55,6 +55,33 @@
     </MudPaper>
 }
 
+@if (Settings.DebugMode && Monitor.HasSession)
+{
+    <MudPaper Class="pa-3 mb-4" Style="border:1px dashed var(--mud-palette-warning)">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.BugReport" Color="Color.Warning" />
+            <MudText><b>Debug: Flugphase setzen</b></MudText>
+            <MudSpacer />
+            <MudSwitch T="bool" Value="Monitor.PhaseFrozen" ValueChanged="SetFrozen" Color="Color.Warning"
+                       Label="Phase einfrieren (Telemetrie ändert sie nicht)" />
+        </MudStack>
+        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+            @foreach (var phase in Enum.GetValues<FlightPhase>())
+            {
+                <MudButton Size="Size.Small" Variant="@(Monitor.Phase == phase ? Variant.Filled : Variant.Outlined)"
+                           Color="@(Monitor.Phase == phase ? Color.Warning : Color.Default)" OnClick="() => SetPhase(phase)">
+                    @MissionTexts.Phase(phase)
+                </MudButton>
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mt-2" Style="display:block">
+            Die Flugautomatik reagiert wie auf eine erkannte Phase: Steigflug startet einen angenommenen Auftrag, „Geparkt“ rechnet ihn ab
+            (abhängig von der Position als Ankunft oder Ausweichlandung). Ohne „einfrieren“ erkennt die Telemetrie danach wieder selbst weiter.
+            Die Abrechnung vermerkt manuelle Phasenwechsel.
+        </MudText>
+    </MudPaper>
+}
+
 <MudGrid>
     <MudItem xs="12" md="6">
         <MudPaper Class="pa-4">
@@ -133,6 +160,17 @@
     private void OnChanged() => InvokeAsync(StateHasChanged);
 
     private async Task ConnectLive() => await Run(Monitor.ConnectLiveAsync);
+
+    private void SetPhase(FlightPhase phase)
+    {
+        Monitor.ForcePhase(phase, Monitor.PhaseFrozen);
+        Departure.TickNow(); // don't wait for the next telemetry sample
+    }
+
+    private void SetFrozen(bool freeze)
+    {
+        if (Monitor.Phase is { } phase) Monitor.ForcePhase(phase, freeze);
+    }
 
     private async Task StartReplay() => await Run(() => Monitor.StartReplayAsync(_replayPath, speed: 10));
 

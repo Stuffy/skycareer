@@ -407,6 +407,25 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Contains(s.Notes, n => n.Contains("Zuladung"));
     }
 
+    [Fact]
+    public async Task Forced_phases_drive_the_flight_automation()
+    {
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+
+        host.Force(FlightPhase.Climb);
+        await automation.TickAsync();
+        Assert.Equal(ContractStatus.InProgress, (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single().Status);
+
+        // Parked without having moved: settled, but not at the destination.
+        host.Force(FlightPhase.Arrived);
+        await automation.TickAsync();
+        var s = automation.LastSettlement;
+        Assert.NotNull(s);
+        Assert.Equal(FlightOutcome.Diverted, s!.Outcome);
+        Assert.Contains(s.Notes, n => n.Contains("manuell gesetzt"));
+        Assert.False(host.HasSession);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -487,6 +506,8 @@ public sealed class CareerServiceTests : IAsyncLifetime
             ContractId = contractId;
             return true;
         }
+
+        public void Force(FlightPhase phase) => _session!.ForcePhase(phase, Latest!, freeze: true);
 
         public void Feed(Telemetry t)
         {

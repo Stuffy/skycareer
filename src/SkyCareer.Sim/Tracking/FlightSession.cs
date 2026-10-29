@@ -16,7 +16,8 @@ public sealed record FlightSummary(
     IReadOnlyList<IntegrityViolation> Violations,
     double FinalLatitude,
     double FinalLongitude,
-    bool Resumed = false)
+    bool Resumed = false,
+    int ManualPhaseChanges = 0)
 {
     public TimeSpan? BlockTime => BlockOn - BlockOff;
     public TimeSpan? AirTime => LandingTime - TakeoffTime;
@@ -64,6 +65,24 @@ public sealed class FlightSession
     /// <summary>True when the flight was picked up without its full history; the result notes the gap.</summary>
     public bool Resumed { get; private set; }
 
+    /// <summary>Phases set by hand in debug mode; the result notes them.</summary>
+    public int ManualPhaseChanges { get; private set; }
+
+    /// <summary>
+    /// Debug: sets the flight phase by hand (and keeps the payload lock consistent with it). With
+    /// <paramref name="freeze"/> telemetry can't move the phase on until <see cref="FlightPhaseTracker.Frozen"/> is cleared.
+    /// </summary>
+    public void ForcePhase(FlightPhase phase, Telemetry at, bool freeze)
+    {
+        Phases.Frozen = freeze;
+        if (phase == Phases.Phase) return;
+        ManualPhaseChanges++;
+        Phases.ForcePhase(phase, at);
+        bool flying = phase is >= FlightPhase.TakeoffRoll and < FlightPhase.Arrived;
+        if (flying && !Integrity.PayloadLocked) Integrity.LockPayload(at.PayloadKg);
+        else if (phase is FlightPhase.Preflight or FlightPhase.TaxiOut) Integrity.UnlockPayload();
+    }
+
     public void Process(Telemetry t)
     {
         _first ??= t;
@@ -102,5 +121,6 @@ public sealed class FlightSession
         Integrity.Violations,
         _last?.Latitude ?? 0,
         _last?.Longitude ?? 0,
-        Resumed);
+        Resumed,
+        ManualPhaseChanges);
 }

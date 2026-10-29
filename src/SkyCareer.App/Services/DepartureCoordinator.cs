@@ -43,6 +43,9 @@ public sealed class DepartureCoordinator : IDisposable
         Kick();
     }
 
+    /// <summary>Evaluates right away instead of on the next telemetry sample (e.g. after a debug phase change).</summary>
+    public void TickNow() => Kick();
+
     private void Kick()
     {
         if (!_running.Wait(0)) return;

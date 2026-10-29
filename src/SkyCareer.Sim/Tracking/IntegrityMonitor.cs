@@ -34,6 +34,8 @@ public sealed class IntegrityMonitor
     /// <summary>Call when the takeoff roll starts; payload is locked from then on.</summary>
     public void LockPayload(double payloadKg) => _payloadAtDeparture = payloadKg;
 
+    public bool PayloadLocked => _payloadAtDeparture is not null;
+
     /// <summary>Releases the lock after a rejected takeoff, so the load can be corrected on the ground.</summary>
     public void UnlockPayload()
     {

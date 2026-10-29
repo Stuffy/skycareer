@@ -117,7 +117,8 @@ public sealed class StandardMissionGenerator : IMissionGenerator
         var rules = type.FlightRules == FlightRulesRequirement.Vfr ? FlightRules.Vfr : FlightRules.Ifr;
         var fuel = FuelPlanner.Plan(aircraft, dist, rules, rules == FlightRules.Ifr ? Math.Min(100, dist * 0.3) : 0);
         var baggage = type.Passengers?.Baggage ?? BaggageProfile.None;
-        var sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng);
+        // Every passenger's bag weighs differently; SimBrief gets the sum as freight.
+        var sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng, baggageMode: PassengerMassMode.Randomized);
 
         // Trim cargo first, then passengers, until the load fits; give up if the minimums can't be kept.
         for (int i = 0; i < 10 && !sheet.IsWithinLimits; i++)
@@ -125,7 +126,7 @@ public sealed class StandardMissionGenerator : IMissionGenerator
             if (cargo.Kg > cargoMin) cargo = Mass.FromKg(Math.Max(cargoMin, cargo.Kg * 0.8));
             else if (pax.Seated > paxMin) pax = pax with { Adults = Math.Max(paxMin - pax.Children, (int)(pax.Adults * 0.85)) };
             else break;
-            sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng);
+            sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng, baggageMode: PassengerMassMode.Randomized);
         }
         if (!sheet.IsWithinLimits || pax.Seated < paxMin || cargo.Kg < cargoMin) return null;
 

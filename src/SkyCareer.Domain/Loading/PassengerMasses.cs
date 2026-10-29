@@ -19,15 +19,15 @@ public sealed record PassengerCount(int Adults, int Children = 0, int Infants = 
 }
 
 /// <summary>
-/// Passenger and baggage mass tables. Defaults follow SimBrief (175 lb per passenger, one 50 lb bag each) so the
-/// mission payload matches an OFP; the SimBrief dispatch page can't take other masses. A career sets its own values
+/// Passenger and baggage mass tables. The passenger weight follows SimBrief (175 lb), which weighs every passenger the
+/// same; bags (50 lb on average) vary per passenger and reach SimBrief as freight. A career sets its own values
 /// (<see cref="Career.Career.PassengerWeightKg"/>, <see cref="Career.Career.BagWeightKg"/>) via <see cref="ForCareer"/>.
 /// </summary>
 public sealed record PassengerMassTable
 {
     /// <summary>SimBrief's default passenger weight, 175 lb.</summary>
     public const double SimBriefAdultKg = 79.38;
-    /// <summary>SimBrief's bag weight in the user's airframes (OFP <c>bag_weight</c>), 50 lb.</summary>
+    /// <summary>Average checked bag, 50 lb (SimBrief's usual airframe value).</summary>
     public const double SimBriefBagKg = 22.68;
 
     public double AdultKg { get; init; } = SimBriefAdultKg;
@@ -57,7 +57,10 @@ public sealed record PassengerMassTable
         return Mass.FromKg(adults + children);
     }
 
-    /// <summary>Checked baggage. Randomized mode varies each bag ±40 % and lets some passengers travel without one.</summary>
+    /// <summary>
+    /// Checked baggage. Randomized mode varies each bag ±40 % and lets 15 % of passengers travel without one; the
+    /// expected total stays at one <see cref="BagKg"/> bag per seated passenger.
+    /// </summary>
     public Mass BaggageMass(PassengerCount pax, BaggageProfile profile, PassengerMassMode mode, Random rng)
     {
         double perPax = BaggageKgPerPax(profile);

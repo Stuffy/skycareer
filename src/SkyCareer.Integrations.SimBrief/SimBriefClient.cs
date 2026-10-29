@@ -37,9 +37,9 @@ public sealed record SimBriefOfp(
 }
 
 /// <summary>
-/// Prefill for SimBrief's dispatch page. <see cref="CargoKg"/> is the freight alone: SimBrief adds one bag per
-/// passenger with the airframe's bag weight itself. The page ignores custom masses (<c>acdata</c>), so passenger and
-/// bag weight come from the airframe and the career settings must match them.
+/// Prefill for SimBrief's dispatch page, usually from <see cref="SimBriefPayload"/>: passengers including crew, and as
+/// cargo everything else (bags, freight, mass differences). The page ignores custom masses (<c>acdata</c>), so the
+/// passenger weight comes from the airframe (must match the career) and its bag weight must be 0.
 /// <see cref="Airframe"/> is a SimBrief airframe ID that replaces the plain ICAO type.
 /// </summary>
 public sealed record DispatchRequest(string Origin, string Destination, string AircraftIcao, int Passengers,

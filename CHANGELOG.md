@@ -2,6 +2,18 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## Unveröffentlicht
+
+### Geändert
+- **SimBrief:** Die Crew wird als Passagiere übergeben, Gepäck und Gewichtsunterschiede der Crew als Fracht. Dadurch
+  stimmt das ZFW im OFP mit dem Load-Sheet überein. **Im SimBrief-Airframe das Gepäckgewicht auf 0 stellen.**
+- **Gepäck:** Aufgegebenes Gepäck wiegt je Passagier unterschiedlich viel. Der Wert unter *Einstellungen → Beladung* ist
+  jetzt der Durchschnitt, manche Passagiere reisen ohne aufgegebenes Gepäck.
+
+### Behoben
+- Nach einem Flug blieben Angebote vom alten Flughafen im Auftragsmarkt stehen und ließen sich annehmen.
+  Sie werden jetzt entfernt, auch in bestehenden Spielständen.
+
 ## 0.1.1 – 2026-10-29
 
 ### Neu

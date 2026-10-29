@@ -248,12 +248,13 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         var withPax = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.Adults > 0).ToList();
         Assert.NotEmpty(withPax);
-        // Like SimBrief: children weigh as adults, every seated passenger has one bag; infants keep their lap mass.
+        // Like SimBrief: children weigh as adults; infants keep their lap mass.
         Assert.All(withPax, o =>
-        {
-            Assert.Equal(90, (o.PassengerMassKg - o.Infants * PassengerMassTable.Default.InfantKg) / (o.Adults + o.Children), 1);
-            Assert.Equal(20, o.BaggageKg / (o.Adults + o.Children), 1);
-        });
+            Assert.Equal(90, (o.PassengerMassKg - o.Infants * PassengerMassTable.Default.InfantKg) / (o.Adults + o.Children), 1));
+        // Bags vary per passenger around the set average (sent to SimBrief as freight).
+        var perBag = withPax.Select(o => o.BaggageKg / (o.Adults + o.Children)).ToList();
+        Assert.InRange(perBag.Average(), 18, 22);
+        Assert.True(perBag.Distinct().Count() > perBag.Count / 2);
     }
 
     [Fact]
@@ -818,6 +819,43 @@ public sealed class CareerServiceTests : IAsyncLifetime
     private sealed class TestDbFactory(DbContextOptions<SkyCareerDb> options) : IDbContextFactory<SkyCareerDb>
     {
         public SkyCareerDb CreateDbContext() => new(options);
+    }
+
+    [Fact]
+    public async Task Offers_from_the_old_airport_are_dropped_once_the_aircraft_moved()
+    {
+        await NewCareer();
+        var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.RefreshMarketAsync(new Random(3));
+        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var job = offers.First();
+        var other = offers.First(o => o.Id != job.Id);
+        await _svc.AcceptAsync(job.Id);
+        await _svc.DebugCompleteContractAsync(job.Id);
+
+        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin != job.Destination);
+        await _svc.RefreshMarketAsync(new Random(4));
+        var fresh = await _svc.GetContractsAsync(ContractStatus.Offered);
+        Assert.NotEmpty(fresh);
+        Assert.All(fresh, o => Assert.Equal(job.Destination, o.Origin));
+        await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(other.Id));
+
+        // A save from an older version still holds offers from the old airport: the next search drops them.
+        await using (var db = _factory.CreateDbContext())
+        {
+            var stale = await db.Contracts.FirstAsync(c => c.Status == ContractStatus.Offered);
+            db.Contracts.Add(new MissionContract
+            {
+                CareerId = stale.CareerId, AircraftId = plane.Id, MissionTypeId = stale.MissionTypeId, Origin = job.Origin,
+                Destination = stale.Destination, Status = ContractStatus.Offered, ExpiresAt = stale.ExpiresAt, Deadline = stale.Deadline,
+                OfferedAt = stale.OfferedAt
+            });
+            await db.SaveChangesAsync();
+        }
+        var staleOffer = (await _svc.GetContractsAsync(ContractStatus.Offered)).Single(o => o.Origin == job.Origin);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(staleOffer.Id));
+        await _svc.RefreshMarketAsync(new Random(5));
+        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin == job.Origin);
     }
 
     [Fact]

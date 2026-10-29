@@ -106,6 +106,19 @@ public class GsxTests
     }
 }
 
+public class GsxCrewTests
+{
+    [Fact]
+    public void Gsx_may_count_the_crew_from_the_ofp()
+    {
+        var mission = new PassengerCount(8);
+        var state = new GsxState { Boarding = GsxServiceState.Callable, PassengersBoardingTotal = 11 };
+        Assert.Null(GsxLoadSync.PassengerMismatch(state, mission, crewAsPassengers: 3));
+        Assert.NotNull(GsxLoadSync.PassengerMismatch(state, mission));
+        Assert.NotNull(GsxLoadSync.PassengerMismatch(state with { PassengersBoardingTotal = 12 }, mission, 3));
+    }
+}
+
 public class PlnTests
 {
     private static readonly Airport Eddf = new("EDDF", "Frankfurt", new GeoPosition(50.033333, 8.570556), AirportSize.Large, 4000, [RunwaySurface.Paved], "DE", 364);

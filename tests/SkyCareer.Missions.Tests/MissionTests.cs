@@ -1,5 +1,6 @@
 using SkyCareer.Domain;
 using SkyCareer.Domain.Aircraft;
+using SkyCareer.Domain.Loading;
 using SkyCareer.Domain.World;
 using SkyCareer.Integrations.SimBrief;
 using SkyCareer.Missions.Generation;
@@ -118,9 +119,9 @@ public class MissionTests
     }
 
     [Fact]
-    public void SimBrief_ofp_that_dropped_bags_is_reported()
+    public void SimBrief_ofp_with_airframe_bags_and_weight_limits_is_reported()
     {
-        // Shape of a real Citation X OFP: SimBrief's airframe MZFW (11 068 kg) cut 3 of 9 bags.
+        // Shape of a real Citation X OFP: the airframe still has a bag weight, and its MZFW (11 068 kg) cut 3 of 9 bags.
         const string json = """
             {
               "fetch": { "status": "Success" },
@@ -140,7 +141,7 @@ public class MissionTests
         Assert.Equal(9, ofp.PlannedBagCount);
 
         var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, 1000, 11300, 16375));
-        Assert.Contains(problems, p => p.Contains("3 von 9 Gepäckstücken"));
+        Assert.Contains(problems, p => p.Contains("Gepäckgewicht von 50 lbs") && p.Contains("auf 0 setzen"));
         Assert.Contains(problems, p => p.StartsWith("Zuladung"));
         Assert.Contains(problems, p => p.StartsWith("ZFW"));
         Assert.Contains(problems, p => p.StartsWith("MZFW im Flugzeugprofil"));
@@ -160,7 +161,7 @@ public class MissionTests
     }
 
     [Fact]
-    public void Ofp_with_other_passenger_or_bag_weight_is_reported()
+    public void Ofp_with_other_passenger_weight_or_airframe_bags_is_reported()
     {
         var ofp = SimBriefClient.Parse("""
             {
@@ -171,9 +172,49 @@ public class MissionTests
               "fuel": { "plan_ramp": "2500", "enroute_burn": "1900" }
             }
             """);
-        var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38, BagWeightKg: 22.68));
+        var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38));
         Assert.DoesNotContain(problems, p => p.Contains("je Passagier"));
-        Assert.Contains(problems, p => p.Contains("55 lbs je Gepäckstück") && p.Contains("50 lbs"));
+        Assert.Contains(problems, p => p.Contains("Gepäckgewicht von 55 lbs"));
+        Assert.Contains(OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 90)),
+            p => p.Contains("je Passagier"));
+    }
+
+    [Fact]
+    public void SimBrief_payload_sends_crew_as_passengers_and_the_rest_as_cargo()
+    {
+        var jet = Aircraft("a20n");
+        var pax = new PassengerCount(10, 0, 1);
+        var fuel = FuelPlanner.Plan(jet, 300, FlightRules.Ifr, 100);
+        var sheet = LoadSheetBuilder.FromMasses(jet, pax, Mass.FromKg(10 * 79.38 + 10), Mass.FromKg(237), Mass.FromKg(300), fuel);
+        int crew = jet.Pilots + jet.CabinCrewCount;
+        Assert.True(jet.Pilots >= 2);
+
+        var load = SimBriefPayload.For(sheet, 79.38);
+        Assert.Equal(10 + crew, load.Passengers);
+        Assert.Equal(crew, load.CrewAsPassengers);
+        // Bags, freight, the infant and the crew's standard masses above/below the passenger weight.
+        double expectedCargo = 237 + 300 + 10 + jet.Pilots * (jet.CrewMassKg - 79.38) + jet.CabinCrewCount * (jet.CabinCrewMassKg - 79.38);
+        Assert.Equal(Math.Round(expectedCargo), load.CargoKg);
+        // SimBrief's ZFW (airframe OEW = sim empty weight) equals ours.
+        Assert.Equal(sheet.ZeroFuelWeight.Kg, jet.OperatingEmptyKg + load.Passengers * 79.38 + load.CargoKg, 0.6);
+
+        var crewInEmpty = SimBriefPayload.For(LoadSheetBuilder.FromMasses(jet with { CrewIncludedInEmptyWeight = true }, pax,
+            Mass.FromKg(10 * 79.38 + 10), Mass.FromKg(237), Mass.FromKg(300), fuel), 79.38);
+        Assert.Equal(10, crewInEmpty.Passengers);
+        Assert.Equal(547, crewInEmpty.CargoKg);
+    }
+
+    [Fact]
+    public void Offers_vary_bags_per_passenger_around_the_average()
+    {
+        var table = PassengerMassTable.ForCareer(79.38, 22.68);
+        var rng = new Random(7);
+        var pax = new PassengerCount(100);
+        var bags = Enumerable.Range(0, 50).Select(_ => table.BaggageMass(pax, BaggageProfile.European, PassengerMassMode.Randomized, rng).Kg).ToList();
+        Assert.True(bags.Distinct().Count() > 40);
+        Assert.InRange(bags.Average(), 100 * 22.68 * 0.95, 100 * 22.68 * 1.05);
+        Assert.Equal(100 * 79.38, table.PassengerMass(pax, PassengerMassMode.Standard, rng).Kg, 6);
+        Assert.Equal(0, table.BaggageMass(pax, BaggageProfile.HandOnly, PassengerMassMode.Randomized, rng).Kg);
     }
 
     [Fact]

@@ -1,9 +1,12 @@
 namespace SkyCareer.Integrations.SimBrief;
 
-/// <summary>What the mission and its load sheet expect from the OFP. Weights in kg.</summary>
+/// <summary>
+/// What the mission and its load sheet expect from the OFP. Weights in kg. <see cref="Passengers"/> and
+/// <see cref="FreightKg"/> are what the dispatch link sent (<see cref="SimBriefPayload"/>: crew included, bags as freight).
+/// </summary>
 public sealed record OfpExpectation(string Origin, string Destination, string AircraftIcao, int Passengers, double FreightKg,
     double PayloadKg = 0, double ZeroFuelWeightKg = 0, double ProfileMaxZeroFuelKg = 0,
-    double PassengerWeightKg = 0, double BagWeightKg = 0);
+    double PassengerWeightKg = 0);
 
 /// <summary>
 /// Checks that an imported OFP belongs to the accepted mission and plans the same load. Messages are shown in the
@@ -29,12 +32,10 @@ public static class OfpValidator
         if (e.PassengerWeightKg > 0 && ofp.PassengerWeightKg > 0 && Math.Abs(ofp.PassengerWeightKg - e.PassengerWeightKg) > 0.5)
             problems.Add($"SimBrief rechnet mit {ofp.PassengerWeightKg * LbPerKg:N0} lbs je Passagier, die Karriere mit {e.PassengerWeightKg * LbPerKg:N0} lbs " +
                          "– unter „Einstellungen → Beladung“ angleichen (gilt für neue Aufträge)");
-        if (e.BagWeightKg > 0 && ofp.BagWeightKg > 0 && Math.Abs(ofp.BagWeightKg - e.BagWeightKg) > 0.5)
-            problems.Add($"SimBrief rechnet mit {ofp.BagWeightKg * LbPerKg:N0} lbs je Gepäckstück, die Karriere mit {e.BagWeightKg * LbPerKg:N0} lbs " +
-                         "– unter „Einstellungen → Beladung“ angleichen (gilt für neue Aufträge)");
-        if (ofp.PlannedBagCount > ofp.BagCount)
-            problems.Add($"SimBrief hat {ofp.PlannedBagCount - ofp.BagCount} von {ofp.PlannedBagCount} Gepäckstücken wegen des Gewichtslimits weggelassen " +
-                         $"(MZFW im SimBrief-Airframe {ofp.MaxZeroFuelWeightKg:N0} kg)");
+        // SkyCareer sends the bags as freight; SimBrief's own bags would count them twice.
+        if (ofp.BagWeightKg > 0.5 && ofp.BagCount > 0)
+            problems.Add($"Im SimBrief-Airframe ist ein Gepäckgewicht von {ofp.BagWeightKg * LbPerKg:N0} lbs eingestellt – auf 0 setzen, " +
+                         "SkyCareer sendet das Gepäck als Fracht");
         if (Math.Abs(ofp.FreightKg - e.FreightKg) > Math.Max(50, e.FreightKg * 0.05))
             problems.Add($"Fracht im OFP {ofp.FreightKg:N0} kg, Auftrag {e.FreightKg:N0} kg");
         if (e.PayloadKg > 0 && ofp.PayloadKg > 0 && Math.Abs(ofp.PayloadKg - e.PayloadKg) > Math.Max(50, e.PayloadKg * 0.05))

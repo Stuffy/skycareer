@@ -101,7 +101,8 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
         State = state;
         var sheet = _sheet;
         if (sheet is null) return;
-        Mismatch = GsxLoadSync.PassengerMismatch(state, sheet.Passengers);
+        var crew = sheet.Aircraft.CrewIncludedInEmptyWeight ? 0 : sheet.Aircraft.Pilots + sheet.Aircraft.CabinCrewCount;
+        Mismatch = GsxLoadSync.PassengerMismatch(state, sheet.Passengers, crew);
 
         if (!SyncEnabled || monitor.Loader is not { } loader || sheet.Aircraft.Loading != Domain.Aircraft.LoadingMethod.SimConnectStations) return;
         // Only on the ground at the gate: before block-off (no session yet or preflight) and after parking.

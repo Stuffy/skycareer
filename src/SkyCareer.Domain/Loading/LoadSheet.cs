@@ -48,14 +48,17 @@ public sealed record LoadSheet
 
 public static class LoadSheetBuilder
 {
+    /// <param name="baggageMode">Defaults to <paramref name="mode"/>; offers keep passengers at standard mass (as SimBrief
+    /// weighs them) but vary the bags.</param>
     public static LoadSheet Build(AircraftProfile aircraft, PassengerCount pax, BaggageProfile baggage, Mass cargo,
-        FuelPlan fuel, PassengerMassMode mode = PassengerMassMode.Standard, PassengerMassTable? table = null, Random? rng = null)
+        FuelPlan fuel, PassengerMassMode mode = PassengerMassMode.Standard, PassengerMassTable? table = null, Random? rng = null,
+        PassengerMassMode? baggageMode = null)
     {
         table ??= PassengerMassTable.Default;
         rng ??= Random.Shared;
 
         var paxMass = table.PassengerMass(pax, mode, rng);
-        var bagMass = table.BaggageMass(pax, baggage, mode, rng);
+        var bagMass = table.BaggageMass(pax, baggage, baggageMode ?? mode, rng);
         return FromMasses(aircraft, pax, paxMass, bagMass, cargo, fuel);
     }
 

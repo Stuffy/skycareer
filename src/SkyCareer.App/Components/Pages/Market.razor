@@ -315,6 +315,7 @@
     private Guid? _selected;
     private bool _airportDataOutdated;
     private int _reputation;
+    private double _passengerWeightKg = PassengerMassTable.SimBriefAdultKg;
     private string? _searchStatus;
 
     protected override async Task OnInitializedAsync()
@@ -416,6 +417,7 @@
         var career = await Career.GetCareerAsync();
         _gameTime = career.GameTime;
         _reputation = career.Reputation;
+        _passengerWeightKg = career.PassengerWeightKg;
         _fleet = await Career.GetFleetAsync();
         _offers = await Career.GetContractsAsync(ContractStatus.Offered);
         _active = await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress);
@@ -437,6 +439,7 @@
         {
             var search = Filter.ToSearch();
             return _offers.Where(o => (Filter.AircraftId is not { } id || o.AircraftId == id) &&
+                                      _fleet.Any(f => f.Id == o.AircraftId && f.Location == o.Origin) &&
                                       search.Matches(o, _airports.GetValueOrDefault(o.Destination)));
         }
     }
@@ -612,8 +615,8 @@
 
     private void OpenSimBrief(MissionContract c, AircraftProfile p)
     {
-        // Bags aren't sent: SimBrief adds one per passenger with the airframe's bag weight.
-        var uri = SimBriefClient.BuildDispatchUri(new DispatchRequest(c.Origin, c.Destination, p.IcaoType, c.Adults + c.Children, c.CargoKg,
+        var load = SimBriefPayload.For(Career.BuildLoadSheet(c, p), _passengerWeightKg);
+        var uri = SimBriefClient.BuildDispatchUri(new DispatchRequest(c.Origin, c.Destination, p.IcaoType, load.Passengers, load.CargoKg,
             Airframe: p.SimBriefAirframe));
         Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
     }
@@ -624,8 +627,9 @@
         if (career.SimBriefUser is null) throw new CareerException("Bitte zuerst unter „Einstellungen“ den SimBrief-Benutzernamen eintragen.");
         var ofp = await SimBrief.FetchLatestAsync(career.SimBriefUser);
         var sheet = Career.BuildLoadSheet(c, p);
-        var problems = OfpValidator.Validate(ofp, new OfpExpectation(c.Origin, c.Destination, p.IcaoType, c.Adults + c.Children, c.CargoKg,
-            sheet.Payload.Kg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg, career.BagWeightKg));
+        var load = SimBriefPayload.For(sheet, career.PassengerWeightKg);
+        var problems = OfpValidator.Validate(ofp, new OfpExpectation(c.Origin, c.Destination, p.IcaoType, load.Passengers, load.CargoKg,
+            sheet.SimPayload.Kg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg));
         if (!ofp.Origin.Equals(c.Origin, StringComparison.OrdinalIgnoreCase) || !ofp.Destination.Equals(c.Destination, StringComparison.OrdinalIgnoreCase))
             throw new CareerException($"Der letzte OFP passt nicht zum Auftrag: {string.Join("; ", problems)}");
         foreach (var problem in problems) Snackbar.Add(problem, Severity.Warning);

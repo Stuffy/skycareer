@@ -82,11 +82,15 @@ public sealed class GsxLoadSync
         }).ToList();
     }
 
-    /// <summary>Warns when GSX boards a different number of passengers than the mission has (e.g. no SimBrief OFP loaded).</summary>
-    public static string? PassengerMismatch(GsxState s, PassengerCount mission)
+    /// <summary>
+    /// Warns when GSX boards a different number of passengers than the mission has (e.g. no SimBrief OFP loaded).
+    /// The OFP counts the crew as passengers (<paramref name="crewAsPassengers"/>), so GSX may include them.
+    /// </summary>
+    public static string? PassengerMismatch(GsxState s, PassengerCount mission, int crewAsPassengers = 0)
     {
         int gsx = s.PassengersBoardingTotal > 0 ? s.PassengersBoardingTotal : s.Passengers;
-        if (gsx <= 0 || gsx == mission.Seated || gsx == mission.Total) return null;
+        if (gsx <= 0 || gsx == mission.Seated || gsx == mission.Total ||
+            gsx == mission.Seated + crewAsPassengers || gsx == mission.Total + crewAsPassengers) return null;
         return $"GSX rechnet mit {gsx} Passagieren, der Auftrag hat {mission.Seated}. " +
                "In GSX „Trust SimBrief“ für Passagiere aktivieren und den passenden OFP erzeugen.";
     }

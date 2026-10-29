@@ -317,7 +317,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             PerformDueCheck(db, career, aircraft, profile);
         }
         aircraft.Location = to.Ident;
-        await db.Contracts.Where(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.Offered).ExecuteDeleteAsync();
+        await DropOffersAwayFromAsync(db, aircraft);
         await db.SaveChangesAsync();
         Changed?.Invoke();
         return ferry;
@@ -378,6 +378,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await db.SaveChangesAsync(ct);
 
         var fleet = await db.Fleet.Where(f => f.CareerId == career.Id && (aircraftId == null || f.Id == aircraftId)).ToListAsync(ct);
+        // Offers made before the aircraft moved (saves from older versions) can never start; drop them.
+        foreach (var aircraft in fleet) await DropOffersAwayFromAsync(db, aircraft, ct);
         var offers = await db.Contracts.Where(c => c.CareerId == career.Id && c.Status == ContractStatus.Offered).ToListAsync(ct);
         var ilsCache = await LoadIlsCacheAsync(db, ct);
         int created = 0, ilsChecked = 0;
@@ -498,6 +500,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var c = await RequireContract(db, contractId);
         if (c.Status != ContractStatus.Offered) throw new CareerException("Angebot ist nicht mehr verfügbar.");
         if (c.ExpiresAt < career.GameTime) throw new CareerException("Angebot ist abgelaufen.");
+        var aircraft = await RequireAircraft(db, c.AircraftId);
+        if (!string.Equals(aircraft.Location, c.Origin, StringComparison.OrdinalIgnoreCase))
+            throw new CareerException($"{aircraft.Registration} steht nicht mehr in {c.Origin}.");
         if (await db.Contracts.AnyAsync(x => x.AircraftId == c.AircraftId && (x.Status == ContractStatus.Accepted || x.Status == ContractStatus.InProgress)))
             throw new CareerException("Dieses Flugzeug hat bereits einen angenommenen Auftrag.");
         c.Status = ContractStatus.Accepted;
@@ -611,6 +616,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         career.Reputation = Math.Clamp(career.Reputation + s.ReputationChange, 0, 100);
 
         aircraft.Location = s.FinalLocation;
+        await DropOffersAwayFromAsync(db, aircraft);
         aircraft.AirframeHours += s.AirHours;
         aircraft.HoursSinceCheck += s.AirHours;
         if (s.AirHours > 0) aircraft.Cycles++;
@@ -856,7 +862,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             if (!string.Equals(ident, aircraft.Location, StringComparison.OrdinalIgnoreCase))
             {
                 aircraft.Location = ident;
-                await db.Contracts.Where(x => x.AircraftId == aircraft.Id && x.Status == ContractStatus.Offered).ExecuteDeleteAsync();
+                await DropOffersAwayFromAsync(db, aircraft);
             }
         }
         await db.SaveChangesAsync();
@@ -956,6 +962,11 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         aircraft.UnavailableUntil = career.GameTime + FleetEconomics.CheckDowntime(profile);
         aircraft.UnavailableReason = "Planmäßiger Check";
     }
+
+    /// <summary>Offers are made for the aircraft's current airport; once it has moved they can never start.</summary>
+    private static Task<int> DropOffersAwayFromAsync(SkyCareerDb db, FleetAircraft aircraft, CancellationToken ct = default) =>
+        db.Contracts.Where(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.Offered && c.Origin != aircraft.Location)
+            .ExecuteDeleteAsync(ct);
 
     private static void ExpireOffers(SkyCareerDb db, Career career)
     {

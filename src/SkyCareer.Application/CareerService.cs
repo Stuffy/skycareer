@@ -142,6 +142,15 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         Changed?.Invoke();
     }
 
+    public async Task UpdateSimBriefDetailedLoadAsync(bool enabled)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        career.SimBriefDetailedLoad = enabled;
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
     /// <summary>Switches booking of GSX receipts on or off; receipts written before switching on are never booked.</summary>
     public async Task UpdateGsxCostsAsync(bool enabled)
     {
@@ -426,7 +435,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 bool needLarge = rule.MinLargeShare > 0 && typeLarge < Math.Ceiling(rule.MinLargeShare * (typeOffers + 1));
                 var ctxBase = new GenerationContext(type, profile, origin, airports, career.GameTime, rng)
                 {
-                    Search = search, RecentDestinations = recent, Masses = masses
+                    Search = search, RecentDestinations = recent, Masses = masses, VaryBaggage = career.SimBriefDetailedLoad
                 };
                 var generator = generators.Get(type);
                 var offer = (needCapital ? generator.TryGenerate(ctxBase with { RequireCapital = true }) : null)

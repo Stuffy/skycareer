@@ -251,8 +251,15 @@ public sealed class CareerServiceTests : IAsyncLifetime
         // Like SimBrief: children weigh as adults; infants keep their lap mass.
         Assert.All(withPax, o =>
             Assert.Equal(90, (o.PassengerMassKg - o.Infants * PassengerMassTable.Default.InfantKg) / (o.Adults + o.Children), 1));
-        // Bags vary per passenger around the set average (sent to SimBrief as freight).
-        var perBag = withPax.Select(o => o.BaggageKg / (o.Adults + o.Children)).ToList();
+        // Standard: one bag of the set weight per seated passenger, as SimBrief adds them.
+        Assert.All(withPax, o => Assert.Equal(20, o.BaggageKg / (o.Adults + o.Children), 1));
+
+        // Detailed SimBrief load: bags vary per passenger around the set average (sent to SimBrief as freight).
+        await _svc.UpdateSimBriefDetailedLoadAsync(true);
+        await _svc.DebugClearMarketAsync();
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } }, rng: new Random(3));
+        var varied = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.Adults > 0).ToList();
+        var perBag = varied.Select(o => o.BaggageKg / (o.Adults + o.Children)).ToList();
         Assert.InRange(perBag.Average(), 18, 22);
         Assert.True(perBag.Distinct().Count() > perBag.Count / 2);
     }

@@ -47,18 +47,24 @@
             <MudNumericField T="double" @bind-Value="_paxWeightLb" Label="Gewicht je Passagier (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Min="@(Math.Round(CareerService.MinPassengerWeightKg * LbPerKg))" Max="@(Math.Round(CareerService.MaxPassengerWeightKg * LbPerKg))"
                              HelperText="@($"= {_paxWeightLb / LbPerKg:N1} kg")" Style="max-width:200px" />
-            <MudNumericField T="double" @bind-Value="_bagWeightLb" Label="Ø Gewicht je Gepäckstück (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudNumericField T="double" @bind-Value="_bagWeightLb" Label="@(c.SimBriefDetailedLoad ? "Ø Gewicht je Gepäckstück (lbs)" : "Gewicht je Gepäckstück (lbs)")" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Min="0" Max="@(Math.Round(CareerService.MaxBagWeightKg * LbPerKg))"
                              HelperText="@($"= {_bagWeightLb / LbPerKg:N1} kg")" Style="max-width:200px" />
             <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveWeights">Speichern</MudButton>
             <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="ResetWeights">SimBrief-Standard (175 / 50 lbs)</MudButton>
         </MudStack>
         <MudText Typo="Typo.body2" Class="mt-2">
-            Jeder Passagier (auch Kinder) zählt mit diesem Gewicht – so rechnet auch SimBrief, trag hier das Passagiergewicht deines SimBrief-Flugzeugs ein.
-            Gepäck wiegt je Passagier unterschiedlich (im Mittel der eingestellte Wert, manche reisen ohne aufgegebenes Gepäck).
-            Der Planungslink übergibt die Crew als Passagiere und Gepäck, Fracht und Crew-Gewichtsunterschiede als Fracht:
-            <b>im SimBrief-Flugzeug das Gepäckgewicht (Bag Weight) auf 0 setzen</b>, sonst zählt SimBrief das Gepäck doppelt.
+            Jeder Passagier (auch Kinder) zählt mit diesem Gewicht und hat ein Gepäckstück, außer bei Aufträgen nur mit Handgepäck – so rechnet auch SimBrief.
+            SimBrief übernimmt keine Gewichte aus dem Planungslink, sondern nimmt die Werte deines SimBrief-Flugzeugs: trag hier dieselben ein.
             Gilt für neue Aufträge; bereits angebotene und angenommene Aufträge behalten ihre Gewichte.
+        </MudText>
+        <MudSwitch T="bool" Value="c.SimBriefDetailedLoad" ValueChanged="SetDetailedLoad" Color="Color.Primary" Class="mt-3"
+                   Label="Genaue Beladung an SimBrief übergeben (Crew und unterschiedliche Gepäckgewichte)" />
+        <MudText Typo="Typo.caption" Style="display:block">
+            Die Crew wird als Passagiere übergeben, Gepäck und Gewichtsunterschiede als Fracht; Gepäck wiegt dann je Passagier
+            unterschiedlich (der Wert oben ist der Durchschnitt). Das Zero Fuel Weight im OFP stimmt so genau mit dem Load-Sheet überein.
+            <b>Dafür einmalig in SimBrief</b> unter „Flugzeuge“ das verwendete Flugzeug bearbeiten und bei den Gewichten das
+            <b>Gepäckgewicht (Bag Weight) auf 0</b> setzen, sonst zählt SimBrief das Gepäck doppelt. Gilt für neue Aufträge.
         </MudText>
     </MudPaper>
 
@@ -182,6 +188,8 @@
         await Career.UpdateGsxSyncAsync(enabled);
         Gsx.SetSyncEnabled(enabled);
     });
+
+    private Task SetDetailedLoad(bool enabled) => Run(() => Career.UpdateSimBriefDetailedLoadAsync(enabled));
 
     private Task SetGsxCosts(bool enabled) => Run(() => Career.UpdateGsxCostsAsync(enabled));
 

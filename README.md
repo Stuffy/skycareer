@@ -72,12 +72,13 @@ Spielzeit vergeht nur durch Flüge und bewusstes Warten (Titelleiste) – Pausen
 ## Integrationen
 
 ### SimBrief
-„In SimBrief planen“ öffnet die Dispatch-Seite mit Strecke, Passagieren und Fracht. Die Crew wird dabei als Passagiere
-übergeben; Gepäck (je Passagier unterschiedlich schwer), Fracht und die Gewichtsunterschiede der Crew gehen als Fracht an
-SimBrief. Damit Auftrag und OFP übereinstimmen:
+„In SimBrief planen“ öffnet die Dispatch-Seite mit Strecke, Passagieren und Fracht. SimBrief übernimmt Passagier- und
+Gepäckgewicht aus dem gewählten Airframe; damit Auftrag und OFP übereinstimmen, sollten unter **Einstellungen → Beladung**
+dieselben Werte eingetragen sein (Standard: 175 lbs je Passagier, 50 lbs je Gepäckstück).
 
-- im SimBrief-Airframe das **Gepäckgewicht (Bag Weight) auf 0** stellen, sonst zählt SimBrief das Gepäck doppelt;
-- unter **Einstellungen → Beladung** dasselbe Passagiergewicht wie im Airframe eintragen (Standard: 175 lbs).
+Optional übergibt **Genaue Beladung an SimBrief** zusätzlich die Crew (als Passagiere) und je Passagier unterschiedlich
+schwere Gepäckstücke (als Fracht), sodass das ZFW im OFP exakt dem Load-Sheet entspricht. Dafür muss im SimBrief-Airframe
+das **Gepäckgewicht (Bag Weight) auf 0** stehen, sonst zählt SimBrief das Gepäck doppelt.
 
 „OFP laden“ übernimmt Block Fuel und Route und meldet Abweichungen bei Strecke, Typ, Passagieren, Fracht und Gewichten. Für eigene Airframes kann im
 Flugzeugprofil die SimBrief-Airframe-ID hinterlegt werden.

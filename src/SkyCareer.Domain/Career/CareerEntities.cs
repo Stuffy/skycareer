@@ -43,6 +43,11 @@ public sealed class Career
     public double PassengerWeightKg { get; set; } = Loading.PassengerMassTable.SimBriefAdultKg;
     /// <summary>Mass of the one checked bag per passenger for new offers (default SimBrief's 50 lb).</summary>
     public double BagWeightKg { get; set; } = Loading.PassengerMassTable.SimBriefBagKg;
+    /// <summary>
+    /// Sends SimBrief the crew as passengers and bags, freight and mass differences as cargo, and varies bag weights per
+    /// passenger. Needs bag weight 0 in the SimBrief airframe; off = SimBrief's standard model (fixed bag per passenger).
+    /// </summary>
+    public bool SimBriefDetailedLoad { get; set; }
     /// <summary>Book GSX receipts (handling, buses, catering, fuel) instead of the model's costs for them.</summary>
     public bool GsxCostsEnabled { get; set; }
     /// <summary>When the GSX cost option was switched on; older receipts are never booked.</summary>

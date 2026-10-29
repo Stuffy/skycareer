@@ -141,7 +141,11 @@ public class MissionTests
         Assert.Equal(9, ofp.PlannedBagCount);
 
         var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, 1000, 11300, 16375));
-        Assert.Contains(problems, p => p.Contains("Gepäckgewicht von 50 lbs") && p.Contains("auf 0 setzen"));
+        Assert.Contains(problems, p => p.Contains("3 von 9 Gepäckstücken"));
+        // Detailed load: SimBrief must not add bags at all.
+        var detailed = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, 1000, 11300, 16375, BagsAsFreight: true));
+        Assert.Contains(detailed, p => p.Contains("Gepäckgewicht von 50 lbs") && p.Contains("auf 0 setzen"));
+        Assert.DoesNotContain(detailed, p => p.Contains("Gepäckstücken"));
         Assert.Contains(problems, p => p.StartsWith("Zuladung"));
         Assert.Contains(problems, p => p.StartsWith("ZFW"));
         Assert.Contains(problems, p => p.StartsWith("MZFW im Flugzeugprofil"));
@@ -172,9 +176,11 @@ public class MissionTests
               "fuel": { "plan_ramp": "2500", "enroute_burn": "1900" }
             }
             """);
-        var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38));
+        var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38, BagWeightKg: 22.68));
         Assert.DoesNotContain(problems, p => p.Contains("je Passagier"));
-        Assert.Contains(problems, p => p.Contains("Gepäckgewicht von 55 lbs"));
+        Assert.Contains(problems, p => p.Contains("55 lbs je Gepäckstück") && p.Contains("50 lbs"));
+        Assert.Contains(OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38, BagsAsFreight: true)),
+            p => p.Contains("Gepäckgewicht von 55 lbs"));
         Assert.Contains(OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 90)),
             p => p.Contains("je Passagier"));
     }
@@ -188,6 +194,11 @@ public class MissionTests
         var sheet = LoadSheetBuilder.FromMasses(jet, pax, Mass.FromKg(10 * 79.38 + 10), Mass.FromKg(237), Mass.FromKg(300), fuel);
         int crew = jet.Pilots + jet.CabinCrewCount;
         Assert.True(jet.Pilots >= 2);
+
+        // Standard: passengers and freight only, SimBrief adds its own bags.
+        var standard = SimBriefPayload.For(sheet, 79.38, detailed: false);
+        Assert.Equal(10, standard.Passengers);
+        Assert.Equal(300, standard.CargoKg);
 
         var load = SimBriefPayload.For(sheet, 79.38);
         Assert.Equal(10 + crew, load.Passengers);

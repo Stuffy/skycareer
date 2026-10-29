@@ -316,6 +316,7 @@
     private bool _airportDataOutdated;
     private int _reputation;
     private double _passengerWeightKg = PassengerMassTable.SimBriefAdultKg;
+    private bool _detailedLoad;
     private string? _searchStatus;
 
     protected override async Task OnInitializedAsync()
@@ -418,6 +419,7 @@
         _gameTime = career.GameTime;
         _reputation = career.Reputation;
         _passengerWeightKg = career.PassengerWeightKg;
+        _detailedLoad = career.SimBriefDetailedLoad;
         _fleet = await Career.GetFleetAsync();
         _offers = await Career.GetContractsAsync(ContractStatus.Offered);
         _active = await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress);
@@ -615,7 +617,7 @@
 
     private void OpenSimBrief(MissionContract c, AircraftProfile p)
     {
-        var load = SimBriefPayload.For(Career.BuildLoadSheet(c, p), _passengerWeightKg);
+        var load = SimBriefPayload.For(Career.BuildLoadSheet(c, p), _passengerWeightKg, _detailedLoad);
         var uri = SimBriefClient.BuildDispatchUri(new DispatchRequest(c.Origin, c.Destination, p.IcaoType, load.Passengers, load.CargoKg,
             Airframe: p.SimBriefAirframe));
         Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
@@ -627,9 +629,12 @@
         if (career.SimBriefUser is null) throw new CareerException("Bitte zuerst unter „Einstellungen“ den SimBrief-Benutzernamen eintragen.");
         var ofp = await SimBrief.FetchLatestAsync(career.SimBriefUser);
         var sheet = Career.BuildLoadSheet(c, p);
-        var load = SimBriefPayload.For(sheet, career.PassengerWeightKg);
+        bool detailed = career.SimBriefDetailedLoad;
+        var load = SimBriefPayload.For(sheet, career.PassengerWeightKg, detailed);
+        // Standard mode: SimBrief's payload has no crew (the crew isn't sent).
         var problems = OfpValidator.Validate(ofp, new OfpExpectation(c.Origin, c.Destination, p.IcaoType, load.Passengers, load.CargoKg,
-            sheet.SimPayload.Kg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg));
+            (detailed ? sheet.SimPayload : sheet.Payload).Kg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg,
+            career.BagWeightKg, BagsAsFreight: detailed));
         if (!ofp.Origin.Equals(c.Origin, StringComparison.OrdinalIgnoreCase) || !ofp.Destination.Equals(c.Destination, StringComparison.OrdinalIgnoreCase))
             throw new CareerException($"Der letzte OFP passt nicht zum Auftrag: {string.Join("; ", problems)}");
         foreach (var problem in problems) Snackbar.Add(problem, Severity.Warning);

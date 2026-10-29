@@ -166,6 +166,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<int>("Reputation")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("SimBriefDetailedLoad")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SimBriefUser")
                         .HasColumnType("TEXT");
 

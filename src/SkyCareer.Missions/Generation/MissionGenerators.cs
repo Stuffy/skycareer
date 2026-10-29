@@ -40,6 +40,11 @@ public sealed record GenerationContext(
     public bool RequireCapital { get; init; }
     /// <summary>Passenger and baggage masses of the career (adult weight from the settings).</summary>
     public PassengerMassTable Masses { get; init; } = PassengerMassTable.Default;
+    /// <summary>
+    /// Bags weigh differently per passenger (the sum reaches SimBrief as freight). Off: one standard bag per passenger,
+    /// as SimBrief adds them itself.
+    /// </summary>
+    public bool VaryBaggage { get; init; }
 
     /// <summary>
     /// Destinations already used in the current search. Picking one of them again on purpose produces several jobs
@@ -117,8 +122,8 @@ public sealed class StandardMissionGenerator : IMissionGenerator
         var rules = type.FlightRules == FlightRulesRequirement.Vfr ? FlightRules.Vfr : FlightRules.Ifr;
         var fuel = FuelPlanner.Plan(aircraft, dist, rules, rules == FlightRules.Ifr ? Math.Min(100, dist * 0.3) : 0);
         var baggage = type.Passengers?.Baggage ?? BaggageProfile.None;
-        // Every passenger's bag weighs differently; SimBrief gets the sum as freight.
-        var sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng, baggageMode: PassengerMassMode.Randomized);
+        var bagMode = ctx.VaryBaggage ? PassengerMassMode.Randomized : PassengerMassMode.Standard;
+        var sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng, baggageMode: bagMode);
 
         // Trim cargo first, then passengers, until the load fits; give up if the minimums can't be kept.
         for (int i = 0; i < 10 && !sheet.IsWithinLimits; i++)
@@ -126,7 +131,7 @@ public sealed class StandardMissionGenerator : IMissionGenerator
             if (cargo.Kg > cargoMin) cargo = Mass.FromKg(Math.Max(cargoMin, cargo.Kg * 0.8));
             else if (pax.Seated > paxMin) pax = pax with { Adults = Math.Max(paxMin - pax.Children, (int)(pax.Adults * 0.85)) };
             else break;
-            sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng, baggageMode: PassengerMassMode.Randomized);
+            sheet = LoadSheetBuilder.Build(aircraft, pax, baggage, cargo, fuel, table: ctx.Masses, rng: rng, baggageMode: bagMode);
         }
         if (!sheet.IsWithinLimits || pax.Seated < paxMin || cargo.Kg < cargoMin) return null;
 

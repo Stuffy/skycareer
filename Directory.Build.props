@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- Overridden by tools/release.ps1 (-p:Version=…); the installed app reports the Velopack package version. -->
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <!-- Public GitHub repo whose releases the in-app updater reads (also used by tools/release.ps1). -->
     <SkyCareerRepoUrl>https://github.com/Stuffy/skycareer</SkyCareerRepoUrl>
   </PropertyGroup>

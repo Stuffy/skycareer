@@ -163,6 +163,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<double>("PassengerWeightKg")
                         .HasColumnType("REAL");
 
+                    b.Property<bool>("PersistFuel")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Reputation")
                         .HasColumnType("INTEGER");
 
@@ -192,11 +195,17 @@ namespace SkyCareer.Data.Migrations
                     b.Property<Guid>("CareerId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ComponentWear")
+                        .HasColumnType("TEXT");
+
                     b.Property<double>("Condition")
                         .HasColumnType("REAL");
 
                     b.Property<int>("Cycles")
                         .HasColumnType("INTEGER");
+
+                    b.Property<double?>("FuelKg")
+                        .HasColumnType("REAL");
 
                     b.Property<double>("HoursSinceCheck")
                         .HasColumnType("REAL");
@@ -481,6 +490,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<DateTime?>("FlightStartedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("FuelRestoredAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Infants")
                         .HasColumnType("INTEGER");
 
@@ -513,6 +525,9 @@ namespace SkyCareer.Data.Migrations
 
                     b.Property<double>("PlannedBlockFuelKg")
                         .HasColumnType("REAL");
+
+                    b.Property<string>("SimWearAtStart")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()

@@ -11,6 +11,12 @@ public sealed record FlightResult
     public TimeSpan AirTime { get; init; }
     public double DistanceFlownNm { get; init; }
     public double FuelUsedKg { get; init; }
+    /// <summary>Fuel on board at block-off (what was loaded for the flight); null if not tracked from the ground.</summary>
+    public double? FuelAtBlockOffKg { get; init; }
+    /// <summary>Fuel left at the end; stays in the aircraft for the next flight. 0 = unknown.</summary>
+    public double FinalFuelKg { get; init; }
+    /// <summary>Wear the sim reported between arming and parking (per component loss); null without sim data.</summary>
+    public Aircraft.AircraftWear? SimWearDelta { get; init; }
     public double TouchdownFpm { get; init; }
     public double MaxGForce { get; init; } = 1;
     public int Bounces { get; init; }

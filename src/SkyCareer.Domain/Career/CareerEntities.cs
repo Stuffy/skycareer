@@ -48,6 +48,8 @@ public sealed class Career
     /// passenger. Needs bag weight 0 in the SimBrief airframe; off = SimBrief's standard model (fixed bag per passenger).
     /// </summary>
     public bool SimBriefDetailedLoad { get; set; }
+    /// <summary>Fuel stays in the aircraft between flights: restored in the sim when a job is armed, only uplift is paid.</summary>
+    public bool PersistFuel { get; set; } = true;
     /// <summary>Book GSX receipts (handling, buses, catering, fuel) instead of the model's costs for them.</summary>
     public bool GsxCostsEnabled { get; set; }
     /// <summary>When the GSX cost option was switched on; older receipts are never booked.</summary>
@@ -68,6 +70,13 @@ public sealed class FleetAircraft
     /// <summary>0–100. Wears with hours, drops on hard landings, restored by checks and repairs.</summary>
     public double Condition { get; set; } = 100;
     public double HoursSinceCheck { get; set; }
+    /// <summary>Fuel on board after the last flight (kg); null when unknown, e.g. a newly acquired aircraft.</summary>
+    public double? FuelKg { get; set; }
+    /// <summary>
+    /// SkyCareer's own condition per MSFS wear component (<see cref="Aircraft.AircraftWear"/> text), worn by the sim's
+    /// per-flight deltas and restored by repairs and checks. Null until the first flight with sim wear data.
+    /// </summary>
+    public string? ComponentWear { get; set; }
     /// <summary>Price paid (owned) – basis for resale value.</summary>
     public decimal PurchasePrice { get; set; }
     /// <summary>Monthly lease rate (leased only).</summary>
@@ -82,6 +91,11 @@ public sealed class FleetAircraft
     public string? UnavailableReason { get; set; }
 
     public bool IsAvailable(DateTime gameTime) => UnavailableUntil is null || UnavailableUntil <= gameTime;
+
+    public Aircraft.AircraftWear Components => Aircraft.AircraftWear.Parse(ComponentWear);
+
+    /// <summary>Condition that drives maintenance and repair costs: the overall condition or the worst component, whichever is lower.</summary>
+    public double EffectiveCondition => Math.Min(Condition, Components.WorstLevel * 100);
 }
 
 /// <summary>A mission offer on the market or a job the player has taken. Load figures are frozen at offer time.</summary>
@@ -115,6 +129,10 @@ public sealed class MissionContract
     public DateTime? FlightStartedAtUtc { get; set; }
     /// <summary>Departure checks that were red at liftoff, one per line; each costs part of the payout at settlement.</summary>
     public string? DepartureIssues { get; set; }
+    /// <summary>When the aircraft's stored fuel was set in the sim for this job; it's done once so later uplift stays.</summary>
+    public DateTime? FuelRestoredAtUtc { get; set; }
+    /// <summary>The sim's wear components when the job was armed (<see cref="Aircraft.AircraftWear"/> text); the settlement uses the difference.</summary>
+    public string? SimWearAtStart { get; set; }
 
     public int TotalPassengers => Adults + Children + Infants;
     public IReadOnlyList<string> DepartureIssueList =>

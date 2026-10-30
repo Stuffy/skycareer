@@ -1,5 +1,7 @@
 @page "/logbook"
 @inherits CareerPageBase
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 
 <MudText Typo="Typo.h5" Class="mb-4">Flugbuch</MudText>
 
@@ -18,7 +20,7 @@ else
         <tbody>
             @foreach (var f in _flights)
             {
-                <tr title="@f.Notes">
+                <tr title="@f.Notes" id="@($"flight-{f.Id}")" style="@(f.Id == Flight ? "background:var(--mud-palette-action-default-hover)" : null)">
                     <td>@f.ArrivedGameTime.ToString("dd.MM.yy HH:mm")</td>
                     <td>@(Career.Content.MissionTypes.FirstOrDefault(m => m.Id == f.MissionTypeId)?.Name ?? f.MissionTypeId)</td>
                     <td>@f.Origin → @f.Destination@(f.ArrivedAt != f.Destination ? $" (gelandet {f.ArrivedAt})" : "")</td>
@@ -63,6 +65,19 @@ else
     private Dictionary<Guid, string> _registrations = [];
     private Dictionary<Guid, List<GsxReceiptRecord>> _receipts = [];
     private readonly HashSet<Guid> _open = [];
+
+    /// <summary>Highlights and scrolls to this flight (link from the aircraft detail page).</summary>
+    [SupplyParameterFromQuery(Name = "flight")] public Guid? Flight { get; set; }
+    private bool _scrolled;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrolled && Flight is { } id && _flights.Any(f => f.Id == id))
+        {
+            _scrolled = true;
+            await JS.InvokeVoidAsync("skyMap.scrollToElement", $"flight-{id}");
+        }
+    }
 
     protected override async Task LoadAsync()
     {

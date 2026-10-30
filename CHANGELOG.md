@@ -2,6 +2,23 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## Unveröffentlicht
+
+### Neu
+- **Tankstand bleibt im Flugzeug** (*Einstellungen → Beladung*, standardmäßig an): Der Resttreibstoff wird nach dem Flug
+  gespeichert, in der Flotte angezeigt und beim Scharfschalten des nächsten Auftrags im Simulator gesetzt. Bezahlt wird
+  dann nur der nachgetankte Treibstoff statt des verbrauchten.
+- **Flugzeugprofile aus SimBrief-Typen:** Profile lassen sich komplett aus der SimBrief-Typenliste anlegen (auch ohne
+  laufenden Simulator) oder beim Anlegen aus dem Sim mit den genauen Gewichtsgrenzen und Leistungsdaten von SimBrief ergänzen.
+- **Abnutzung aus MSFS 2024:** Die Abnutzung, die der Simulator während eines Flugs meldet, senkt den Zustand des
+  Flugzeugs und seiner Bauteile (Fahrwerk, Reifen, Bremsen, Triebwerk, Steuerflächen …). Die Flotte zeigt die Bauteile,
+  Bauteile unter 70 % erscheinen gelb in der Abflugprüfung und erhöhen Wartungsrücklage und Reparaturkosten. Eine Reparatur
+  in SkyCareer setzt die Abnutzung im Simulator nicht zurück (das lässt MSFS nicht zu).
+- **Detailseite für Flugzeuge** (Klick auf das Kennzeichen in der Flotte): Werte, Bauteile mit Reparatur einzelner
+  Bauteile oder ganzer Baugruppen (Reifen und Bremsen 2 h Werkstatt, Triebwerk 1 Tag, sonst 6 h), Wirtschaftlichkeit nach
+  Kostenarten, alle Flüge des Flugzeugs (mit Sprung ins Flugbuch) und offene Aufträge.
+- **Debug:** Testseite für die Abnutzungs- und Schmutzwerte von MSFS 2024 (lesen und testweise schreiben).
+
 ## 0.1.2 – 2026-10-29
 
 ### Neu

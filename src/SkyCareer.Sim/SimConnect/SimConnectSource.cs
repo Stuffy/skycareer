@@ -483,6 +483,35 @@ public sealed class SimConnectSource : IFlightDataSource, IAircraftLoader, IAirc
                 SIMCONNECT_DATA_SET_FLAG.DEFAULT, TankValues.From(q));
     }
 
+    public async Task WriteVariableAsync(string name, string unit, double value, CancellationToken ct = default)
+    {
+        uint id = (uint)Interlocked.Increment(ref _nextId);
+        var def = (Definition)id;
+        var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending[id] = tcs;
+        lock (_lock)
+        {
+            var sc = _sc ?? throw new InvalidOperationException("Not connected to the simulator.");
+            sc.AddToDataDefinition(def, name, unit, SIMCONNECT_DATATYPE.FLOAT64, 0, SimConnect.SIMCONNECT_UNUSED);
+            _packetToRequest[sc.GetLastSentPacketID()] = id;
+            sc.RegisterDataDefineStruct<SingleValue>(def);
+            sc.SetDataOnSimObject(def, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_DATA_SET_FLAG.DEFAULT, new SingleValue { Value = value });
+            _packetToRequest[sc.GetLastSentPacketID()] = id;
+        }
+        try
+        {
+            // Writes have no answer; only a rejection arrives (as an exception). No news within a second counts as sent.
+            await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(1), ct)).ConfigureAwait(false);
+            if (tcs.Task.IsFaulted) await tcs.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            _pending.TryRemove(id, out _);
+            foreach (var kv in _packetToRequest.Where(kv => kv.Value == id)) _packetToRequest.TryRemove(kv.Key, out _);
+            lock (_lock) _sc?.ClearDataDefinition(def);
+        }
+    }
+
     public async Task StopAsync()
     {
         _cts?.Cancel();

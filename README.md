@@ -23,7 +23,12 @@ wirtschaftliche Karriere einbettet: Aufträge annehmen, Flotte aufbauen, Kosten 
 - **Auftragsmarkt** – Linien-, Charter-, VIP-, Lufttaxi-, Fracht-, Ambulanz- und Buschflüge, passend zu Flugzeug, Reichweite und
   Pistenanforderungen. Großstädte und Hauptstädte werden als Ziele bevorzugt; Militärflugplätze stehen nur Militärflugzeugen offen.
 - **Flotte und Finanzen** – Flugzeuge kaufen, leasen oder mieten; Treibstoff, Gebühren, Crew, Wartung und Versicherung
-  werden realistisch verbucht. Flugzeuge lassen sich per Überführungsflug an andere Standorte verlegen.
+  werden realistisch verbucht. Flugzeuge lassen sich per Überführungsflug an andere Standorte verlegen. Der Resttreibstoff
+  bleibt im Flugzeug und wird beim nächsten Auftrag im Simulator gesetzt; bezahlt wird nur, was nachgetankt wird.
+  Die Abnutzung, die MSFS 2024 während eines Flugs meldet (Fahrwerk, Reifen, Bremsen, Triebwerk …), fließt in den Zustand
+  der Bauteile ein; abgenutzte Bauteile verteuern Wartung und Reparatur und werden in der Abflugprüfung angezeigt.
+  Jedes Flugzeug hat eine Detailseite mit Werten, Bauteilen (einzeln oder je Baugruppe reparierbar), Wirtschaftlichkeit,
+  Flughistorie und offenen Aufträgen.
 - **Load-Sheet und Beladung** – Passagiere, Gepäck, Fracht und Treibstoff werden berechnet, gegen MZFW/MTOW/MLW geprüft
   und auf Wunsch direkt in den Simulator geschrieben.
 - **Automatischer Flugablauf** – kein Startknopf: Steht das Flugzeug am Abflughafen, wird der Auftrag verfolgt. Eine
@@ -102,11 +107,14 @@ BeyondATC direkt den aktuellen SimBrief-OFP.
 ## Eigene Flugzeugprofile
 
 Mitgeliefert werden Profile für Cessna 172, Cessna 208B, Airbus H145, King Air 350 und Airbus A320neo. Weitere Flugzeuge
-lassen sich unter **Inhalte → Flugzeugprofile → Aus aktuellem Sim-Flugzeug** anlegen:
+lassen sich unter **Inhalte → Flugzeugprofile** anlegen:
 
-- Leergewicht, MTOW, Tanks, Payload-Stationen, Triebwerkstyp und Reisegeschwindigkeit werden aus dem Simulator gelesen.
-- Verbrauch, Frachtkapazität und Preise werden aus dem ähnlichsten bekannten Profil abgeleitet; MZFW und MLW geschätzt.
-  Diese Werte sollten mit Handbuch oder SimBrief abgeglichen werden.
+- **Aus aktuellem Sim-Flugzeug:** Leergewicht, MTOW, Tanks, Payload-Stationen, Triebwerkstyp und Reisegeschwindigkeit
+  werden aus dem Simulator gelesen. Über „SimBrief-Typ“ lassen sich MZFW, MTOW, MLW, Tankkapazität, Verbrauch,
+  Reisegeschwindigkeit und Mindestpiste aus der SimBrief-Typenliste übernehmen, statt sie zu schätzen.
+- **Aus SimBrief-Typ:** legt das Profil komplett aus SimBrief an, auch ohne laufenden Simulator. Die Payload-Stationen
+  werden später mit „Stationen aus Sim übernehmen“ ergänzt.
+- Fehlende Werte (Preise, Frachtkapazität) werden aus dem ähnlichsten bekannten Profil abgeleitet.
 - Der Editor prüft das Profil laufend und zeigt, welche Missionstypen damit möglich sind.
 
 Eigene Profile liegen unter `Dokumente\SkyCareer\content\aircraft` und ersetzen mitgelieferte Profile gleicher ID. Die

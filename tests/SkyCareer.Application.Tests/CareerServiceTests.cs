@@ -2,6 +2,8 @@ using SkyCareer.Domain.Loading;
 using Microsoft.EntityFrameworkCore;
 using SkyCareer.Data;
 using SkyCareer.Domain;
+using SkyCareer.Domain.Aircraft;
+using SkyCareer.Domain.Finance;
 using SkyCareer.Domain.Career;
 using SkyCareer.Domain.World;
 using SkyCareer.Integrations.Gsx;
@@ -503,6 +505,9 @@ public sealed class CareerServiceTests : IAsyncLifetime
         public void EndFlight() { _session = null; ContractId = null; Journal.Clear(); }
         public FlightSummary? Summarize() => _session?.Summarize();
         public Task<string?> SaveTrackAsync(string name) => Task.FromResult<string?>(null);
+        /// <summary>What the "sim" reports as wear; tests change it between arming and parking.</summary>
+        public AircraftWear? Wear { get; set; }
+        public Task<AircraftWear?> ReadWearAsync() => Task.FromResult(Wear);
         void IFlightSessionHost.Log(string message) => Log.Add(message);
 
         public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt)
@@ -542,10 +547,10 @@ public sealed class CareerServiceTests : IAsyncLifetime
         }
     }
 
-    private async Task<(FlightAutomation Automation, FakeHost Host, MissionContract Job, Telemetry Parked)> ArmedCaravanJobAsync(string title)
+    private async Task<(FlightAutomation Automation, FakeHost Host, MissionContract Job, Telemetry Parked)> ArmedCaravanJobAsync(string title, AircraftWear? wear = null, Ownership ownership = Ownership.Rented)
     {
         await NewCareer();
-        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.AcquireAircraftAsync("c208b", ownership);
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "cargo_feeder" } }, rng: new Random(4));
         var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).OrderBy(o => o.DistanceNm).First();
         await _svc.AcceptAsync(job.Id);
@@ -559,11 +564,180 @@ public sealed class CareerServiceTests : IAsyncLifetime
             OnGround = true, ParkingBrake = true, AircraftTitle = title, PayloadKg = sheet.SimPayload.Kg, FuelKg = sheet.Fuel.Block.Kg,
             TotalWeightKg = 2145 + sheet.SimPayload.Kg + sheet.Fuel.Block.Kg
         };
-        var host = new FakeHost();
+        var host = new FakeHost { Wear = wear };
         var automation = new FlightAutomation(_svc, host);
         host.Feed(parked);
         await automation.TickAsync();
         return (automation, host, job, parked);
+    }
+
+    /// <summary>Taxis, takes off, flies straight to the destination at a pace the teleport check accepts, lands and parks.</summary>
+    private async Task FlyCaravanJobAsync(FlightAutomation automation, FakeHost host, MissionContract job, Telemetry parked, bool checkPhases = false,
+        Action? beforeLanding = null)
+    {
+        async Task Fly(IEnumerable<Telemetry> samples)
+        {
+            foreach (var t in samples) host.Feed(t);
+            await automation.TickAsync();
+        }
+
+        var dest = (await _svc.FindAirportAsync(job.Destination))!;
+        var t0 = parked with { AnyEngineRunning = true };
+        var taxi = Segment(t0, 30, t => t with { ParkingBrake = false, GroundSpeedKt = 12 }).ToList();
+        await Fly(taxi);
+        if (checkPhases)
+        {
+            Assert.Equal(FlightPhase.TaxiOut, host.Phase);
+            Assert.Equal(ContractStatus.Accepted, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().Status);   // still editable
+        }
+
+        var roll = Segment(taxi[^1], 10, t => t with { GroundSpeedKt = 70 }).ToList();
+        await Fly(roll);
+        var liftoff = Segment(roll[^1], 10, t => t with { OnGround = false, GroundSpeedKt = 100, VerticalSpeedFpm = 800, AltitudeAglFt = 500 }).ToList();
+        await Fly(liftoff);
+        if (checkPhases) Assert.Equal(ContractStatus.InProgress, (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single().Status);
+
+        double nm = liftoff[^1].Position.DistanceNmTo(dest.Position);
+        int seconds = (int)Math.Ceiling(nm / 300.0 * 3600);
+        var cruise = Segment(liftoff[^1], seconds, t => t with { GroundSpeedKt = 300, VerticalSpeedFpm = 0, AltitudeAglFt = 5000 }, dest.Position).ToList();
+        await Fly(cruise);
+        beforeLanding?.Invoke();
+        var landing = Segment(cruise[^1], 1, t => t with { OnGround = true, AltitudeAglFt = 0, VerticalSpeedFpm = 0, TouchdownVsFpm = -150, GForce = 1.2, GroundSpeedKt = 60 })
+            .Concat(Segment(cruise[^1] with { OnGround = true, AltitudeAglFt = 0 }, 20, t => t with { GForce = 1, GroundSpeedKt = 10, TouchdownVsFpm = 0 }))
+            .ToList();
+        var park = Segment(landing[^1], 10, t => t with { GroundSpeedKt = 0, ParkingBrake = true, AnyEngineRunning = false }).ToList();
+        await Fly(landing.Concat(park));
+    }
+
+    [Fact]
+    public async Task Sim_wear_during_the_flight_wears_the_components_and_shows_in_the_departure_check()
+    {
+        var atStart = AircraftWear.FromSim(new Dictionary<int, double> { [35] = 0.98, [36] = 0.99, [37] = 0.95, [46] = 0.97, [39] = 0 });
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX", atStart, Ownership.Leased);
+        Assert.Equal(atStart.Serialize(), (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().SimWearAtStart);
+
+        // The tires lose 30 points during the flight, the rest stays; the sim's own repair of the brakes doesn't count.
+        await FlyCaravanJobAsync(automation, host, job, parked, beforeLanding: () =>
+            host.Wear = AircraftWear.FromSim(new Dictionary<int, double> { [35] = 0.98, [36] = 1.0, [37] = 0.65, [46] = 0.97 }));
+
+        var s = automation.LastSettlement!;
+        Assert.Contains(s.Notes, n => n.StartsWith("Abnutzung laut MSFS: Reifen −30 %"));
+        double model = FleetEconomics.ConditionLoss(s.AirHours, -150, 1.2);
+        Assert.Equal(model + 30.0 / 4, s.ConditionLoss, 3);
+
+        // SkyCareer's own state starts as new, so the tires are at 70 %: exactly the warning level is still fine.
+        var plane = (await _svc.GetFleetAsync()).Single();
+        Assert.Equal(0.70, plane.Components.Level(37), 3);
+        Assert.Equal(1.0, plane.Components.Level(36), 3);
+        Assert.Equal(70, plane.EffectiveCondition, 1);
+
+        // More tire wear pushes them below the warning level: the departure check warns, but nothing blocks.
+        await using (var db = _factory.CreateDbContext())
+        {
+            var a = await db.Fleet.SingleAsync();
+            a.ComponentWear = a.Components.Wear(new AircraftWear(new Dictionary<int, double> { [37] = 0.05 })).Serialize();
+            await db.SaveChangesAsync();
+        }
+        await _svc.RefreshMarketAsync(new Random(7));
+        var next = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        await _svc.AcceptAsync(next.Id);
+        automation.Invalidate();
+        await automation.TickAsync();
+        var technical = automation.Readiness[next.Id][DepartureCheck.Technical]!;
+        Assert.Equal(Light.Yellow, technical.Light);
+        Assert.Contains("Reifen 65", technical.Detail);
+        Assert.DoesNotContain(automation.Readiness[next.Id].Penalised, i => i.Key == DepartureCheck.Technical);
+    }
+
+    [Fact]
+    public async Task Single_components_are_repaired_with_their_own_cost_and_workshop_time()
+    {
+        var career = await NewCareer();
+        var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Leased);
+        await using (var db = _factory.CreateDbContext())
+        {
+            var a = await db.Fleet.SingleAsync();
+            a.ComponentWear = new AircraftWear(new Dictionary<int, double> { [37] = 0.6, [38] = 0.9, [40] = 0.8, [35] = 0.95 }).Serialize();
+            await db.SaveChangesAsync();
+        }
+        var profile = _svc.Profile(plane.ProfileId);
+        plane = (await _svc.GetFleetAsync()).Single();
+        decimal cash = (await _svc.GetCareerAsync()).Cash;
+        var tireCost = FleetEconomics.ComponentRepairCost(profile, plane.Components, [37]);
+
+        await _svc.RepairComponentsAsync(plane.Id, [37]);
+        plane = (await _svc.GetFleetAsync()).Single();
+        Assert.Equal(1, plane.Components.Level(37));
+        Assert.Equal(0.9, plane.Components.Level(38), 6);
+        Assert.Equal(0.8, plane.Components.Level(40), 6);
+        Assert.Equal(cash - tireCost, (await _svc.GetCareerAsync()).Cash);
+        Assert.Equal(career.GameTime + TimeSpan.FromHours(2), plane.UnavailableUntil);
+        Assert.Equal("Reparatur Reifen", plane.UnavailableReason);
+        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.Repair && l.Amount == -tireCost && l.Description.Contains("Reifen 60 %"));
+
+        // Tire pressure and the engine together: the engine's day in the workshop wins.
+        await _svc.RepairComponentsAsync(plane.Id, [38, 40]);
+        plane = (await _svc.GetFleetAsync()).Single();
+        Assert.Equal(career.GameTime + TimeSpan.FromHours(24), plane.UnavailableUntil);
+        Assert.Equal(0.95, plane.Components.WorstLevel, 6);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.RepairComponentsAsync(plane.Id, [37]));   // already new
+
+        // Rentals are the lessor's job.
+        var rented = await _svc.AcquireAircraftAsync("c172", Ownership.Rented);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.RepairComponentsAsync(rented.Id, [37]));
+        await Assert.ThrowsAsync<CareerException>(() => _svc.RepairAsync(rented.Id));
+    }
+
+    [Fact]
+    public async Task Aircraft_details_only_hold_that_aircrafts_flights_ledger_and_jobs()
+    {
+        await NewCareer();
+        var first = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        var second = await _svc.AcquireAircraftAsync("c172", Ownership.Rented);
+        await _svc.RefreshMarketAsync(new Random(3));
+        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var flown = offers.First(o => o.AircraftId == first.Id);
+        await _svc.AcceptAsync(flown.Id);
+        await _svc.DebugCompleteContractAsync(flown.Id);
+        var open = (await _svc.GetContractsAsync(ContractStatus.Offered)).First(o => o.AircraftId == second.Id);
+        await _svc.AcceptAsync(open.Id);
+
+        var d1 = await _svc.GetAircraftDetailsAsync(first.Id);
+        Assert.Equal(first.Id, d1.Aircraft.Id);
+        Assert.Single(d1.Flights);
+        Assert.NotEmpty(d1.Ledger);
+        Assert.All(d1.Ledger, l => Assert.Equal(first.Id, l.AircraftId));
+        Assert.Empty(d1.OpenJobs);
+
+        var d2 = await _svc.GetAircraftDetailsAsync(second.Id);
+        Assert.Empty(d2.Flights);
+        Assert.Equal(open.Id, Assert.Single(d2.OpenJobs).Id);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.GetAircraftDetailsAsync(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task Repair_restores_the_components()
+    {
+        await NewCareer();
+        var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Leased);
+        await using (var db = _factory.CreateDbContext())
+        {
+            var a = await db.Fleet.SingleAsync();
+            a.ComponentWear = new AircraftWear(new Dictionary<int, double> { [37] = 0.9, [35] = 0.95 }).Serialize();
+            await db.SaveChangesAsync();
+        }
+        plane = (await _svc.GetFleetAsync()).Single();
+        Assert.Equal(90, plane.EffectiveCondition, 3);
+        // Only the components are worn: one of four tire components (0.2 % of the new price) at 90 %, one of two gear components (1 %) at 95 %.
+        var price = _svc.Profile(plane.ProfileId).Economics.PurchasePriceNew;
+        var cost = FleetEconomics.RepairCost(_svc.Profile(plane.ProfileId), plane);
+        Assert.Equal(Math.Round(price * 0.0005m * 0.1m + price * 0.005m * 0.05m, 0), cost);
+
+        await _svc.RepairAsync(plane.Id);
+        plane = (await _svc.GetFleetAsync()).Single();
+        Assert.Equal(1.0, plane.Components.WorstLevel, 3);
+        Assert.Equal(100, plane.EffectiveCondition, 3);
+        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.Repair && l.Amount == -cost && l.Description.Contains("Reifen 90"));
     }
 
     [Fact]
@@ -575,34 +749,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Equal(Light.Yellow, automation.Readiness[job.Id].Overall);
         Assert.Equal(DepartureCheck.Ofp, Assert.Single(automation.Readiness[job.Id].Items, i => i.Light != Light.Green).Key);
 
-        async Task Fly(IEnumerable<Telemetry> samples)
-        {
-            foreach (var t in samples) host.Feed(t);
-            await automation.TickAsync();
-        }
-
-        var dest = (await _svc.FindAirportAsync(job.Destination))!;
-        var t0 = parked with { AnyEngineRunning = true };
-        var taxi = Segment(t0, 30, t => t with { ParkingBrake = false, GroundSpeedKt = 12 }).ToList();
-        await Fly(taxi);
-        Assert.Equal(FlightPhase.TaxiOut, host.Phase);
-        Assert.Equal(ContractStatus.Accepted, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().Status);   // still editable
-
-        var roll = Segment(taxi[^1], 10, t => t with { GroundSpeedKt = 70 }).ToList();
-        await Fly(roll);
-        var liftoff = Segment(roll[^1], 10, t => t with { OnGround = false, GroundSpeedKt = 100, VerticalSpeedFpm = 800, AltitudeAglFt = 500 }).ToList();
-        await Fly(liftoff);
-        Assert.Equal(ContractStatus.InProgress, (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single().Status);
-
-        // Straight to the destination at a pace the teleport check accepts, then land, taxi and park.
-        double nm = liftoff[^1].Position.DistanceNmTo(dest.Position);
-        int seconds = (int)Math.Ceiling(nm / 300.0 * 3600);
-        var cruise = Segment(liftoff[^1], seconds, t => t with { GroundSpeedKt = 300, VerticalSpeedFpm = 0, AltitudeAglFt = 5000 }, dest.Position).ToList();
-        var landing = Segment(cruise[^1], 1, t => t with { OnGround = true, AltitudeAglFt = 0, VerticalSpeedFpm = 0, TouchdownVsFpm = -150, GForce = 1.2, GroundSpeedKt = 60 })
-            .Concat(Segment(cruise[^1] with { OnGround = true, AltitudeAglFt = 0 }, 20, t => t with { GForce = 1, GroundSpeedKt = 10, TouchdownVsFpm = 0 }))
-            .ToList();
-        var park = Segment(landing[^1], 10, t => t with { GroundSpeedKt = 0, ParkingBrake = true, AnyEngineRunning = false }).ToList();
-        await Fly(cruise.Concat(landing).Concat(park));
+        await FlyCaravanJobAsync(automation, host, job, parked, checkPhases: true);
 
         Assert.Equal(FlightPhase.Arrived, host.Phase is null ? FlightPhase.Arrived : host.Phase);
         Assert.NotNull(automation.LastSettlement);
@@ -826,6 +973,44 @@ public sealed class CareerServiceTests : IAsyncLifetime
     private sealed class TestDbFactory(DbContextOptions<SkyCareerDb> options) : IDbContextFactory<SkyCareerDb>
     {
         public SkyCareerDb CreateDbContext() => new(options);
+    }
+
+    [Fact]
+    public async Task Fuel_stays_in_the_aircraft_and_only_uplift_is_paid()
+    {
+        var career = await NewCareer();
+        Assert.True(career.PersistFuel);
+        var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        Assert.Null(plane.FuelKg);
+
+        // First flight: nothing known about the tanks, so the burn is paid as before.
+        await _svc.RefreshMarketAsync(new Random(3));
+        var first = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        await _svc.AcceptAsync(first.Id);
+        await _svc.MarkFuelRestoredAsync(first.Id);
+        Assert.NotNull((await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().FuelRestoredAtUtc);
+        var r1 = await _svc.DebugCompleteContractAsync(first.Id);
+        Assert.Contains(r1.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Treibstoff"));
+        double left = (await _svc.GetFleetAsync()).Single().FuelKg!.Value;
+        Assert.True(left > 0);
+
+        // Second flight: only what's added on top of the remaining fuel is paid.
+        await _svc.RefreshMarketAsync(new Random(4));
+        var second = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        await _svc.AcceptAsync(second.Id);
+        var block = _svc.BuildLoadSheet(second, _svc.Profile(plane.ProfileId)).Fuel.Block.Kg;
+        var r2 = await _svc.DebugCompleteContractAsync(second.Id);
+        Assert.True(block > left, "test needs a flight that requires uplift");
+        var fuelLine = Assert.Single(r2.Lines, l => l.Category == LedgerCategory.Fuel);
+        Assert.StartsWith($"Getankt {block - left:N0} kg", fuelLine.Description);
+
+        // Switched off: back to paying the burn.
+        await _svc.UpdatePersistFuelAsync(false);
+        await _svc.RefreshMarketAsync(new Random(5));
+        var third = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        await _svc.AcceptAsync(third.Id);
+        var r3 = await _svc.DebugCompleteContractAsync(third.Id);
+        Assert.Contains(r3.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Treibstoff"));
     }
 
     [Fact]

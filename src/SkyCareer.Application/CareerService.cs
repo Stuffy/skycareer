@@ -151,6 +151,34 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         Changed?.Invoke();
     }
 
+    public async Task UpdatePersistFuelAsync(bool enabled)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        career.PersistFuel = enabled;
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Notes that the aircraft's stored fuel was set in the sim for this job, so re-arming doesn't undo later uplift.</summary>
+    public async Task MarkFuelRestoredAsync(Guid contractId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var c = await RequireContract(db, contractId);
+        c.FuelRestoredAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Stores the sim's wear components at the start of a job (once); the settlement uses the change until parking.</summary>
+    public async Task RecordSimWearAsync(Guid contractId, AircraftWear wear)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var c = await RequireContract(db, contractId);
+        if (c.SimWearAtStart is not null || wear.IsEmpty) return;
+        c.SimWearAtStart = wear.Serialize();
+        await db.SaveChangesAsync();
+    }
+
     /// <summary>Switches booking of GSX receipts on or off; receipts written before switching on are never booked.</summary>
     public async Task UpdateGsxCostsAsync(bool enabled)
     {
@@ -278,17 +306,65 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         var aircraft = await RequireAircraft(db, aircraftId);
+        await RequireRepairableAsync(db, aircraft);
         var profile = Profile(aircraft.ProfileId);
-        var cost = FleetEconomics.RepairCost(profile, aircraft.Condition);
+        var cost = FleetEconomics.RepairCost(profile, aircraft);
         if (cost <= 0) return;
         if (career.Cash < cost) throw new CareerException($"Nicht genug Geld für die Reparatur ({cost:N0} €).");
 
-        Book(db, career, LedgerCategory.Repair, -cost, $"Reparatur {aircraft.Registration} ({aircraft.Condition:N0} % → 100 %)", aircraft.Id);
+        var worn = aircraft.Components.Groups().Where(g => g.Level < 0.995).Select(g => $"{g.Group} {g.Level:P0}").ToList();
+        Book(db, career, LedgerCategory.Repair, -cost,
+            $"Reparatur {aircraft.Registration} ({aircraft.Condition:N0} % → 100 %{(worn.Count > 0 ? "; " + string.Join(", ", worn) : "")})", aircraft.Id);
         aircraft.Condition = 100;
-        aircraft.UnavailableUntil = career.GameTime.AddDays(1);
-        aircraft.UnavailableReason = "Reparatur";
+        RestoreComponents(aircraft, 1);
+        SetDowntime(aircraft, career.GameTime + TimeSpan.FromDays(1), "Reparatur");
         await db.SaveChangesAsync();
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Repairs single wear components (e.g. only the tires): each costs its share of the new price times its wear; the
+    /// aircraft is in the workshop for the longest downtime of the groups involved. The overall condition is unchanged.
+    /// </summary>
+    public async Task RepairComponentsAsync(Guid aircraftId, IReadOnlyCollection<int> componentIds)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        var aircraft = await RequireAircraft(db, aircraftId);
+        await RequireRepairableAsync(db, aircraft);
+        var wear = aircraft.Components;
+        var worn = componentIds.Distinct().Where(id => wear.Levels.TryGetValue(id, out var l) && l < 1)
+            .Select(id => (Component: WearComponents.All[id], Level: wear.Levels[id])).ToList();
+        if (worn.Count == 0) throw new CareerException("Diese Bauteile sind nicht abgenutzt.");
+        var cost = FleetEconomics.ComponentRepairCost(Profile(aircraft.ProfileId), wear, worn.Select(w => w.Component.Id));
+        if (career.Cash < cost) throw new CareerException($"Nicht genug Geld für die Reparatur ({cost:N0} €).");
+
+        string what = worn.Count == 1 ? worn[0].Component.Name
+            : worn.Select(w => w.Component.Group).Distinct().Count() == 1 ? $"{worn[0].Component.Group} ({worn.Count} Bauteile)"
+            : $"{worn.Count} Bauteile";
+        Book(db, career, LedgerCategory.Repair, -cost,
+            $"Reparatur {aircraft.Registration}: {string.Join(", ", worn.Select(w => $"{w.Component.Name} {w.Level:P0}"))} → 100 %", aircraft.Id);
+        aircraft.ComponentWear = wear.RepairComponents(worn.Select(w => w.Component.Id)).Serialize();
+        var downtime = worn.Select(w => WearComponents.RepairDowntime(w.Component.Group)).Max();
+        SetDowntime(aircraft, career.GameTime + downtime, $"Reparatur {what}");
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Rentals are maintained by the lessor, and nothing is repaired while the aircraft is flying a job.</summary>
+    private async Task RequireRepairableAsync(SkyCareerDb db, FleetAircraft aircraft)
+    {
+        if (aircraft.Ownership == Ownership.Rented) throw new CareerException("Mietflugzeuge wartet der Vermieter.");
+        if (await db.Contracts.AnyAsync(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.InProgress))
+            throw new CareerException($"{aircraft.Registration} ist gerade im Flug.");
+    }
+
+    /// <summary>Workshop time never shortens a downtime that is already longer.</summary>
+    private static void SetDowntime(FleetAircraft aircraft, DateTime until, string reason)
+    {
+        if (aircraft.UnavailableUntil is { } busy && busy >= until) return;
+        aircraft.UnavailableUntil = until;
+        aircraft.UnavailableReason = reason;
     }
 
     /// <summary>Costs of ferrying an aircraft to another airport; throws if the move isn't possible.</summary>
@@ -590,8 +666,12 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var nearest = await NearestAirportAsync(db, result.FinalPosition);
         var departure = career.GameTime;
 
+        // With fuel kept between flights, the flight pays for what was added on the ground since the last one.
+        double? uplift = career.PersistFuel && aircraft.FuelKg is { } before && result.FuelAtBlockOffKg is { } loaded
+            ? Math.Max(0, loaded - before)
+            : null;
         var s = FlightSettlement.Settle(new SettlementInput(type, c, profile, aircraft, origin, destination, nearest, result,
-            departure, EconomyTables.For(career.Difficulty), ExternalGroundCosts: career.GsxCostsEnabled));
+            departure, EconomyTables.For(career.Difficulty), ExternalGroundCosts: career.GsxCostsEnabled, FuelUpliftKg: uplift));
 
         var flight = new FlightRecord
         {
@@ -625,11 +705,15 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         career.Reputation = Math.Clamp(career.Reputation + s.ReputationChange, 0, 100);
 
         aircraft.Location = s.FinalLocation;
+        if (result.FinalFuelKg > 0) aircraft.FuelKg = Math.Round(result.FinalFuelKg, 1);
         await DropOffersAwayFromAsync(db, aircraft);
         aircraft.AirframeHours += s.AirHours;
         aircraft.HoursSinceCheck += s.AirHours;
         if (s.AirHours > 0) aircraft.Cycles++;
         aircraft.Condition = Math.Max(0, aircraft.Condition - s.ConditionLoss);
+        // Rentals are maintained by the lessor (like their checks), so only own and leased aircraft keep component wear.
+        if (result.SimWearDelta is { IsEmpty: false } wear && aircraft.Ownership != Ownership.Rented)
+            aircraft.ComponentWear = aircraft.Components.Wear(wear).Serialize();
         PerformDueCheck(db, career, aircraft, profile);
 
         c.Status = s.Outcome is FlightOutcome.Completed or FlightOutcome.Late ? ContractStatus.Completed : ContractStatus.Failed;
@@ -662,6 +746,22 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var id = RequireCareerId();
         return (await db.Ledger.Where(l => l.CareerId == id).ToListAsync()).OrderByDescending(l => l.GameTime).ToList();
+    }
+
+    /// <summary>Everything the aircraft detail page shows: the aircraft, its flights, ledger entries and open jobs.</summary>
+    public async Task<AircraftDetails> GetAircraftDetailsAsync(Guid aircraftId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var id = RequireCareerId();
+        var aircraft = await RequireAircraft(db, aircraftId);
+        var flights = (await db.Flights.Where(f => f.CareerId == id && f.AircraftId == aircraftId).ToListAsync())
+            .OrderByDescending(f => f.ArrivedGameTime).ToList();
+        var ledger = (await db.Ledger.Where(l => l.CareerId == id && l.AircraftId == aircraftId).ToListAsync())
+            .OrderByDescending(l => l.GameTime).ToList();
+        var jobs = (await db.Contracts.Where(c => c.CareerId == id && c.AircraftId == aircraftId
+                && (c.Status == ContractStatus.Accepted || c.Status == ContractStatus.InProgress)).ToListAsync())
+            .OrderBy(c => c.Deadline).ToList();
+        return new AircraftDetails(aircraft, flights, ledger, jobs);
     }
 
     public async Task<List<FlightRecord>> GetFlightsAsync()
@@ -859,6 +959,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await RequireCareer(db);
         var aircraft = await RequireAircraft(db, aircraftId);
         if (condition is { } c) aircraft.Condition = c;
+        if (condition >= 100) RestoreComponents(aircraft, 1);
         if (clearDowntime)
         {
             aircraft.UnavailableUntil = null;
@@ -881,7 +982,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     /// <summary>Settles an accepted or running job as a perfect, on-time flight without flying it.</summary>
     public async Task<SettlementResult> DebugCompleteContractAsync(Guid contractId)
     {
-        double blockHours;
+        double blockHours, loadedFuel, burntFuel;
         GeoPosition destination;
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
@@ -890,8 +991,13 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress))
                 throw new CareerException("Nur angenommene oder laufende Aufträge lassen sich abschließen.");
             var aircraft = await RequireAircraft(db, c.AircraftId);
-            blockHours = c.DistanceNm / Math.Max(1, Profile(aircraft.ProfileId).CruiseKtas) + 0.5;
+            var profile = Profile(aircraft.ProfileId);
+            blockHours = c.DistanceNm / Math.Max(1, profile.CruiseKtas) + 0.5;
             destination = (await RequireAirport(db, c.Destination)).Position;
+            // Tanks filled up to the planned block fuel (or kept if fuller); trip and taxi fuel burnt.
+            var fuel = BuildLoadSheet(c, profile).Fuel;
+            loadedFuel = Math.Max(aircraft.FuelKg ?? 0, fuel.Block.Kg);
+            burntFuel = Math.Min(loadedFuel, fuel.Trip.Kg + fuel.Taxi.Kg);
             // Skips the start checks (location, downtime) on purpose.
             c.Status = ContractStatus.InProgress;
             await db.SaveChangesAsync();
@@ -903,6 +1009,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             AirTime = TimeSpan.FromHours(Math.Max(0.1, blockHours - 0.3)),
             TouchdownFpm = -150,
             MaxGForce = 1.2,
+            FuelUsedKg = burntFuel,
+            FuelAtBlockOffKg = loadedFuel,
+            FinalFuelKg = loadedFuel - burntFuel,
             FinalPosition = destination,
             Parked = true,
             Notes = ["Mit den Debug-Werkzeugen abgeschlossen."]
@@ -962,12 +1071,18 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             db.Fleet.Remove(ended);
     }
 
+    private static void RestoreComponents(FleetAircraft aircraft, double amount)
+    {
+        if (aircraft.ComponentWear is not null) aircraft.ComponentWear = aircraft.Components.Restore(amount).Serialize();
+    }
+
     private void PerformDueCheck(SkyCareerDb db, Career career, FleetAircraft aircraft, AircraftProfile profile)
     {
         if (aircraft.Ownership == Ownership.Rented || aircraft.HoursSinceCheck < FleetEconomics.CheckIntervalHours(profile)) return;
         Book(db, career, LedgerCategory.Maintenance, -FleetEconomics.CheckCost(profile), $"Planmäßiger Check {aircraft.Registration}", aircraft.Id);
         aircraft.HoursSinceCheck = 0;
         aircraft.Condition = Math.Min(100, aircraft.Condition + 15);
+        RestoreComponents(aircraft, 0.15);
         aircraft.UnavailableUntil = career.GameTime + FleetEconomics.CheckDowntime(profile);
         aircraft.UnavailableReason = "Planmäßiger Check";
     }

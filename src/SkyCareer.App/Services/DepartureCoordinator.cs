@@ -1,4 +1,5 @@
 using SkyCareer.Application;
+using SkyCareer.Application.Logging;
 
 namespace SkyCareer.App.Services;
 
@@ -66,12 +67,36 @@ public sealed class DepartureCoordinator : IDisposable
             if (job is null || aircraft is null) return;
             var career = await _career.GetCareerAsync().ConfigureAwait(false);
             _gsx.Track(job.Id, _career.BuildLoadSheet(job, _career.Profile(aircraft.ProfileId)), career.GsxSyncEnabled);
+            if (career.PersistFuel) await RestoreFuelAsync(job, aircraft).ConfigureAwait(false);
         }
         catch (CareerException)
         {
             // GSX is optional; the market page retargets it on its next load.
         }
     });
+
+    /// <summary>
+    /// Puts the fuel the aircraft had after its last flight back into the sim, once per job and before block-off; later
+    /// uplift (EFB, GSX) is then paid at settlement.
+    /// </summary>
+    private async Task RestoreFuelAsync(Domain.Career.MissionContract job, Domain.Career.FleetAircraft aircraft)
+    {
+        if (job.FuelRestoredAtUtc is not null || aircraft.FuelKg is not { } stored || _monitor.Loader is not { } loader) return;
+        if (_monitor.Latest is not { OnGround: true } t || _monitor.Phase is not (null or Sim.Tracking.FlightPhase.Preflight)) return;
+        try
+        {
+            if (Math.Abs(t.FuelKg - stored) > Math.Max(20, stored * 0.02))
+            {
+                await loader.ApplyFuelAsync(Domain.Mass.FromKg(stored)).ConfigureAwait(false);
+                _monitor.Log($"Tankstand von {aircraft.Registration} wiederhergestellt: {stored:N0} kg");
+            }
+            await _career.MarkFuelRestoredAsync(job.Id).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            AppLog.Warn("Treibstoff", $"Tankstand konnte nicht gesetzt werden: {ex.Message}", ex);
+        }
+    }
 
     public void Dispose()
     {

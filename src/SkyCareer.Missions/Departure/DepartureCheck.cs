@@ -46,7 +46,7 @@ public sealed record DepartureReadiness(IReadOnlyList<CheckItem> Items)
 public static class DepartureCheck
 {
     public const string Sim = "sim", Type = "type", Position = "position", Payload = "payload", Fuel = "fuel",
-        Limits = "limits", Ofp = "ofp", Availability = "availability";
+        Limits = "limits", Ofp = "ofp", Availability = "availability", Technical = "technical";
 
     /// <summary>Aircraft must be on the ground this close to the departure airport's reference point.</summary>
     public const double MaxDistanceNm = 3;
@@ -125,6 +125,17 @@ public static class DepartureCheck
             : plannedArrival > contract.Deadline
                 ? new(Availability, "Verfügbarkeit", Light.Yellow, $"Deadline {contract.Deadline:dd.MM. HH:mm} ist bei sofortigem Start kaum zu schaffen")
                 : new(Availability, "Verfügbarkeit", Light.Green, $"Deadline {contract.Deadline:dd.MM. HH:mm}"));
+
+        // Worn components only warn (never block or cost payout); shown once the aircraft has wear data from the sim.
+        var components = aircraft.Components;
+        if (!components.IsEmpty)
+        {
+            var worn = components.Warnings();
+            items.Add(worn.Count == 0
+                ? new(Technical, "Technik", Light.Green, $"alle Bauteile ≥ {WearComponents.WarningLevel:P0}")
+                : new(Technical, "Technik", Light.Yellow,
+                    $"{string.Join(", ", worn.Select(w => $"{w.Group} {w.Level:P0}"))} – Reparatur empfohlen"));
+        }
 
         return new DepartureReadiness(items);
     }

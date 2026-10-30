@@ -58,6 +58,12 @@
             SimBrief übernimmt keine Gewichte aus dem Planungslink, sondern nimmt die Werte deines SimBrief-Flugzeugs: trag hier dieselben ein.
             Gilt für neue Aufträge; bereits angebotene und angenommene Aufträge behalten ihre Gewichte.
         </MudText>
+        <MudSwitch T="bool" Value="c.PersistFuel" ValueChanged="SetPersistFuel" Color="Color.Primary" Class="mt-3"
+                   Label="Tankstand zwischen Flügen beibehalten" />
+        <MudText Typo="Typo.caption" Style="display:block">
+            Der Resttreibstoff bleibt nach dem Parken im Flugzeug und wird beim Scharfschalten des nächsten Auftrags im Sim gesetzt
+            (einmal je Auftrag, vor dem Rollen). Bezahlt wird dann nur, was bis zum Block-Off nachgetankt wurde, statt des Verbrauchs.
+        </MudText>
         <MudSwitch T="bool" Value="c.SimBriefDetailedLoad" ValueChanged="SetDetailedLoad" Color="Color.Primary" Class="mt-3"
                    Label="Genaue Beladung an SimBrief übergeben (Crew und unterschiedliche Gepäckgewichte)" />
         <MudText Typo="Typo.caption" Style="display:block">
@@ -188,6 +194,8 @@
         await Career.UpdateGsxSyncAsync(enabled);
         Gsx.SetSyncEnabled(enabled);
     });
+
+    private Task SetPersistFuel(bool enabled) => Run(() => Career.UpdatePersistFuelAsync(enabled));
 
     private Task SetDetailedLoad(bool enabled) => Run(() => Career.UpdateSimBriefDetailedLoadAsync(enabled));
 

@@ -77,29 +77,7 @@
         if (!_months.Contains(_month)) _months.Insert(0, _month);
     }
 
-    // Starting capital and debug corrections aren't earned, so they stay out of the monthly result.
-    private static bool IsOperating(LedgerCategory c) => c is not (LedgerCategory.StartingCapital or LedgerCategory.Adjustment);
+    private static bool IsOperating(LedgerCategory c) => FleetTexts.IsOperating(c);
 
-    private static string CategoryText(LedgerCategory c) => c switch
-    {
-        LedgerCategory.MissionRevenue => "Auftragserlöse",
-        LedgerCategory.Bonus => "Boni",
-        LedgerCategory.Penalty => "Strafen",
-        LedgerCategory.Fuel => "Treibstoff",
-        LedgerCategory.LandingFee => "Landegebühren",
-        LedgerCategory.Handling => "Abfertigung",
-        LedgerCategory.Navigation => "Streckengebühren",
-        LedgerCategory.Catering => "Catering",
-        LedgerCategory.Crew => "Personal",
-        LedgerCategory.Maintenance => "Wartung",
-        LedgerCategory.Repair => "Reparaturen",
-        LedgerCategory.Lease => "Leasing",
-        LedgerCategory.Rent => "Miete",
-        LedgerCategory.Insurance => "Versicherung",
-        LedgerCategory.AircraftPurchase => "Flugzeugkauf",
-        LedgerCategory.AircraftSale => "Flugzeugverkauf",
-        LedgerCategory.StartingCapital => "Startkapital",
-        LedgerCategory.Adjustment => "Korrekturen",
-        _ => c.ToString()
-    };
+    private static string CategoryText(LedgerCategory c) => FleetTexts.Category(c);
 }

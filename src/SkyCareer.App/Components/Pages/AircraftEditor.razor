@@ -4,6 +4,8 @@
 @inject FlightMonitorService Monitor
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
+@inject SimBriefCatalogService SimBriefTypes
+@using SkyCareer.Integrations.SimBrief
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
     <MudText Typo="Typo.h5">@_title</MudText>
@@ -15,6 +17,30 @@
 @if (_hint is not null)
 {
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_hint</MudAlert>
+}
+
+@if (Id is null)
+{
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-1">SimBrief-Typ</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            @(HasSimData
+                ? "Übernimmt Gewichtsgrenzen (MZFW, MTOW, MLW), Tankkapazität, Verbrauch, Reisegeschwindigkeit und Mindestpiste aus SimBrief. Leergewicht, Ladestationen und Sim-Erkennung bleiben wie aus dem Sim gelesen."
+                : "Erstellt das Profil aus den SimBrief-Daten des Typs, auch ohne laufenden Sim. Leergewicht und Sitze stammen aus SimBrief; die Ladestationen später mit „Stationen aus Sim übernehmen“ ergänzen.")
+        </MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudAutocomplete T="SimBriefType" @bind-Value="_simBriefType" SearchFunc="SearchSimBrief" ToStringFunc="@(t => t?.Label)"
+                             Label="Typ suchen (ICAO oder Name)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:360px"
+                             MaxItems="30" ResetValueOnEmptyText="true" />
+            <MudButton Variant="Variant.Outlined" Disabled="@(_simBriefType is null || Busy)" OnClick="ApplySimBrief">
+                @(HasSimData ? "SimBrief-Werte übernehmen" : "Profil aus SimBrief erstellen")
+            </MudButton>
+        </MudStack>
+        @if (_simBriefError is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_simBriefError</MudAlert>
+        }
+    </MudPaper>
 }
 
 <MudGrid>
@@ -193,6 +219,14 @@
     [SupplyParameterFromQuery] public string? Id { get; set; }
     [SupplyParameterFromQuery] public string? Copy { get; set; }
     [SupplyParameterFromQuery] public bool FromSim { get; set; }
+    /// <summary>Start from a SimBrief type (empty: just show the type search).</summary>
+    [SupplyParameterFromQuery(Name = "simbrief")] public string? SimBrief { get; set; }
+
+    private SimBriefType? _simBriefType;
+    private string? _simBriefError;
+
+    /// <summary>Stations come from the sim; SimBrief then only fills limits and performance.</summary>
+    private bool HasSimData => _form.Stations.Count > 0;
 
     private ProfileForm _form = new();
     private string _title = "Neues Flugzeugprofil";
@@ -240,6 +274,53 @@
         else if (FromSim)
         {
             await FillFromSim();
+            // Offer the matching SimBrief type right away.
+            if (await TryCatalogAsync() is { } catalog) _simBriefType = catalog.Find(_form.IcaoType);
+        }
+        else if (!string.IsNullOrWhiteSpace(SimBrief) && await TryCatalogAsync() is { } catalog && catalog.Find(SimBrief) is { } type)
+        {
+            _simBriefType = type;
+            ApplySimBrief();
+        }
+    }
+
+    private async Task<SimBriefAircraftCatalog?> TryCatalogAsync()
+    {
+        try
+        {
+            _simBriefError = null;
+            return await SimBriefTypes.GetAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _simBriefError = ex.Message;
+            return null;
+        }
+    }
+
+    private async Task<IEnumerable<SimBriefType>> SearchSimBrief(string? text, CancellationToken ct) =>
+        await TryCatalogAsync() is { } catalog ? catalog.Search(text) : [];
+
+    private void ApplySimBrief()
+    {
+        if (_simBriefType is not { } t) return;
+        if (HasSimData)
+        {
+            var stations = _form.Stations;
+            var (merged, warning) = SimBriefProfileDraft.Merge(Preview, t);
+            _form = ProfileForm.From(merged);
+            _form.Stations = stations;
+            _hint = $"Grenzen und Leistungsdaten aus SimBrief ({t.Label}) übernommen; Leergewicht, Stationen und Sim-Erkennung aus dem Sim." +
+                    (warning is null ? "" : " " + warning);
+        }
+        else
+        {
+            _form = ProfileForm.From(SimBriefProfileDraft.FromSimBrief(t, Store.Current.Aircraft));
+            _idTouched = false;
+            _title = $"Neues Profil: {t.Name}";
+            _hint = "Aus SimBrief übernommen: Gewichte, Tank, Sitze, Verbrauch, Reisegeschwindigkeit und Mindestpiste; Preise aus einem ähnlichen Profil geschätzt. " +
+                    "Leergewicht stammt aus SimBrief und kann vom Sim abweichen; Stationen später aus dem Sim übernehmen. " +
+                    "„Sim-Erkennung“ an den Titel des Sim-Flugzeugs anpassen.";
         }
     }
 

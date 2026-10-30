@@ -148,6 +148,22 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         lock (_sessionLock) return Session?.Summarize();
     }
 
+    /// <summary>The sim's wear components, or null without a connection or when the read fails (never fails a flight).</summary>
+    public async Task<SkyCareer.Domain.Aircraft.AircraftWear?> ReadWearAsync()
+    {
+        if (Inspector is not { } inspector) return null;
+        try
+        {
+            var wear = await WearReader.ReadAsync(inspector).ConfigureAwait(false);
+            return wear.IsEmpty ? null : wear;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or OperationCanceledException)
+        {
+            AppLog.Warn("Abnutzung", $"MSFS-Abnutzung konnte nicht gelesen werden: {ex.Message}", ex);
+            return null;
+        }
+    }
+
     public FlightPhase? Phase
     {
         get { lock (_sessionLock) return Session?.Phases.Phase; }

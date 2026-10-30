@@ -51,6 +51,23 @@ public static class FleetEconomics
         return loss;
     }
 
+    /// <summary>
+    /// Extra condition loss from the sim's wear during a flight: the average component loss in percent, scaled by
+    /// <see cref="WearComponents.SimWearFactor"/>.
+    /// </summary>
+    public static double SimConditionLoss(AircraftWear delta) => delta.AverageLoss * 100 * WearComponents.SimWearFactor;
+
+    /// <summary>
+    /// Cost to restore the given components (all when <paramref name="ids"/> is null): per component the new price ×
+    /// <see cref="WearComponents.ComponentRepairShare"/> × wear, rounded once for the whole job.
+    /// </summary>
+    public static decimal ComponentRepairCost(AircraftProfile a, AircraftWear wear, IEnumerable<int>? ids = null) =>
+        Math.Round((ids ?? wear.Levels.Keys).Distinct().Where(wear.Levels.ContainsKey)
+            .Sum(id => a.Economics.PurchasePriceNew * (decimal)(WearComponents.ComponentRepairShare(id) * (1 - wear.Levels[id]))), 0);
+
+    /// <summary>Cost to restore an aircraft and its components to new.</summary>
+    public static decimal RepairCost(AircraftProfile a, FleetAircraft f) => RepairCost(a, f.Condition) + ComponentRepairCost(a, f.Components);
+
     /// <summary>Cost to restore an aircraft to 100 % condition.</summary>
     public static decimal RepairCost(AircraftProfile a, double condition) =>
         Math.Round(a.Economics.PurchasePriceNew * 0.004m * (decimal)Math.Max(0, 100 - condition), 0);

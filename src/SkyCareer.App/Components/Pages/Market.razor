@@ -73,6 +73,11 @@
                 Load-Sheet: Pax @sheet.PassengerMass.Kg.ToString("N0") kg · Gepäck @sheet.BaggageMass.Kg.ToString("N0") kg · Fracht @sheet.CargoMass.Kg.ToString("N0") kg
                 · ZFW @sheet.ZeroFuelWeight.Kg.ToString("N0") kg · Block Fuel <b>@sheet.Fuel.Block.Kg.ToString("N0") kg</b>@(c.OfpBlockFuelKg is not null ? " (SimBrief)" : "")
                 · TOW @sheet.TakeoffWeight.Kg.ToString("N0") / @sheet.Aircraft.MaxTakeoffKg.ToString("N0") kg
+                @if (_persistFuel && aircraft?.FuelKg is { } inTank)
+                {
+                    <br />@($"Im Tank {inTank:N0} kg → nachtanken {Math.Max(0, sheet.Fuel.Block.Kg - inTank):N0} kg")
+                    @(c.FuelRestoredAtUtc is null && c.Status == ContractStatus.Accepted ? " (wird beim Scharfschalten im Sim gesetzt)" : "")
+                }
             </MudText>
         }
         @if (c.OfpRoute is not null)
@@ -317,6 +322,7 @@
     private int _reputation;
     private double _passengerWeightKg = PassengerMassTable.SimBriefAdultKg;
     private bool _detailedLoad;
+    private bool _persistFuel;
     private string? _searchStatus;
 
     protected override async Task OnInitializedAsync()
@@ -420,6 +426,7 @@
         _reputation = career.Reputation;
         _passengerWeightKg = career.PassengerWeightKg;
         _detailedLoad = career.SimBriefDetailedLoad;
+        _persistFuel = career.PersistFuel;
         _fleet = await Career.GetFleetAsync();
         _offers = await Career.GetContractsAsync(ContractStatus.Offered);
         _active = await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress);

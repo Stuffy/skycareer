@@ -128,7 +128,7 @@ public static class CostModel
             aircraft.Ownership == Ownership.Rented
                 ? new(LedgerCategory.Rent, Math.Round(aircraft.RentPerBlockHour * (decimal)Math.Max(1, blockHours), 2),
                     $"Überführung {route}: Miete {Math.Max(1, blockHours):0.0} h")
-                : new(LedgerCategory.Maintenance, Maintenance(t, a, airHours, aircraft.Condition),
+                : new(LedgerCategory.Maintenance, Maintenance(t, a, airHours, aircraft.EffectiveCondition),
                     $"Überführung {route}: Wartungsrücklage {airHours:0.0} FH")
         };
         return new FerryEstimate(distance, blockHours, airHours, lines.Where(l => l.Amount > 0).ToList());

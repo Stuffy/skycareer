@@ -196,6 +196,37 @@
     </MudStack>
 </MudPaper>
 
+<MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.h6" Class="mb-2">4. MSFS-Abnutzung (Test)</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">
+        Prüft, ob SimConnect die Abnutzungs- und Schmutzwerte von MSFS 2024 lesen und setzen kann. Achtung: Unbekannte Variablen
+        liefern oft 0 statt eines Fehlers. Zum Testen am besten ein Flugzeug mit sichtbarer Abnutzung laden (z. B. nach einem Flug).
+    </MudText>
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudButton Variant="Variant.Outlined" OnClick="ReadWear" Disabled="@(Monitor.Inspector is null || _busy)">Alle lesen</MudButton>
+        <MudText Typo="Typo.caption">@_wearStatus</MudText>
+    </MudStack>
+    @if (_wear.Count > 0)
+    {
+        <MudSimpleTable Dense="true" Class="mb-3">
+            <thead><tr><th>Variable</th><th>Bauteil</th><th>Wert</th></tr></thead>
+            <tbody>
+                @foreach (var w in _wear)
+                {
+                    <tr><td class="mono">@w.Variable</td><td>@w.Label</td><td class="mono">@w.Value</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        <MudTextField @bind-Value="_writeName" Label="Variable" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:300px" />
+        <MudTextField @bind-Value="_writeUnit" Label="Einheit" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px" />
+        <MudNumericField T="double" @bind-Value="_writeValue" Label="Wert" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:120px" />
+        <MudButton Variant="Variant.Outlined" OnClick="WriteVariable" Disabled="@(Monitor.Loader is null || _busy)">Schreiben</MudButton>
+        <MudText Class="mono">@_writeResult</MudText>
+    </MudStack>
+</MudPaper>
+
 </DebugGate>
 
 @code {
@@ -265,6 +296,61 @@
         _readBack = await Monitor.Inspector!.ReadAircraftAsync();
         _verification = LoadVerifier.Verify(_sheet!, Mass.FromKg(_readBack.PayloadKg), Mass.FromKg(_readBack.FuelKg));
     }
+
+    private sealed record WearRow(string Variable, string Label, string Value);
+    private List<WearRow> _wear = [];
+    private string? _wearStatus;
+    private string _writeName = "REGULAR DIRT PCT", _writeUnit = "percent", _writeResult = "";
+    private double _writeValue;
+
+    private Task ReadWear() => Run(async () =>
+    {
+        var vars = new List<(string Name, string Label)>();
+        foreach (var c in WearComponents.All) vars.Add((WearComponents.SimVar(c.Id), c.Name));
+        foreach (int i in new[] { 35, 36, 37, 39, 40, 46 }) vars.Add(($"WEAR AND TEAR CHECK PROGRESSION:{i}", $"Check-Fortschritt {WearComponents.All[i].Name}"));
+        foreach (var dirt in new[] { "REGULAR", "RUNWAY", "MUD", "DUST", "LEAKS" }) vars.Add(($"{dirt} DIRT PCT", "Schmutz"));
+        vars.Add(("BRAKE LEFT WEIGHT REMAINING", "Bremse links"));
+        vars.Add(("BRAKE RIGHT WEIGHT REMAINING", "Bremse rechts"));
+
+        var rows = new List<WearRow>();
+        int failed = 0;
+        foreach (var chunk in vars.Chunk(IAircraftInspector.MaxBatchVariables))
+        {
+            try
+            {
+                var values = await Monitor.Inspector!.ReadVariablesAsync(chunk.Select(v => v.Name).ToList());
+                rows.AddRange(chunk.Select((v, i) => new WearRow(v.Name, v.Label, values[i].ToString("0.####"))));
+            }
+            catch (Exception)
+            {
+                // One bad name fails the whole batch: read this block one by one.
+                foreach (var v in chunk)
+                {
+                    try { rows.Add(new WearRow(v.Name, v.Label, (await Monitor.Inspector!.ReadVariableAsync(v.Name)).ToString("0.####"))); }
+                    catch (Exception ex) { failed++; rows.Add(new WearRow(v.Name, v.Label, $"Fehler: {ex.Message}")); }
+                }
+            }
+        }
+        _wear = rows;
+        _wearStatus = $"{rows.Count} Variablen gelesen, {failed} Fehler, {rows.Count(r => r.Value == "0")} mit Wert 0.";
+    });
+
+    private Task WriteVariable() => Run(async () =>
+    {
+        _writeResult = "…";
+        string name = _writeName.Trim(), unit = _writeUnit.Trim();
+        try
+        {
+            double before = await Monitor.Inspector!.ReadVariableAsync(name, unit);
+            await Monitor.Loader!.WriteVariableAsync(name, unit, _writeValue);
+            await Task.Delay(1000);
+            double after = await Monitor.Inspector!.ReadVariableAsync(name, unit);
+            _writeResult = Math.Abs(after - _writeValue) < 1e-3
+                ? $"übernommen (vorher {before:0.####})"
+                : $"nicht übernommen (vorher {before:0.####}, gelesen {after:0.####})";
+        }
+        catch (Exception ex) { _writeResult = ex.Message; }
+    });
 
     private Task ReadVariable() => Run(async () =>
     {

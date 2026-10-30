@@ -2,6 +2,8 @@
 @inherits CareerPageBase
 @inject IDialogService Dialogs
 @inject AppSettings Settings
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 @using Microsoft.AspNetCore.Components.Web
 
 <MudText Typo="Typo.h5" Class="mb-4">Flotte</MudText>
@@ -15,30 +17,42 @@
     else
     {
         <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Kennzeichen</th><th>Typ</th><th>Status</th><th>Standort</th><th>Stunden / Zyklen</th><th>Zustand</th><th>Nächster Check</th><th>Wert / Rate</th><th></th></tr></thead>
+            <thead><tr><th>Kennzeichen</th><th>Typ</th><th>Status</th><th>Standort</th><th>Stunden / Zyklen</th><th>Tank</th><th>Zustand</th><th>Nächster Check</th><th>Wert / Rate</th><th></th></tr></thead>
             <tbody>
                 @foreach (var f in _fleet)
                 {
                     var p = Career.Profile(f.ProfileId);
+                    var parts = f.Components;
+                    var warnings = parts.Warnings();
                     <tr>
-                        <td><b>@f.Registration</b></td>
+                        <td><MudLink Href="@($"fleet/{f.Id}")"><b>@f.Registration</b></MudLink></td>
                         <td>@p.Name</td>
                         <td>
-                            @OwnershipText(f.Ownership)
+                            @FleetTexts.Ownership(f.Ownership)
                             @if (!f.IsAvailable(_gameTime)) { <br /><span class="bad">@(f.UnavailableReason ?? "Wartung") bis @f.UnavailableUntil?.ToString("dd.MM. HH:mm")</span> }
                         </td>
                         <td>@f.Location</td>
                         <td>@f.AirframeHours.ToString("N1") h / @f.Cycles</td>
-                        <td class="@(f.Condition < 70 ? "bad" : "")">@f.Condition.ToString("N0") %</td>
+                        <td>@FleetTexts.Fuel(f, p)</td>
+                        <td class="@(f.Condition < 70 ? "bad" : "")" style="white-space:nowrap">
+                            @f.Condition.ToString("N0") %
+                            @if (!parts.IsEmpty)
+                            {
+                                <MudTooltip Text="@(warnings.Count == 0 ? "Bauteile anzeigen" : "Abgenutzt: " + string.Join(", ", warnings.Select(w => $"{w.Group} {w.Level:P0}")))">
+                                    <MudIconButton Size="Size.Small" Icon="@(warnings.Count == 0 ? Icons.Material.Outlined.Build : Icons.Material.Filled.Warning)"
+                                                   Color="@(warnings.Count == 0 ? Color.Default : Color.Warning)" Href="@($"fleet/{f.Id}")" />
+                                </MudTooltip>
+                            }
+                        </td>
                         <td>@(f.Ownership == Ownership.Rented ? "inkl." : $"in {Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck):N0} h")</td>
-                        <td>@ValueText(f, p)</td>
+                        <td>@FleetTexts.Value(f, p, _gameTime)</td>
                         <td style="white-space:nowrap">
                             <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => StartRelocation(f)">Standort ändern</MudButton>
-                            @if (f.Condition < 99.5 && f.Ownership != Ownership.Rented)
+                            @if (f.EffectiveCondition < 99.5 && f.Ownership != Ownership.Rented)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Repair(f)">Reparieren (@Eur(FleetEconomics.RepairCost(p, f.Condition)))</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Repair(f)">Reparieren (@Eur(FleetEconomics.RepairCost(p, f)))</MudButton>
                             }
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => DisposeAircraft(f)">@DisposeText(f.Ownership)</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => DisposeAircraft(f)">@FleetTexts.DisposeAction(f.Ownership)</MudButton>
                         </td>
                     </tr>
                 }
@@ -125,6 +139,9 @@
 
 @code {
     private List<FleetAircraft> _fleet = [];
+    /// <summary>Opens the relocation panel for this aircraft (link from the aircraft detail page).</summary>
+    [SupplyParameterFromQuery(Name = "relocate")] public Guid? RelocateId { get; set; }
+    private bool _relocateHandled;
     private DateTime _gameTime;
     private decimal _cash;
 
@@ -134,6 +151,20 @@
         _gameTime = career.GameTime;
         _cash = career.Cash;
         _fleet = await Career.GetFleetAsync();
+        if (!_relocateHandled && RelocateId is { } id && _fleet.FirstOrDefault(a => a.Id == id) is { } aircraft)
+        {
+            _relocateHandled = true;
+            StartRelocation(aircraft);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_relocateHandled && _relocating is not null && RelocateId is not null)
+        {
+            RelocateId = null;
+            await JS.InvokeVoidAsync("skyMap.scrollToElement", "relocation");
+        }
     }
 
     private Task Acquire(AircraftProfile p, Ownership ownership) => Run(async () =>
@@ -183,26 +214,10 @@
 
     private Task Repair(FleetAircraft f) => Run(() => Career.RepairAsync(f.Id), $"{f.Registration} wird repariert (1 Tag).");
 
-    private string ValueText(FleetAircraft f, AircraftProfile p) => f.Ownership switch
-    {
-        Ownership.Owned => Eur(FleetEconomics.MarketValue(p, f, _gameTime)),
-        Ownership.Leased => $"{Eur(f.MonthlyRate)}/Monat bis {f.LeaseEndsAt:MM/yyyy}",
-        _ => $"{Eur(f.RentPerBlockHour)}/Blockstunde"
-    };
-
     private async Task DisposeAircraft(FleetAircraft f)
     {
-        var p = Career.Profile(f.ProfileId);
-        string text = f.Ownership switch
-        {
-            Ownership.Owned => $"{f.Registration} für {Eur(FleetEconomics.SaleValue(p, f, _gameTime))} verkaufen?",
-            Ownership.Leased => $"Leasing für {f.Registration} vorzeitig beenden? Gebühr: {Eur(f.MonthlyRate * 3)}.",
-            _ => $"Mietflugzeug {f.Registration} zurückgeben?"
-        };
-        if (await Dialogs.ShowMessageBoxAsync("Bestätigen", text, yesText: "Ja", cancelText: "Abbrechen") == true)
+        if (await Dialogs.ShowMessageBoxAsync("Bestätigen", FleetTexts.DisposeQuestion(f, Career.Profile(f.ProfileId), _gameTime), yesText: "Ja", cancelText: "Abbrechen") == true)
             await Run(() => Career.DisposeAircraftAsync(f.Id), "Erledigt.");
     }
 
-    private static string OwnershipText(Ownership o) => o switch { Ownership.Owned => "Eigentum", Ownership.Leased => "Geleast", _ => "Gemietet" };
-    private static string DisposeText(Ownership o) => o switch { Ownership.Owned => "Verkaufen", _ => "Zurückgeben" };
 }

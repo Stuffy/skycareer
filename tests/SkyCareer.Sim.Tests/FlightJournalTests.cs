@@ -67,6 +67,23 @@ public class FlightJournalTests
     }
 
     [Fact]
+    public void Fuel_at_block_off_includes_uplift_on_the_ground()
+    {
+        var t = new Telemetry { Timestamp = DateTimeOffset.UnixEpoch, OnGround = true, ParkingBrake = true, FuelKg = 1000 };
+        var session = new Sim.Tracking.FlightSession();
+        session.Process(t);
+        session.Process(t with { Timestamp = t.Timestamp.AddMinutes(5), FuelKg = 1500 });   // refuelled at the gate
+        session.Process(t with { Timestamp = t.Timestamp.AddMinutes(6), FuelKg = 1500, ParkingBrake = false, GroundSpeedKt = 8 });
+        session.Process(t with { Timestamp = t.Timestamp.AddMinutes(30), FuelKg = 900, ParkingBrake = false, GroundSpeedKt = 8 });
+
+        var s = session.Summarize();
+        Assert.Equal(Sim.Tracking.FlightPhase.TaxiOut, s.FinalPhase);
+        Assert.Equal(1500, s.FuelAtBlockOffKg);
+        Assert.Equal(900, s.FinalFuelKg);
+        Assert.Equal(600, s.FuelUsedKg);   // uplift before block-off isn't counted as burn
+    }
+
+    [Fact]
     public void Resume_without_history_picks_the_phase_from_the_current_state()
     {
         var started = DateTimeOffset.UnixEpoch;

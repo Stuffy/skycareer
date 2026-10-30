@@ -17,7 +17,9 @@ public sealed record FlightSummary(
     double FinalLatitude,
     double FinalLongitude,
     bool Resumed = false,
-    int ManualPhaseChanges = 0)
+    int ManualPhaseChanges = 0,
+    double? FuelAtBlockOffKg = null,
+    double FinalFuelKg = 0)
 {
     public TimeSpan? BlockTime => BlockOn - BlockOff;
     public TimeSpan? AirTime => LandingTime - TakeoffTime;
@@ -32,6 +34,7 @@ public sealed class FlightSession
     private readonly List<Telemetry> _samples = [];
     private Telemetry? _first, _last;
     private double _distanceNm, _maxG = 1, _minG = 1, _overspeedSec, _stallSec;
+    private double? _fuelAtBlockOff;
 
     public FlightSession(FlightPhaseTracker.Options? phaseOptions = null, IntegrityMonitor.Options? integrityOptions = null)
     {
@@ -41,6 +44,8 @@ public sealed class FlightSession
         // released again after a rejected takeoff.
         Phases.PhaseChanged += (_, change) =>
         {
+            // From block-off on, adding fuel is a violation: what's in the tanks now is what was bought for this flight.
+            if (change.From == FlightPhase.Preflight) _fuelAtBlockOff ??= change.At.FuelKg;
             if (change.To == FlightPhase.TakeoffRoll) Integrity.LockPayload(change.At.PayloadKg);
             else if (change.From == FlightPhase.TakeoffRoll && change.To == FlightPhase.TaxiOut) Integrity.UnlockPayload();
         };
@@ -112,7 +117,7 @@ public sealed class FlightSession
         Phases.LandingTime,
         Phases.BlockOn,
         _distanceNm,
-        _first is null || _last is null ? 0 : Math.Max(0, _first.FuelKg - _last.FuelKg),
+        _last is null ? 0 : Math.Max(0, (_fuelAtBlockOff ?? _first?.FuelKg ?? 0) - _last.FuelKg),
         _maxG,
         _minG,
         (int)_overspeedSec,
@@ -122,5 +127,7 @@ public sealed class FlightSession
         _last?.Latitude ?? 0,
         _last?.Longitude ?? 0,
         Resumed,
-        ManualPhaseChanges);
+        ManualPhaseChanges,
+        _fuelAtBlockOff,
+        _last?.FuelKg ?? 0);
 }

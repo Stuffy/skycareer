@@ -73,6 +73,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<MarketFilter>();
         services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(60) });
         services.AddSingleton<SimBriefClient>();
+        services.AddSingleton<SimBriefCatalogService>();
 
         var dbPath = SkyCareerDb.DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);

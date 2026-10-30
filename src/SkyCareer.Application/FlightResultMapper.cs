@@ -1,4 +1,5 @@
 using SkyCareer.Domain;
+using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Career;
 using SkyCareer.Sim.Tracking;
 
@@ -10,12 +11,15 @@ public static class FlightResultMapper
     private static readonly HashSet<ViolationKind> Severe =
         [ViolationKind.Slew, ViolationKind.Teleport, ViolationKind.InflightRefuel, ViolationKind.AircraftChanged, ViolationKind.PayloadChanged];
 
-    public static FlightResult Map(FlightSummary s, IReadOnlyList<string>? departureIssues = null) => new()
+    public static FlightResult Map(FlightSummary s, IReadOnlyList<string>? departureIssues = null, AircraftWear? simWearDelta = null) => new()
     {
         BlockTime = s.BlockTime ?? (s.BlockOff is { } off && s.LandingTime is { } land ? land - off : TimeSpan.Zero),
         AirTime = s.AirTime ?? TimeSpan.Zero,
         DistanceFlownNm = s.DistanceFlownNm,
         FuelUsedKg = s.FuelUsedKg,
+        FuelAtBlockOffKg = s.FuelAtBlockOffKg,
+        FinalFuelKg = s.FinalFuelKg,
+        SimWearDelta = simWearDelta is { IsEmpty: false } ? simWearDelta : null,
         TouchdownFpm = s.FinalTouchdown?.VerticalSpeedFpm ?? 0,
         MaxGForce = s.MaxGForce,
         Bounces = s.FinalTouchdown?.Bounces ?? 0,

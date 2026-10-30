@@ -54,4 +54,9 @@ public interface IAircraftLoader
     Task ApplyPayloadAsync(IReadOnlyList<Domain.Loading.StationLoad> stations, CancellationToken ct = default);
     /// <summary>Sets total fuel, distributed proportionally over the aircraft's tanks by capacity.</summary>
     Task ApplyFuelAsync(Mass totalFuel, CancellationToken ct = default);
+    /// <summary>
+    /// Sets any SimVar on the user aircraft (debug/spike use). Throws when SimConnect rejects it within a second;
+    /// a variable that isn't settable may also be ignored silently, so read it back to be sure.
+    /// </summary>
+    Task WriteVariableAsync(string name, string unit, double value, CancellationToken ct = default);
 }

@@ -17,7 +17,8 @@ public sealed record SettlementInput(
     FlightResult Result,
     DateTime DepartureGameTime,
     EconomyTables Economy,
-    bool ExternalGroundCosts = false); // fuel, handling and catering are paid from GSX receipts instead
+    bool ExternalGroundCosts = false, // fuel, handling and catering are paid from GSX receipts instead
+    double? FuelUpliftKg = null);     // fuel stays in the aircraft: pay what was added since the last flight, not what was burnt
 
 public sealed record SettlementResult(
     FlightOutcome Outcome,
@@ -117,7 +118,9 @@ public static class FlightSettlement
 
         // Variable costs are always due: the flight happened, whatever the outcome.
         var fuelPrice = CostModel.FuelPricePerKg(t, i.Profile.FuelType, i.Origin, i.DepartureGameTime);
-        if (!i.ExternalGroundCosts)
+        if (!i.ExternalGroundCosts && i.FuelUpliftKg is { } uplift)
+            AddCost(lines, LedgerCategory.Fuel, fuelPrice * (decimal)uplift, $"Getankt {uplift:N0} kg à {fuelPrice:0.000} €/kg");
+        else if (!i.ExternalGroundCosts)
             AddCost(lines, LedgerCategory.Fuel, fuelPrice * (decimal)r.FuelUsedKg, $"Treibstoff {r.FuelUsedKg:N0} kg à {fuelPrice:0.000} €/kg");
         if (airHours > 0)
             AddCost(lines, LedgerCategory.LandingFee, CostModel.LandingFee(t, i.Profile, landedAt), $"Landegebühr {landedAt.Ident}");
@@ -136,9 +139,19 @@ public static class FlightSettlement
         if (i.Aircraft.Ownership == Ownership.Rented)
             AddCost(lines, LedgerCategory.Rent, i.Aircraft.RentPerBlockHour * (decimal)Math.Max(1, blockHours), $"Miete {Math.Max(1, blockHours):0.0} h");
         else
-            AddCost(lines, LedgerCategory.Maintenance, CostModel.Maintenance(t, i.Profile, airHours, i.Aircraft.Condition), $"Wartungsrücklage {airHours:0.0} FH");
+            AddCost(lines, LedgerCategory.Maintenance, CostModel.Maintenance(t, i.Profile, airHours, i.Aircraft.EffectiveCondition), $"Wartungsrücklage {airHours:0.0} FH");
 
         double conditionLoss = outcome == FlightOutcome.Crashed ? 60 : FleetEconomics.ConditionLoss(airHours, r.TouchdownFpm, r.MaxGForce);
+        if (outcome != FlightOutcome.Crashed && r.SimWearDelta is { IsEmpty: false } wear)
+        {
+            double simLoss = FleetEconomics.SimConditionLoss(wear);
+            conditionLoss += simLoss;
+            var worn = wear.GroupLosses().Where(g => g.Loss >= 0.00005).Take(3)
+                .Select(g => $"{g.Group} −{g.Loss * 100:0.##} %").ToList();
+            notes.Add(worn.Count == 0
+                ? "Abnutzung laut MSFS: keine messbare."
+                : $"Abnutzung laut MSFS: {string.Join(", ", worn)} (Zustand −{simLoss:0.##} %).");
+        }
         if (Math.Abs(r.TouchdownFpm) > 600) notes.Add($"Harte Landung ({r.TouchdownFpm:N0} fpm) – Inspektion empfohlen.");
 
         return new SettlementResult(outcome, score, lines, landedAt.Ident, arrivalTime, blockHours, airHours,

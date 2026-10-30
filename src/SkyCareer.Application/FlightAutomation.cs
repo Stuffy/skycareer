@@ -1,4 +1,5 @@
 using SkyCareer.Application.Logging;
+using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Career;
 using SkyCareer.Domain.World;
 using SkyCareer.Missions.Departure;
@@ -24,6 +25,8 @@ public interface IFlightSessionHost
     void EndFlight();
     FlightSummary? Summarize();
     Task<string?> SaveTrackAsync(string name);
+    /// <summary>The sim's wear-and-tear components (only those the aircraft has); null without sim data.</summary>
+    Task<AircraftWear?> ReadWearAsync();
     void Log(string message);
 }
 
@@ -49,6 +52,8 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     /// <summary>Why a job didn't start at the last liftoff (wrong airport or aircraft).</summary>
     public IReadOnlyDictionary<Guid, string> NotStarted => _notStarted;
     private readonly Dictionary<Guid, string> _notStarted = [];
+    /// <summary>Jobs whose start wear was already tried, so a failing read isn't repeated every tick.</summary>
+    private readonly HashSet<Guid> _wearTried = [];
     public SettlementResult? LastSettlement { get; private set; }
     public MissionContract? LastSettledContract { get; private set; }
     public string? LastError { get; private set; }
@@ -96,7 +101,11 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
                 _groundReadiness = ground;
 
             if (host.HasSession && host.ContractId is { } current) await FollowAsync(current, t);
-            else if (!host.HasSession && t is not null && !TryResume(t) && t.OnGround) TryArm(t);
+            else if (!host.HasSession && t is not null && !TryResume(t) && t.OnGround)
+            {
+                TryArm(t);
+                if (host.ContractId is { } armedNow && _jobs.FirstOrDefault(j => j.Id == armedNow) is { } armedJob) await RecordStartWearAsync(armedJob);
+            }
 
             LastError = null;
         }
@@ -124,6 +133,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         {
             if (phase is FlightPhase.Preflight or FlightPhase.TaxiOut or FlightPhase.TakeoffRoll)
             {
+                if (phase == FlightPhase.Preflight && t is { OnGround: true }) await RecordStartWearAsync(job);
                 if (t is not null && phase != FlightPhase.TakeoffRoll && _airports.TryGetValue(job.Origin, out var origin) &&
                     t.Position.DistanceNmTo(origin.Position) > DisarmDistanceNm)
                 {
@@ -168,13 +178,27 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         _dirty = true;
     }
 
+    /// <summary>
+    /// Stores the sim's wear once per job while it waits at the stand (nothing wears there, so this equals block-off);
+    /// the settlement charges the difference to the reading after parking.
+    /// </summary>
+    private async Task RecordStartWearAsync(MissionContract job)
+    {
+        if (job.SimWearAtStart is not null || !_wearTried.Add(job.Id)) return;
+        if (await host.ReadWearAsync() is not { } wear) return;
+        await career.RecordSimWearAsync(job.Id, wear);
+        job.SimWearAtStart = wear.Serialize();
+    }
+
     private async Task SettleAsync(MissionContract job)
     {
         var summary = host.Summarize() ?? throw new CareerException("Keine Flugdaten vorhanden.");
         var track = await host.SaveTrackAsync($"{job.Origin}-{job.Destination}-{job.Id:N}");
         // Stored with the job at liftoff, so they survive an app restart mid-flight.
         var issues = job.DepartureIssueList.Count > 0 ? job.DepartureIssueList : host.DepartureIssues;
-        LastSettlement = await career.CompleteFlightAsync(job.Id, FlightResultMapper.Map(summary, issues), track);
+        var start = AircraftWear.Parse(job.SimWearAtStart);
+        var wearDelta = !start.IsEmpty && await host.ReadWearAsync() is { } end ? AircraftWear.Delta(start, end) : null;
+        LastSettlement = await career.CompleteFlightAsync(job.Id, FlightResultMapper.Map(summary, issues, wearDelta), track);
         LastSettledContract = job;
         host.Log($"Flug {job.Origin} → {job.Destination} automatisch abgerechnet: {LastSettlement.Outcome}");
         host.EndFlight();

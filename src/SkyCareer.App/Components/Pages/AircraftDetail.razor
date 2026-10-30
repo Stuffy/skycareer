@@ -1,0 +1,295 @@
+@page "/fleet/{Id:guid}"
+@inherits CareerPageBase
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+@if (_details is { } d && _profile is { } p)
+{
+    var f = d.Aircraft;
+    var parts = f.Components;
+    bool flying = d.OpenJobs.Any(j => j.Status == ContractStatus.InProgress);
+    bool rented = f.Ownership == Ownership.Rented;
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="fleet" />
+        <MudText Typo="Typo.h5">@f.Registration</MudText>
+        <MudLink Href="@($"aircraft/edit?id={Uri.EscapeDataString(p.Id)}")" Typo="Typo.h6">@p.Name</MudLink>
+        @if (flying)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning">Im Flug</MudChip>
+        }
+        else if (!f.IsAvailable(_gameTime))
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Error">@(f.UnavailableReason ?? "Wartung") bis @f.UnavailableUntil?.ToString("dd.MM. HH:mm")</MudChip>
+        }
+        else
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Success">Verfügbar</MudChip>
+        }
+    </MudStack>
+
+    <MudGrid Class="mb-4">
+        @foreach (var (label, value, bad) in Overview(f, p))
+        {
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudPaper Class="pa-3" Style="height:100%">
+                    <MudText Typo="Typo.caption">@label</MudText>
+                    <MudText Typo="Typo.subtitle1" Class="@(bad ? "bad" : "")">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6">Bauteile</MudText>
+            <MudSpacer />
+            @if (!rented && FleetEconomics.RepairCost(p, f) > 0)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || flying)" OnClick="RepairAll">
+                    Komplett reparieren (@Eur(FleetEconomics.RepairCost(p, f)) · 1 Tag)
+                </MudButton>
+            }
+        </MudStack>
+        @if (parts.IsEmpty)
+        {
+            <MudText Typo="Typo.body2">Noch keine MSFS-Abnutzungsdaten – sie entstehen beim ersten Flug mit verbundenem Simulator.</MudText>
+        }
+        else
+        {
+            @if (rented)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Mietflugzeuge wartet der Vermieter; Reparaturen sind nicht nötig.</MudAlert>
+            }
+            <MudExpansionPanels MultiExpansion="true" Elevation="0" Outlined="true">
+                @foreach (var group in GroupsOf(parts))
+                {
+                    var ids = group.Components.Where(c => c.Level < 1).Select(c => c.Component.Id).ToList();
+                    var groupCost = FleetEconomics.ComponentRepairCost(p, parts, ids);
+                    <MudExpansionPanel>
+                        <TitleContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Style="width:100%">
+                                <MudText Style="min-width:140px"><b>@group.Name</b></MudText>
+                                <MudProgressLinear Value="@(group.Worst * 100)" Color="@LevelColor(group.Worst)" Style="max-width:220px" />
+                                <MudText Class="@(group.Worst < WearComponents.WarningLevel ? "bad" : "")" Style="min-width:50px">@group.Worst.ToString("P0")</MudText>
+                                <MudSpacer />
+                                @if (!rented && ids.Count > 0 && groupCost > 0)
+                                {
+                                    @* Own span so the click doesn't also toggle the panel. *@
+                                    <span @onclick:stopPropagation="true">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || flying)" OnClick="() => RepairParts(ids, group.Name)">
+                                            Gruppe reparieren (@Eur(groupCost) · @FleetTexts.Downtime(WearComponents.RepairDowntime(group.Name)))
+                                        </MudButton>
+                                    </span>
+                                }
+                            </MudStack>
+                        </TitleContent>
+                        <ChildContent>
+                            <MudSimpleTable Dense="true">
+                                <tbody>
+                                    @foreach (var (component, level) in group.Components)
+                                    {
+                                        var cost = FleetEconomics.ComponentRepairCost(p, parts, [component.Id]);
+                                        <tr>
+                                            <td>@component.Name</td>
+                                            <td style="width:220px"><MudProgressLinear Value="@(level * 100)" Color="@LevelColor(level)" /></td>
+                                            <td class="@(level < WearComponents.WarningLevel ? "bad" : "")" style="width:60px">@level.ToString("P0")</td>
+                                            <td style="text-align:right;width:260px">
+                                                @if (!rented && level < 0.995 && cost > 0)
+                                                {
+                                                    <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(Busy || flying)" OnClick="() => RepairParts([component.Id], component.Name)">
+                                                        Reparieren (@Eur(cost))
+                                                    </MudButton>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        </ChildContent>
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+            <MudText Typo="Typo.caption" Class="mt-2 d-block">
+                SkyCareer übernimmt nach jedem Flug die Abnutzung, die MSFS währenddessen gemeldet hat. Unter 70 % warnt die Abflugprüfung,
+                abgenutzte Bauteile erhöhen die Wartungsrücklage. Werkstattzeit: Reifen und Bremsen 2 h, Triebwerk 1 Tag, sonst 6 h.
+                MSFS führt eine eigene Abnutzung, die SkyCareer nicht setzen kann: Reparaturen hier wirken nur in SkyCareer, im Simulator
+                über dessen Wartungsmenü reparieren.
+            </MudText>
+        }
+    </MudPaper>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4" Style="height:100%">
+                <MudText Typo="Typo.h6" Class="mb-2">Wirtschaftlichkeit</MudText>
+                @{
+                    var operating = d.Ledger.Where(l => FleetTexts.IsOperating(l.Category)
+                        && l.Category is not (LedgerCategory.AircraftPurchase or LedgerCategory.AircraftSale)).ToList();
+                    decimal revenue = operating.Where(l => l.Amount > 0).Sum(l => l.Amount);
+                    decimal costs = -operating.Where(l => l.Amount < 0).Sum(l => l.Amount);
+                }
+                @if (operating.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">Noch keine Buchungen für dieses Flugzeug.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true">
+                        <tbody>
+                            @foreach (var g in operating.GroupBy(l => l.Category).OrderByDescending(g => g.Sum(l => l.Amount)))
+                            {
+                                <tr><td>@FleetTexts.Category(g.Key)</td><td style="text-align:right" class="@(g.Sum(l => l.Amount) < 0 ? "bad" : "ok")">@Eur(g.Sum(l => l.Amount))</td></tr>
+                            }
+                            <tr><td>Erlöse / Kosten</td><td style="text-align:right">@Eur(revenue) / @Eur(costs)</td></tr>
+                            <tr><td><b>Ergebnis</b></td><td style="text-align:right" class="@(revenue - costs < 0 ? "bad" : "ok")"><b>@Eur(revenue - costs)</b></td></tr>
+                            @if (d.Flights.Sum(x => x.BlockHours) is var hours and > 0)
+                            {
+                                <tr><td>Ergebnis je Blockstunde</td><td style="text-align:right">@Eur((revenue - costs) / (decimal)hours)</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    @if (d.Ledger.Any(l => l.Category is LedgerCategory.AircraftPurchase or LedgerCategory.AircraftSale))
+                    {
+                        <MudText Typo="Typo.caption">Ohne Kauf/Verkauf des Flugzeugs.</MudText>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Style="height:100%">
+                <MudText Typo="Typo.h6" Class="mb-2">Aufträge &amp; Aktionen</MudText>
+                @if (d.OpenJobs.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-3">Kein angenommener Auftrag.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Class="mb-3">
+                        <tbody>
+                            @foreach (var j in d.OpenJobs)
+                            {
+                                <tr>
+                                    <td>@j.Origin → @j.Destination</td>
+                                    <td>Deadline @j.Deadline.ToString("dd.MM. HH:mm")</td>
+                                    <td>@Eur(j.Payout)</td>
+                                    <td>
+                                        <MudLink Href="@(j.Status == ContractStatus.InProgress ? "live" : "")">
+                                            @(j.Status == ContractStatus.InProgress ? "Im Flug – Live-Flug" : "Angenommen – Aufträge")
+                                        </MudLink>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" Href="@($"fleet?relocate={f.Id}")">Standort ändern</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="DisposeAircraft">@FleetTexts.DisposeAction(f.Ownership)</MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Flüge (@d.Flights.Count)</MudText>
+        @if (d.Flights.Count == 0)
+        {
+            <MudText Typo="Typo.body2">Noch keine Flüge mit diesem Flugzeug.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead><tr><th>Ankunft</th><th>Strecke</th><th>Block</th><th>Landung</th><th>Score</th><th>Status</th><th style="text-align:right">Ergebnis</th></tr></thead>
+                <tbody>
+                    @foreach (var fl in d.Flights)
+                    {
+                        <tr style="cursor:pointer" title="Im Flugbuch öffnen" @onclick="@(() => Nav.NavigateTo($"logbook?flight={fl.Id}"))">
+                            <td>@fl.ArrivedGameTime.ToString("dd.MM.yy HH:mm")</td>
+                            <td>@fl.Origin → @fl.Destination@(fl.ArrivedAt != fl.Destination ? $" (gelandet {fl.ArrivedAt})" : "")</td>
+                            <td>@fl.BlockHours.ToString("N1") h</td>
+                            <td>@fl.TouchdownFpm.ToString("N0") fpm</td>
+                            <td>@fl.Score</td>
+                            <td>@fl.Outcome</td>
+                            <td style="text-align:right" class="@(fl.Revenue - fl.Costs < 0 ? "bad" : "ok")">@Eur(fl.Revenue - fl.Costs)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+else if (_missing)
+{
+    <MudAlert Severity="Severity.Warning">Dieses Flugzeug gehört nicht (mehr) zur Flotte. <MudLink Href="fleet">Zur Flotte</MudLink></MudAlert>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private AircraftDetails? _details;
+    private AircraftProfile? _profile;
+    private DateTime _gameTime;
+    private EconomyTables? _economy;
+    private bool _missing;
+
+    private sealed record PartGroup(string Name, double Worst, IReadOnlyList<(WearComponent Component, double Level)> Components);
+
+    protected override async Task LoadAsync()
+    {
+        var career = await Career.GetCareerAsync();
+        _gameTime = career.GameTime;
+        _economy = EconomyTables.For(career.Difficulty);
+        try
+        {
+            _details = await Career.GetAircraftDetailsAsync(Id);
+            _profile = Career.Profile(_details.Aircraft.ProfileId);
+            _missing = false;
+        }
+        catch (CareerException)
+        {
+            // Sold or returned (also from this page): show the hint instead of a snackbar.
+            _details = null;
+            _missing = true;
+        }
+    }
+
+    private IEnumerable<(string Label, string Value, bool Bad)> Overview(FleetAircraft f, AircraftProfile p)
+    {
+        yield return ("Status", FleetTexts.Ownership(f.Ownership), false);
+        yield return ("Standort", f.Location, false);
+        yield return ("Stunden / Zyklen", $"{f.AirframeHours:N1} h / {f.Cycles}", false);
+        yield return ("Tank", FleetTexts.Fuel(f, p), false);
+        yield return ("Zustand", $"{f.Condition:N0} %", f.Condition < 70);
+        yield return ("Schlechtestes Bauteil", f.Components.Worst is { } w ? $"{w.Component.Name} {w.Level:P0}" : "–", f.Components.WorstLevel < WearComponents.WarningLevel);
+        yield return ("Nächster Check", f.Ownership == Ownership.Rented ? "inkl." : $"in {Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck):N0} h", false);
+        yield return (f.Ownership == Ownership.Owned ? "Marktwert" : "Rate", FleetTexts.Value(f, p, _gameTime), false);
+        if (f.Ownership == Ownership.Owned) yield return ("Verkaufserlös", Eur(FleetEconomics.SaleValue(p, f, _gameTime)), false);
+        if (f.Ownership != Ownership.Rented) yield return ("Fixkosten/Monat", Eur(FleetEconomics.MonthlyFixedCost(p, f)), false);
+        yield return ("Wartungsrücklage/FH", Eur(CostModel.Maintenance(_economy!, p, 1, f.EffectiveCondition)), f.EffectiveCondition < 70);
+    }
+
+    private static IEnumerable<PartGroup> GroupsOf(AircraftWear parts) =>
+        parts.Levels.Select(kv => (Component: WearComponents.All[kv.Key], Level: kv.Value))
+            .GroupBy(c => c.Component.Group)
+            .Select(g => new PartGroup(g.Key, g.Min(c => c.Level), g.OrderBy(c => c.Level).ThenBy(c => c.Component.Id).ToList()))
+            .OrderBy(g => g.Worst);
+
+    private static Color LevelColor(double level) =>
+        level < WearComponents.WarningLevel ? Color.Error : level < 0.9 ? Color.Warning : Color.Success;
+
+    private Task RepairParts(IReadOnlyCollection<int> ids, string what) =>
+        Run(() => Career.RepairComponentsAsync(Id, ids), $"{what} wird repariert.");
+
+    private Task RepairAll() => Run(() => Career.RepairAsync(Id), $"{_details!.Aircraft.Registration} wird repariert (1 Tag).");
+
+    private async Task DisposeAircraft()
+    {
+        var f = _details!.Aircraft;
+        if (await Dialogs.ShowMessageBoxAsync("Bestätigen", FleetTexts.DisposeQuestion(f, _profile!, _gameTime), yesText: "Ja", cancelText: "Abbrechen") == true)
+        {
+            await Run(() => Career.DisposeAircraftAsync(f.Id), "Erledigt.");
+            Nav.NavigateTo("fleet");
+        }
+    }
+}

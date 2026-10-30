@@ -48,8 +48,9 @@ public sealed class IntegrityMonitor
         Flag(ViolationKind.Slew, t.Slew, t, "Slew mode active");
         Flag(ViolationKind.SimRate, t.SimulationRate > _opt.MaxSimRate + 0.01, t, $"Simulation rate {t.SimulationRate:0.##}x");
 
-        // Deboarding (e.g. by GSX) after parking is expected and must not count as a payload change.
-        if (_payloadAtDeparture is { } locked && phase != FlightPhase.Arrived)
+        // Only the flight itself counts: unloading after landing (GSX deboarding, a resume that catches up after the
+        // aircraft was already parked) is expected.
+        if (_payloadAtDeparture is { } locked && phase is >= FlightPhase.TakeoffRoll and <= FlightPhase.Approach)
             Flag(ViolationKind.PayloadChanged, Math.Abs(t.PayloadKg - locked) > _opt.PayloadChangeToleranceKg, t,
                 $"Payload {t.PayloadKg:N0} kg, locked at {locked:N0} kg");
 

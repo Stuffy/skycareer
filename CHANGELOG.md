@@ -18,6 +18,23 @@ Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioni
   Bauteile oder ganzer Baugruppen (Reifen und Bremsen 2 h Werkstatt, Triebwerk 1 Tag, sonst 6 h), Wirtschaftlichkeit nach
   Kostenarten, alle Flüge des Flugzeugs (mit Sprung ins Flugbuch) und offene Aufträge.
 - **Debug:** Testseite für die Abnutzungs- und Schmutzwerte von MSFS 2024 (lesen und testweise schreiben).
+- **Abrechnung nach dem GSX-Deboarding:** Wird GSX genutzt, wartet die Abrechnung nach dem Parken, bis GSX die Passagiere
+  ausgeladen hat; die GSX-Belege sind dann Teil der Abrechnung. Startet kein Deboarding, wird nach 20 Minuten abgerechnet,
+  ebenso sofort beim Anlassen eines Triebwerks oder über „Jetzt abrechnen“ im Live-Flug.
+
+### Geändert
+- **Regelverstöße annullieren keinen Flug mehr.** Stattdessen kostet jede Art einen Teil der Vergütung (Slew, Positionssprung,
+  Flugzeugwechsel 20 %, Tanken im Flug 15 %, Ladungsänderung 10 %, zusammen höchstens 20 %), einen Rufpunkt und Score.
+  Zeitbeschleunigung wird nur noch vermerkt und kostet nichts mehr. Der Live-Flug zeigt die Verstöße mit dem erwarteten Abzug.
+
+### Behoben
+- Nach einem App-Neustart im Flug hat die GSX-Synchronisierung die Kabine geleert, was als Ladungsänderung gewertet und der
+  Flug annulliert wurde. Im Flug wird jetzt nie mehr Zuladung geschrieben; nach dem Neustart folgt GSX nur noch dem Deboarding.
+- War die App länger geschlossen, werden Gewichtsänderungen und eine Landung in dieser Zeit nicht mehr als Verstoß bzw.
+  falsche Landerate gewertet, sondern in der Abrechnung vermerkt. Ausladen beim Rollen zum Stand ist kein Verstoß mehr.
+- Ein verspäteter GSX-Deboarding-Beleg wird nicht mehr dem nächsten Auftrag ab demselben Flughafen zugeordnet.
+- Wiederaufgenommene Flüge ohne Flugaufzeichnung berechnen den Treibstoff wieder richtig.
+- Abnutzung: Fehlt der Startwert (Neustart, Lesefehler), wird er im Flug nachgeholt; die Abrechnung vermerkt das.
 
 ## 0.1.2 – 2026-10-29
 

@@ -133,6 +133,10 @@ public sealed class MissionContract
     public DateTime? FuelRestoredAtUtc { get; set; }
     /// <summary>The sim's wear components when the job was armed (<see cref="Aircraft.AircraftWear"/> text); the settlement uses the difference.</summary>
     public string? SimWearAtStart { get; set; }
+    /// <summary>Fuel on board at block-off, stored at liftoff so a resume without journal still knows the uplift.</summary>
+    public double? FuelAtBlockOffKg { get; set; }
+    /// <summary>Real time (UTC) the job was first armed at its origin; older GSX receipts there belong to the previous flight.</summary>
+    public DateTime? ArmedAtUtc { get; set; }
 
     public int TotalPassengers => Adults + Children + Infants;
     public IReadOnlyList<string> DepartureIssueList =>

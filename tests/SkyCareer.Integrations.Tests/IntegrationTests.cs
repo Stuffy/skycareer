@@ -81,6 +81,34 @@ public class GsxTests
     }
 
     [Fact]
+    public void After_departure_only_deboarding_is_followed()
+    {
+        // After an app restart GSX may still show the departure's boarding (or nothing): never empty or re-board then.
+        var sync = new GsxLoadSync(departed: true);
+        Assert.Null(sync.Next(State()));
+        Assert.Null(sync.Next(State(boarding: GsxServiceState.Completed, refuel: GsxServiceState.Completed)));
+
+        var deboarding = sync.Next(State(boarding: GsxServiceState.Completed, deboarding: GsxServiceState.Performing, total: 10, deboarded: 5));
+        Assert.Equal(0.5, deboarding!.PassengerFraction, 3);
+        Assert.False(deboarding.ApplyFuel);
+        Assert.Equal(0, sync.Next(State(deboarding: GsxServiceState.Completed, total: 10, deboarded: 10))!.PassengerFraction);
+    }
+
+    [Fact]
+    public void Payload_is_only_written_on_the_ground_before_departure_or_after_parking()
+    {
+        Assert.True(GsxLoadSync.MayWrite(null, onGround: true, departed: false, sessionIsThisJob: false));
+        Assert.True(GsxLoadSync.MayWrite(Sim.Tracking.FlightPhase.Preflight, true, false, true));
+        Assert.False(GsxLoadSync.MayWrite(Sim.Tracking.FlightPhase.TaxiOut, true, false, true));
+        // The app restarted in flight: no session yet, the job departed → never write.
+        Assert.False(GsxLoadSync.MayWrite(null, onGround: false, departed: true, sessionIsThisJob: false));
+        Assert.False(GsxLoadSync.MayWrite(null, onGround: true, departed: true, sessionIsThisJob: false));
+        Assert.False(GsxLoadSync.MayWrite(Sim.Tracking.FlightPhase.Cruise, false, true, true));
+        Assert.False(GsxLoadSync.MayWrite(Sim.Tracking.FlightPhase.TaxiIn, true, true, true));
+        Assert.True(GsxLoadSync.MayWrite(Sim.Tracking.FlightPhase.Arrived, true, true, true));
+    }
+
+    [Fact]
     public void Scaling_keeps_crew_and_scales_cabin_and_holds()
     {
         var ac = new AircraftProfile

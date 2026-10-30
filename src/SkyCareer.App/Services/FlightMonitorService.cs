@@ -77,7 +77,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
     /// and keeps recording. Without a journal the session is picked up from the current state (times estimated from
     /// <paramref name="startedAt"/>). Returns false when there is neither a journal nor live telemetry.
     /// </summary>
-    public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt)
+    public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null)
     {
         var history = FlightJournal.Read(TracksDirectory, contractId);
         var current = Latest;
@@ -85,7 +85,8 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
 
         var session = new FlightSession();
         foreach (var t in history) session.Process(t);
-        if (history.Count == 0) session.Resume(current!, startedAt);
+        if (history.Count == 0) session.Resume(current!, startedAt, fuelAtBlockOffKg);
+        else session.ContinueAfterRestart(startedAt);
         AttachLog(session);
         lock (_sessionLock)
         {

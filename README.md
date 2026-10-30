@@ -35,9 +35,10 @@ wirtschaftliche Karriere einbettet: Aufträge annehmen, Flotte aufbauen, Kosten 
   Abflug-Ampel prüft Typ, Position, Zuladung, Treibstoff, Gewichtsgrenzen und OFP. Der Auftrag beginnt beim Abheben und
   wird nach dem Abstellen am Ziel automatisch abgerechnet.
 - **Bewertung und Integrität** – Landung, Pünktlichkeit und Flugverhalten fließen in Score und Reputation ein. Slew,
-  Zeitraffer, Betanken in der Luft oder Positionssprünge werden erkannt.
+  Zeitraffer, Betanken in der Luft oder Positionssprünge werden erkannt und kosten einen Teil der Vergütung, annullieren
+  den Flug aber nicht.
 - **Absturzsicher** – laufende Flüge werden mitgeschrieben und nach einem Neustart der App automatisch fortgesetzt.
-- **Integrationen** – SimBrief (Planung und OFP-Abgleich), GSX Pro (synchrones Boarding, GSX-Rechnungen als Kosten) und BeyondATC (Flugplan-Export).
+- **Integrationen** – SimBrief (Planung und OFP-Abgleich), GSX Pro (synchrones Boarding und Deboarding, Abrechnung nach dem Deboarding, GSX-Rechnungen als Kosten) und BeyondATC (Flugplan-Export).
 
 ## Voraussetzungen
 

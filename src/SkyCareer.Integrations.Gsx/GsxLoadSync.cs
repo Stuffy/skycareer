@@ -1,6 +1,7 @@
 using SkyCareer.Domain;
 using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Loading;
+using SkyCareer.Sim.Tracking;
 
 namespace SkyCareer.Integrations.Gsx;
 
@@ -14,8 +15,10 @@ public sealed record GsxSyncAction(double PassengerFraction, double CargoFractio
 /// Keeps the sim's payload in step with GSX boarding and deboarding: the cabin fills as GSX counts passengers
 /// on board, the holds as its cargo percentage grows, and the block fuel from the load sheet is set once GSX
 /// refuelling finishes (or at the end of boarding if GSX doesn't refuel). One instance per flight.
+/// Created for a job that already departed (after an app restart), it only follows deboarding: GSX may still report
+/// the boarding of the departure, and re-boarding or emptying the cabin then would change the load in flight.
 /// </summary>
-public sealed class GsxLoadSync
+public sealed class GsxLoadSync(bool departed = false)
 {
     /// <summary>Smallest change in load fraction worth a SimConnect write.</summary>
     public const double Step = 0.05;
@@ -26,9 +29,10 @@ public sealed class GsxLoadSync
     public GsxSyncAction? Next(GsxState s)
     {
         if (!s.Detected) return null;
+        if (departed && s.Deboarding is not (GsxServiceState.Performing or GsxServiceState.Completed)) return null;
 
         bool refuelHandled = s.Refueling is GsxServiceState.Requested or GsxServiceState.Performing;
-        bool fuelNow = !_fuelApplied &&
+        bool fuelNow = !departed && !_fuelApplied &&
                        (s.Refueling == GsxServiceState.Completed ||
                         (s.Boarding == GsxServiceState.Completed && !refuelHandled));
         if (fuelNow) _fuelApplied = true;
@@ -67,6 +71,15 @@ public sealed class GsxLoadSync
         _cargo = target.cargo;
         return new GsxSyncAction(target.pax, target.cargo, fuelNow, target.reason);
     }
+
+    /// <summary>
+    /// Payload may only be written on the ground: before the job departed (no session yet or preflight), or once it is
+    /// parked at the destination. Right after an app restart the phase is unknown (null) until the flight is resumed.
+    /// </summary>
+    public static bool MayWrite(FlightPhase? phase, bool onGround, bool departed, bool sessionIsThisJob) =>
+        onGround && (departed
+            ? sessionIsThisJob && phase == FlightPhase.Arrived
+            : phase is null or FlightPhase.Preflight);
 
     private static double Fraction(int done, int total) => total <= 0 ? 0 : Math.Clamp((double)done / total, 0, 1);
 

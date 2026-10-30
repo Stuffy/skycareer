@@ -23,7 +23,8 @@ public static class FlightScorer
         double weighted = weights <= 0 ? 100
             : (landing * rule.LandingRateWeight + smooth * rule.GForceWeight + punctuality * rule.PunctualityWeight) / weights;
 
-        int safety = (int)Math.Min(40, (r.OverspeedSeconds + r.StallWarningSeconds) * 2 + r.MinorViolations * 10);
+        int severeKinds = r.Violations.Where(v => v.Severe).Select(v => v.Type).Distinct().Count();
+        int safety = (int)Math.Min(40, (r.OverspeedSeconds + r.StallWarningSeconds) * 2 + severeKinds * 20);
         int total = (int)Math.Round(Math.Clamp(weighted - safety, 0, 100));
         return new FlightScore(total, (int)Math.Round(landing), (int)Math.Round(smooth), (int)Math.Round(punctuality), safety);
     }

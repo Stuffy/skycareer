@@ -1,9 +1,17 @@
 namespace SkyCareer.Domain.Career;
 
+public enum ViolationType { Slew, SimRate, InflightRefuel, PayloadChanged, Teleport, AircraftChanged }
+
+/// <summary>A rule broken during the flight. Severe ones cost part of the payout, time acceleration is only noted.</summary>
+public sealed record RuleViolation(ViolationType Type, string Detail)
+{
+    public bool Severe => Type != ViolationType.SimRate;
+}
+
 /// <summary>
-/// Simulator-independent outcome of a tracked flight, mapped from the tracker's summary. Integrity violations are
-/// split into severe ones (slew, teleport, refuelling in flight, changing aircraft or payload) that void the job and
-/// minor ones (time acceleration) that only cost score.
+/// Simulator-independent outcome of a tracked flight, mapped from the tracker's summary. Integrity violations never
+/// void the job: severe ones (slew, teleport, refuelling in flight, changing aircraft or payload) cost a share of the
+/// payout, time acceleration is only noted.
 /// </summary>
 public sealed record FlightResult
 {
@@ -26,8 +34,9 @@ public sealed record FlightResult
     public bool Crashed { get; init; }
     /// <summary>True when the aircraft reached the parked state (engines off, brake set) after landing.</summary>
     public bool Parked { get; init; }
-    public int SevereViolations { get; init; }
-    public int MinorViolations { get; init; }
+    public IReadOnlyList<RuleViolation> Violations { get; init; } = [];
+    public int SevereViolations => Violations.Count(v => v.Severe);
+    public int MinorViolations => Violations.Count(v => !v.Severe);
     public IReadOnlyList<string> Notes { get; init; } = [];
     /// <summary>Departure checks that were red at liftoff (load, fuel, weight limits, OFP); each costs part of the payout.</summary>
     public IReadOnlyList<string> DepartureIssues { get; init; } = [];

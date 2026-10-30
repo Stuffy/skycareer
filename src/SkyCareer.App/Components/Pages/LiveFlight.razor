@@ -3,6 +3,7 @@
 @inject FlightMonitorService Monitor
 @inject DepartureCoordinator Departure
 @inject AppSettings Settings
+@using SkyCareer.Missions.Settlement
 
 <MudText Typo="Typo.h5" Class="mb-4">Live-Flug</MudText>
 
@@ -52,6 +53,15 @@
             <MudSpacer />
             <MudText>Phase: <b>@MissionTexts.Phase(Monitor.Phase)</b></MudText>
         </MudStack>
+        @if (Departure.Automation.Waiting is { } waiting)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2" ContentAlignment="HorizontalAlignment.Left">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.body2">@waiting – die GSX-Belege gehören dann zur Abrechnung.</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => SettleNow(jobId)">Jetzt abrechnen</MudButton>
+                </MudStack>
+            </MudAlert>
+        }
     </MudPaper>
 }
 
@@ -125,7 +135,22 @@
                         {
                             <tr><td>Aufsetzen</td><td>@td.VerticalSpeedFpm.ToString("N0") fpm, @td.GForce.ToString("N2") G, @td.Bounces Bounce(s)</td></tr>
                         }
-                        <tr><td>Verstöße</td><td class="@(sum.Violations.Count == 0 ? "ok" : "bad")">@sum.Violations.Count</td></tr>
+                        <tr>
+                            <td>Verstöße</td>
+                            <td class="@(sum.Violations.Count == 0 ? "ok" : "bad")">
+                                @if (sum.Violations.Count == 0)
+                                {
+                                    <span>keine</span>
+                                }
+                                else
+                                {
+                                    var violations = sum.Violations.Select(v => new RuleViolation(FlightResultMapper.Type(v.Kind), v.Detail)).ToList();
+                                    var penalties = FlightSettlement.ViolationPenalties(violations);
+                                    @string.Join(", ", violations.Select(v => v.Type).Distinct().Select(k => FlightSettlement.ViolationText(k) +
+                                        (penalties.FirstOrDefault(p => p.Type == k) is { Share: > 0 } p ? $" (−{p.Share:P0} Vergütung)" : " (nur vermerkt)")))
+                                }
+                            </td>
+                        </tr>
                     </tbody>
                 </MudSimpleTable>
             }
@@ -170,6 +195,12 @@
     private void SetFrozen(bool freeze)
     {
         if (Monitor.Phase is { } phase) Monitor.ForcePhase(phase, freeze);
+    }
+
+    private void SettleNow(Guid jobId)
+    {
+        Departure.Automation.SettleNow(jobId);
+        Departure.TickNow();
     }
 
     private async Task StartReplay() => await Run(() => Monitor.StartReplayAsync(_replayPath, speed: 10));

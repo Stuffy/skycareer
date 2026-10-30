@@ -21,7 +21,7 @@ public interface IFlightSessionHost
     IReadOnlyList<string> DepartureIssues { get; set; }
     void BeginFlight(Guid? contractId = null);
     /// <summary>Continues tracking a job that is already flying (journal replay, or picked up from the current state).</summary>
-    bool ResumeFlight(Guid contractId, DateTimeOffset startedAt);
+    bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null);
     void EndFlight();
     FlightSummary? Summarize();
     Task<string?> SaveTrackAsync(string name);
@@ -30,16 +30,27 @@ public interface IFlightSessionHost
     void Log(string message);
 }
 
+/// <summary>Ground services (GSX deboarding) at the destination, as far as the settlement waits for them.</summary>
+public enum GroundServiceState { NotUsed, NotStarted, InProgress, Completed }
+
 /// <summary>
 /// Runs a career flight without a start button: arms tracking when the aircraft sits at the departure airport of an
 /// accepted job, keeps the job editable on the ground, starts it at liftoff (unless position or type are wrong) and
-/// settles it once the aircraft is parked again. Also evaluates the departure traffic light for every accepted job.
+/// settles it once the aircraft is parked again (with GSX in use: once deboarding is done). Also evaluates the departure traffic light for every accepted job.
 /// Not thread-safe by itself: the caller serialises <see cref="TickAsync"/>.
 /// </summary>
 public sealed class FlightAutomation(CareerService career, IFlightSessionHost host)
 {
     /// <summary>An armed job is dropped when the aircraft shows up this far from its departure airport before takeoff.</summary>
     public const double DisarmDistanceNm = 5;
+    /// <summary>Settle anyway when GSX deboarding hasn't started this long after parking.</summary>
+    public static readonly TimeSpan DeboardingStartTimeout = TimeSpan.FromMinutes(20);
+    /// <summary>Upper bound for a deboarding that never completes.</summary>
+    public static readonly TimeSpan DeboardingTimeout = TimeSpan.FromMinutes(60);
+    /// <summary>Pause after GSX deboarding so its receipt is written and booked before the settlement.</summary>
+    public static readonly TimeSpan ReceiptGrace = TimeSpan.FromSeconds(15);
+    /// <summary>A failed read of the sim's wear is retried after this long.</summary>
+    public static readonly TimeSpan WearRetry = TimeSpan.FromSeconds(30);
 
     private List<MissionContract> _jobs = [];
     private Dictionary<Guid, FleetAircraft> _fleet = [];
@@ -52,14 +63,28 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     /// <summary>Why a job didn't start at the last liftoff (wrong airport or aircraft).</summary>
     public IReadOnlyDictionary<Guid, string> NotStarted => _notStarted;
     private readonly Dictionary<Guid, string> _notStarted = [];
-    /// <summary>Jobs whose start wear was already tried, so a failing read isn't repeated every tick.</summary>
-    private readonly HashSet<Guid> _wearTried = [];
+    /// <summary>When the start wear was last tried per job, so a failing read is retried but not every tick.</summary>
+    private readonly Dictionary<Guid, DateTime> _wearTried = [];
+    private readonly HashSet<Guid> _wearFromResume = [];
+    private DateTimeOffset? _deboardedAt;
+    private volatile string? _settleNow;
     public SettlementResult? LastSettlement { get; private set; }
     public MissionContract? LastSettledContract { get; private set; }
     public string? LastError { get; private set; }
 
     /// <summary>Raised when tracking is armed for a job (e.g. to point GSX at it).</summary>
     public event Action<Guid>? Armed;
+    /// <summary>Raised when a job in flight is picked up again after an app restart.</summary>
+    public event Action<Guid>? Resumed;
+
+    /// <summary>Tells whether the destination's ground services (GSX) are still busy; null = never wait.</summary>
+    public Func<Guid, GroundServiceState>? GroundServices { get; set; }
+
+    /// <summary>Why the parked job isn't settled yet (waiting for GSX deboarding); null otherwise.</summary>
+    public string? Waiting { get; private set; }
+
+    /// <summary>Settles the parked job on the next tick without waiting for ground services.</summary>
+    public void SettleNow(Guid contractId) => _settleNow = contractId.ToString();
     public event Action? Changed;
 
     /// <summary>Call when career data changed (accept, cancel, OFP, fleet …) so the next tick reloads it.</summary>
@@ -151,7 +176,55 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             return;
         }
 
-        if (job.Status == ContractStatus.InProgress && phase is FlightPhase.Arrived or FlightPhase.Crashed) await SettleAsync(job);
+        if (job.Status == ContractStatus.InProgress && job.SimWearAtStart is null && phase is not (FlightPhase.Arrived or FlightPhase.Crashed))
+        {
+            // Not read at the stand (e.g. resumed after an app restart): better late than never, the rest still counts.
+            await RecordStartWearAsync(job);
+            if (job.SimWearAtStart is not null) _wearFromResume.Add(job.Id);
+        }
+        if (job.Status != ContractStatus.InProgress || phase is not (FlightPhase.Arrived or FlightPhase.Crashed))
+        {
+            Waiting = null;
+            return;
+        }
+        if (phase == FlightPhase.Arrived && _settleNow != job.Id.ToString() && WaitForGroundServices(job, t)) return;
+        _settleNow = null;
+        Waiting = null;
+        _deboardedAt = null;
+        await SettleAsync(job);
+    }
+
+    /// <summary>
+    /// With GSX in use the settlement waits for deboarding (its receipts belong to the flight): until it completed (plus
+    /// a short pause for the receipt), at most <see cref="DeboardingStartTimeout"/> if it never starts, and not once the
+    /// aircraft moves or starts an engine again.
+    /// </summary>
+    private bool WaitForGroundServices(MissionContract job, Telemetry? t)
+    {
+        var state = GroundServices?.Invoke(job.Id) ?? GroundServiceState.NotUsed;
+        if (state == GroundServiceState.NotUsed || t is null || t.AnyEngineRunning || !t.OnGround || t.GroundSpeedKt > 3)
+            return false;
+        var parked = host.Summarize()?.BlockOn ?? t.Timestamp;
+        var since = t.Timestamp - parked;
+        switch (state)
+        {
+            case GroundServiceState.Completed:
+                _deboardedAt ??= t.Timestamp;
+                if (t.Timestamp - _deboardedAt < ReceiptGrace)
+                {
+                    Waiting = "GSX-Deboarding abgeschlossen, Belege werden übernommen …";
+                    return true;
+                }
+                return false;
+            case GroundServiceState.InProgress:
+                _deboardedAt = null;
+                Waiting = "Wartet auf das Ende des GSX-Deboardings";
+                return since < DeboardingTimeout;
+            default:
+                _deboardedAt = null;
+                Waiting = $"Wartet auf GSX-Deboarding (spätestens {Math.Max(1, (DeboardingStartTimeout - since).TotalMinutes):N0} min)";
+                return since < DeboardingStartTimeout;
+        }
     }
 
     private async Task TakeOffAsync(MissionContract job)
@@ -171,7 +244,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
 
         _notStarted.Remove(job.Id);
         host.DepartureIssues = check!.Penalised.Select(i => $"{i.Label} ({i.Detail})").ToList();
-        await career.StartFlightAsync(job.Id, host.DepartureIssues);
+        await career.StartFlightAsync(job.Id, host.DepartureIssues, host.Summarize()?.FuelAtBlockOffKg);
         host.Log(host.DepartureIssues.Count == 0
             ? $"Auftrag {job.Origin} → {job.Destination} gestartet"
             : $"Auftrag gestartet mit {host.DepartureIssues.Count} Abweichung(en): {string.Join("; ", host.DepartureIssues)}");
@@ -184,10 +257,18 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     /// </summary>
     private async Task RecordStartWearAsync(MissionContract job)
     {
-        if (job.SimWearAtStart is not null || !_wearTried.Add(job.Id)) return;
-        if (await host.ReadWearAsync() is not { } wear) return;
+        if (job.SimWearAtStart is not null) return;
+        if (_wearTried.TryGetValue(job.Id, out var last) && DateTime.UtcNow - last < WearRetry) return;
+        bool first = !_wearTried.ContainsKey(job.Id);
+        _wearTried[job.Id] = DateTime.UtcNow;
+        if (await host.ReadWearAsync() is not { } wear)
+        {
+            if (first) AppLog.Warn("Abnutzung", $"MSFS-Abnutzung für {job.Origin} → {job.Destination} noch nicht lesbar, neuer Versuch alle {WearRetry.TotalSeconds:N0} s");
+            return;
+        }
         await career.RecordSimWearAsync(job.Id, wear);
         job.SimWearAtStart = wear.Serialize();
+        AppLog.Info("Abnutzung", $"Abnutzung zu Beginn erfasst ({wear.Levels.Count} Bauteile, schlechtestes {wear.WorstLevel:P0})");
     }
 
     private async Task SettleAsync(MissionContract job)
@@ -196,13 +277,35 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         var track = await host.SaveTrackAsync($"{job.Origin}-{job.Destination}-{job.Id:N}");
         // Stored with the job at liftoff, so they survive an app restart mid-flight.
         var issues = job.DepartureIssueList.Count > 0 ? job.DepartureIssueList : host.DepartureIssues;
-        var start = AircraftWear.Parse(job.SimWearAtStart);
-        var wearDelta = !start.IsEmpty && await host.ReadWearAsync() is { } end ? AircraftWear.Delta(start, end) : null;
-        LastSettlement = await career.CompleteFlightAsync(job.Id, FlightResultMapper.Map(summary, issues, wearDelta), track);
+        var result = FlightResultMapper.Map(summary, issues, await WearDeltaAsync(job));
+        if (job.SimWearAtStart is null)
+            result = result with { Notes = [.. result.Notes, "Abnutzung laut MSFS nicht erfasst (kein Startwert)."] };
+        else if (_wearFromResume.Remove(job.Id))
+            result = result with { Notes = [.. result.Notes, "Abnutzung laut MSFS erst ab dem App-Neustart erfasst."] };
+        LastSettlement = await career.CompleteFlightAsync(job.Id, result, track);
         LastSettledContract = job;
         host.Log($"Flug {job.Origin} → {job.Destination} automatisch abgerechnet: {LastSettlement.Outcome}");
         host.EndFlight();
         _dirty = true;
+    }
+
+    private async Task<AircraftWear?> WearDeltaAsync(MissionContract job)
+    {
+        var start = AircraftWear.Parse(job.SimWearAtStart);
+        if (start.IsEmpty)
+        {
+            AppLog.Warn("Abnutzung", $"Keine Abnutzung zu Beginn von {job.Origin} → {job.Destination} gespeichert; Bauteile bleiben unverändert");
+            return null;
+        }
+        if (await host.ReadWearAsync() is not { } end)
+        {
+            AppLog.Warn("Abnutzung", "MSFS-Abnutzung nach dem Flug nicht lesbar; Bauteile bleiben unverändert");
+            return null;
+        }
+        var delta = AircraftWear.Delta(start, end);
+        AppLog.Info("Abnutzung", $"Abnutzung {job.Origin} → {job.Destination}: Ø {delta.AverageLoss:P3}, " +
+                                 string.Join(", ", delta.GroupLosses().Take(3).Select(g => $"{g.Group} −{g.Loss:P2}")));
+        return delta;
     }
 
     /// <summary>After an app restart: picks up a job that is still flying (preferring the one whose aircraft is loaded).</summary>
@@ -214,8 +317,9 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             .FirstOrDefault();
         if (job is null) return false;
         var startedAt = job.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : t.Timestamp;
-        if (!host.ResumeFlight(job.Id, startedAt)) return false;
+        if (!host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg)) return false;
         host.Log($"Flug {job.Origin} → {job.Destination} nach Neustart fortgesetzt");
+        Resumed?.Invoke(job.Id);
         return true;
     }
 

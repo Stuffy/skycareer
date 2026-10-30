@@ -464,11 +464,16 @@ public sealed class CareerServiceTests : IAsyncLifetime
         foreach (var t in cruise.Take(half)) host.Feed(t);
 
         // "Restart": new host and automation; the journal survives only in the first case.
-        var restarted = new FakeHost { Journal = withJournal ? [.. host.Journal] : [] };
+        // The sim only reports wear after the restart (as if the job had been armed by an older app version).
+        var restarted = new FakeHost { Journal = withJournal ? [.. host.Journal] : [], Wear = AircraftWear.FromSim(new Dictionary<int, double> { [37] = 0.95 }) };
         var automation2 = new FlightAutomation(_svc, restarted);
+        Guid? resumed = null;
+        automation2.Resumed += id => resumed = id;
         restarted.Feed(cruise[half]);
         await automation2.TickAsync();
         Assert.Equal(job.Id, restarted.ContractId);
+        Assert.Equal(job.Id, resumed);
+        await automation2.TickAsync();   // in flight: the missing start wear is read now
         Assert.Contains(restarted.Log, l => l.Contains("nach Neustart fortgesetzt"));
 
         var landing = Segment(cruise[^1], 1, t => t with { OnGround = true, AltitudeAglFt = 0, VerticalSpeedFpm = 0, TouchdownVsFpm = -150, GForce = 1.2, GroundSpeedKt = 60 })
@@ -486,6 +491,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         // Departure issues come from the job, not from the (new) host.
         Assert.Contains(s.Lines, l => l.Category == LedgerCategory.Penalty && l.Description.Contains("Zuladung"));
         Assert.Equal(!withJournal, s.Notes.Any(n => n.Contains("Tracking war unterbrochen")));
+        Assert.Contains(s.Notes, n => n.Contains("erst ab dem App-Neustart"));
     }
 
     /// <summary>Stands in for the app's flight monitor: feeds telemetry into a real <see cref="FlightSession"/>.</summary>
@@ -510,12 +516,13 @@ public sealed class CareerServiceTests : IAsyncLifetime
         public Task<AircraftWear?> ReadWearAsync() => Task.FromResult(Wear);
         void IFlightSessionHost.Log(string message) => Log.Add(message);
 
-        public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt)
+        public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null)
         {
             if (Journal.Count == 0 && Latest is null) return false;
             var session = new FlightSession();
             foreach (var t in Journal) session.Process(t);
-            if (Journal.Count == 0) session.Resume(Latest!, startedAt);
+            if (Journal.Count == 0) session.Resume(Latest!, startedAt, fuelAtBlockOffKg);
+            else session.ContinueAfterRestart(startedAt);
             _session = session;
             ContractId = contractId;
             return true;
@@ -893,8 +900,12 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Equal("EDFE", (await _svc.GetFleetAsync()).Single().Location);
     }
 
-    [Fact]
-    public async Task Severe_violation_voids_the_job()
+    [Theory]
+    [InlineData(new[] { ViolationType.PayloadChanged }, 0.10)]
+    [InlineData(new[] { ViolationType.InflightRefuel, ViolationType.InflightRefuel }, 0.15)]
+    [InlineData(new[] { ViolationType.Slew, ViolationType.Teleport, ViolationType.InflightRefuel, ViolationType.PayloadChanged }, 0.20)]
+    [InlineData(new[] { ViolationType.SimRate }, 0)]
+    public async Task Violations_cost_a_capped_share_of_the_payout_but_never_void_the_job(ViolationType[] violations, double share)
     {
         await NewCareer();
         await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
@@ -903,18 +914,86 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await _svc.AcceptAsync(job.Id);
         await _svc.StartFlightAsync(job.Id);
         var dest = (await _svc.FindAirportAsync(job.Destination))!;
+        int reputation = (await _svc.GetCareerAsync()).Reputation;
 
         var s = await _svc.CompleteFlightAsync(job.Id, new FlightResult
         {
             AirTime = TimeSpan.FromMinutes(30), BlockTime = TimeSpan.FromMinutes(45), FuelUsedKg = 90,
-            FinalPosition = dest.Position, SevereViolations = 1
+            FinalPosition = dest.Position, Violations = violations.Select(v => new RuleViolation(v, "test")).ToList()
         });
 
-        Assert.Equal(FlightOutcome.Failed, s.Outcome);
-        Assert.Equal(0, s.Score.Total);
-        Assert.Equal(ContractStatus.Failed, (await _svc.GetContractsAsync(ContractStatus.Failed)).Single().Status);
-        Assert.True((await _svc.GetCareerAsync()).Reputation < 10);
+        Assert.Contains(s.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
+        Assert.Contains(s.Lines, l => l.Category == LedgerCategory.MissionRevenue && l.Amount == job.Payout);
+        var penalties = s.Lines.Where(l => l.Description.StartsWith("Regelverstoß")).Sum(l => -l.Amount);
+        Assert.InRange(penalties, job.Payout * (decimal)share - 2, job.Payout * (decimal)share + 2);
+        Assert.True(s.Score.Total > 0);
+        if (share > 0)
+        {
+            Assert.Contains(s.Notes, n => n.StartsWith("Regelverstoß:"));
+            Assert.True(s.ReputationChange < 1);
+        }
+        Assert.DoesNotContain(s.Notes, n => n.Contains("annulliert"));
+        if (violations.Contains(ViolationType.SimRate))
+        {
+            Assert.Contains(s.Notes, n => n.StartsWith("Zeitbeschleunigung"));
+            Assert.Equal(0, s.Score.SafetyPenalty);
+            Assert.True(s.ReputationChange >= 0);
+        }
+        Assert.NotEqual(ContractStatus.Failed, (await _svc.GetContractsAsync(ContractStatus.Completed, ContractStatus.Failed)).Single().Status);
+        Assert.True((await _svc.GetCareerAsync()).Reputation >= reputation - 3);
     }
+
+    [Fact]
+    public async Task With_gsx_the_settlement_waits_for_deboarding()
+    {
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        var gsx = GroundServiceState.NotStarted;
+        automation.GroundServices = _ => gsx;
+        await FlyCaravanJobAsync(automation, host, job, parked);
+
+        Assert.Equal(FlightPhase.Arrived, host.Phase);
+        Assert.Null(automation.LastSettlement);
+        Assert.Contains("GSX-Deboarding", automation.Waiting);
+
+        async Task After(int seconds)
+        {
+            host.Feed(host.Latest! with { Timestamp = host.Latest!.Timestamp.AddSeconds(seconds) });
+            await automation.TickAsync();
+        }
+
+        gsx = GroundServiceState.InProgress;
+        await After(300);
+        Assert.Null(automation.LastSettlement);
+        gsx = GroundServiceState.Completed;
+        await After(1);
+        Assert.Null(automation.LastSettlement);   // a moment for the GSX receipt
+        await After(20);
+        Assert.NotNull(automation.LastSettlement);
+        Assert.Null(automation.Waiting);
+    }
+
+    [Fact]
+    public async Task Without_gsx_deboarding_the_settlement_follows_after_a_timeout_or_on_request()
+    {
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        automation.GroundServices = _ => GroundServiceState.NotStarted;
+        await FlyCaravanJobAsync(automation, host, job, parked);
+        Assert.Null(automation.LastSettlement);
+
+        automation.SettleNow(job.Id);
+        await automation.TickAsync();
+        Assert.NotNull(automation.LastSettlement);
+
+        // Second flight: nobody starts GSX deboarding, the timeout settles it.
+        var (automation2, host2, job2, parked2) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        automation2.GroundServices = _ => GroundServiceState.NotStarted;
+        await FlyCaravanJobAsync(automation2, host2, job2, parked2);
+        Assert.Null(automation2.LastSettlement);
+        host2.Feed(host2.Latest! with { Timestamp = host2.Latest!.Timestamp + FlightAutomation.DeboardingStartTimeout });
+        await automation2.TickAsync();
+        Assert.NotNull(automation2.LastSettlement);
+    }
+
 
     [Fact]
     public async Task Waiting_books_monthly_lease_and_insurance()
@@ -1096,5 +1175,25 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Equal(result.Costs + 135, (await _svc.GetFlightsAsync()).Single().Costs);
         Assert.Equal(3, (await _svc.GetGsxReceiptsAsync()).Count);
         Assert.Equal(plane.Id, deboard.AircraftId);
+
+        // The next job from there is armed: a late deboarding receipt of the last flight still goes to that flight.
+        await _svc.RefreshMarketAsync(new Random(5));
+        var next = (await _svc.GetContractsAsync(ContractStatus.Offered)).First(c => c.Origin == job.Destination);
+        await _svc.AcceptAsync(next.Id);
+        await _svc.MarkArmedAsync(next.Id);
+        await _svc.MarkArmedAsync(next.Id);   // kept from the first time
+        DateTime armed;
+        await using (var db = _factory.CreateDbContext())
+        {
+            var c = await db.Contracts.SingleAsync(c => c.Id == next.Id);
+            armed = c.ArmedAtUtc!.Value;
+        }
+        var late = await _svc.BookGsxReceiptsAsync(
+        [
+            Receipt("late", GsxReceiptKind.Bus, job.Destination, armed.AddTicks(-1), 5),
+            Receipt("nextfuel", GsxReceiptKind.Fuel, job.Destination, armed.AddMinutes(1), 7)
+        ], next.Id, null);
+        Assert.Equal(job.Id, late.Single(r => r.ReceiptId == "late").ContractId);
+        Assert.Equal(next.Id, late.Single(r => r.ReceiptId == "nextfuel").ContractId);
     }
 }

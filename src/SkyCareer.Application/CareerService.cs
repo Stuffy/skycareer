@@ -169,6 +169,16 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Notes when the job was first armed at its origin (kept across re-arming and app restarts).</summary>
+    public async Task MarkArmedAsync(Guid contractId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var c = await RequireContract(db, contractId);
+        if (c.ArmedAtUtc is not null) return;
+        c.ArmedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
     /// <summary>Stores the sim's wear components at the start of a job (once); the settlement uses the change until parking.</summary>
     public async Task RecordSimWearAsync(Guid contractId, AircraftWear wear)
     {
@@ -621,7 +631,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     }
 
     /// <summary>Marks the job as flying (at liftoff) and stores the red departure checks for the settlement.</summary>
-    public async Task StartFlightAsync(Guid contractId, IReadOnlyList<string>? departureIssues = null)
+    public async Task StartFlightAsync(Guid contractId, IReadOnlyList<string>? departureIssues = null, double? fuelAtBlockOffKg = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
@@ -632,6 +642,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         if (!aircraft.IsAvailable(career.GameTime)) throw new CareerException($"{aircraft.Registration} ist bis {aircraft.UnavailableUntil:g} nicht verfügbar ({aircraft.UnavailableReason ?? "Wartung"}).");
         c.Status = ContractStatus.InProgress;
         c.FlightStartedAtUtc = DateTime.UtcNow;
+        c.FuelAtBlockOffKg = fuelAtBlockOffKg;
         c.DepartureIssues = departureIssues is { Count: > 0 } ? string.Join('\n', departureIssues) : null;
         await db.SaveChangesAsync();
         Changed?.Invoke();
@@ -805,9 +816,13 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         {
             Guid? contractId = null, aircraftId = null;
             FlightRecord? flight = null;
-            if (active is not null && (Same(active.Origin, r.Icao) || Same(active.Destination, r.Icao)))
+            // At the origin, receipts from before the job was armed are the previous flight's deboarding.
+            bool forActive = active is not null &&
+                             (Same(active.Destination, r.Icao) && active.Status == ContractStatus.InProgress ||
+                              Same(active.Origin, r.Icao) && (active.ArmedAtUtc is not { } armed || r.CreatedUtc >= armed));
+            if (forActive)
             {
-                contractId = active.Id;
+                contractId = active!.Id;
                 aircraftId = active.AircraftId;
                 flight = flights.FirstOrDefault(f => f.ContractId == active.Id);
             }

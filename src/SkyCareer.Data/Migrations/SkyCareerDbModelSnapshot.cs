@@ -455,6 +455,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<Guid>("AircraftId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ArmedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<double>("BaggageKg")
                         .HasColumnType("REAL");
 
@@ -489,6 +492,9 @@ namespace SkyCareer.Data.Migrations
 
                     b.Property<DateTime?>("FlightStartedAtUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<double?>("FuelAtBlockOffKg")
+                        .HasColumnType("REAL");
 
                     b.Property<DateTime?>("FuelRestoredAtUtc")
                         .HasColumnType("TEXT");

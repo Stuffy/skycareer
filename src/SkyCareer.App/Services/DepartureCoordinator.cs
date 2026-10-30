@@ -22,8 +22,9 @@ public sealed class DepartureCoordinator : IDisposable
         _monitor = monitor;
         _career = career;
         _gsx = gsx;
-        Automation = new FlightAutomation(career, monitor);
+        Automation = new FlightAutomation(career, monitor) { GroundServices = gsx.GroundServices };
         Automation.Armed += OnArmed;
+        Automation.Resumed += OnResumed;
         Automation.Changed += () => Changed?.Invoke();
         _monitor.Changed += OnMonitorChanged;
         _career.Changed += OnCareerChanged;
@@ -62,11 +63,9 @@ public sealed class DepartureCoordinator : IDisposable
     {
         try
         {
-            var job = (await _career.GetContractsAsync(Domain.Career.ContractStatus.Accepted).ConfigureAwait(false)).FirstOrDefault(c => c.Id == contractId);
-            var aircraft = job is null ? null : (await _career.GetFleetAsync().ConfigureAwait(false)).FirstOrDefault(f => f.Id == job.AircraftId);
-            if (job is null || aircraft is null) return;
-            var career = await _career.GetCareerAsync().ConfigureAwait(false);
-            _gsx.Track(job.Id, _career.BuildLoadSheet(job, _career.Profile(aircraft.ProfileId)), career.GsxSyncEnabled);
+            if (await TrackGsxAsync(contractId, Domain.Career.ContractStatus.Accepted).ConfigureAwait(false) is not { } tracked) return;
+            var (job, aircraft, career) = tracked;
+            await _career.MarkArmedAsync(job.Id).ConfigureAwait(false);
             if (career.PersistFuel) await RestoreFuelAsync(job, aircraft).ConfigureAwait(false);
         }
         catch (CareerException)
@@ -74,6 +73,25 @@ public sealed class DepartureCoordinator : IDisposable
             // GSX is optional; the market page retargets it on its next load.
         }
     });
+
+    /// <summary>After an app restart GSX follows the resumed job again, so its deboarding is synced (and waited for).</summary>
+    private void OnResumed(Guid contractId) => _ = Task.Run(async () =>
+    {
+        try { await TrackGsxAsync(contractId, Domain.Career.ContractStatus.InProgress).ConfigureAwait(false); }
+        catch (CareerException) { }
+    });
+
+    private async Task<(Domain.Career.MissionContract, Domain.Career.FleetAircraft, Domain.Career.Career)?> TrackGsxAsync(
+        Guid contractId, Domain.Career.ContractStatus status)
+    {
+        var job = (await _career.GetContractsAsync(status).ConfigureAwait(false)).FirstOrDefault(c => c.Id == contractId);
+        var aircraft = job is null ? null : (await _career.GetFleetAsync().ConfigureAwait(false)).FirstOrDefault(f => f.Id == job.AircraftId);
+        if (job is null || aircraft is null) return null;
+        var career = await _career.GetCareerAsync().ConfigureAwait(false);
+        _gsx.Track(job.Id, _career.BuildLoadSheet(job, _career.Profile(aircraft.ProfileId)), career.GsxSyncEnabled, career.GsxCostsEnabled,
+            departed: status == Domain.Career.ContractStatus.InProgress);
+        return (job, aircraft, career);
+    }
 
     /// <summary>
     /// Puts the fuel the aircraft had after its last flight back into the sim, once per job and before block-off; later

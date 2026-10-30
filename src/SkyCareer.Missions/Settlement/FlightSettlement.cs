@@ -47,6 +47,41 @@ public static class FlightSettlement
     public const double ArrivalRadiusNm = 3;
     /// <summary>Payout share deducted per departure check that was red at liftoff, capped at three.</summary>
     public const decimal DepartureIssuePenalty = 0.10m;
+    /// <summary>All rule violations of one flight together never cost more than this share of the payout.</summary>
+    public const decimal MaxViolationPenalty = 0.20m;
+
+    /// <summary>Payout share deducted once per kind of rule violation; time acceleration is only noted.</summary>
+    public static decimal ViolationPenalty(ViolationType type) => type switch
+    {
+        ViolationType.Slew or ViolationType.Teleport or ViolationType.AircraftChanged => 0.20m,
+        ViolationType.InflightRefuel => 0.15m,
+        ViolationType.PayloadChanged => 0.10m,
+        _ => 0m
+    };
+
+    public static string ViolationText(ViolationType type) => type switch
+    {
+        ViolationType.Slew => "Slew-Modus",
+        ViolationType.SimRate => "Zeitbeschleunigung",
+        ViolationType.InflightRefuel => "Tanken im Flug",
+        ViolationType.PayloadChanged => "Ladung im Flug geändert",
+        ViolationType.Teleport => "Positionssprung",
+        _ => "Flugzeugwechsel"
+    };
+
+    /// <summary>The penalised kinds of a flight with their (capped) payout shares, in order of severity.</summary>
+    public static IReadOnlyList<(ViolationType Type, decimal Share)> ViolationPenalties(IEnumerable<RuleViolation> violations)
+    {
+        var result = new List<(ViolationType, decimal)>();
+        decimal left = MaxViolationPenalty;
+        foreach (var type in violations.Select(v => v.Type).Distinct().Where(k => ViolationPenalty(k) > 0).OrderByDescending(ViolationPenalty))
+        {
+            decimal share = Math.Min(ViolationPenalty(type), left);
+            left -= share;
+            result.Add((type, share));
+        }
+        return result;
+    }
 
     public static SettlementResult Settle(SettlementInput i)
     {
@@ -68,13 +103,12 @@ public static class FlightSettlement
         var outcome = r switch
         {
             { Crashed: true } => FlightOutcome.Crashed,
-            { SevereViolations: > 0 } => FlightOutcome.Failed,
             _ when !atDestination => FlightOutcome.Diverted,
             _ when lateBy > TimeSpan.Zero => FlightOutcome.Late,
             _ => FlightOutcome.Completed
         };
 
-        var score = outcome is FlightOutcome.Crashed or FlightOutcome.Failed
+        var score = outcome is FlightOutcome.Crashed
             ? new FlightScore(0, 0, 0, 0, 0)
             : FlightScorer.Score(i.Type.Scoring, r, lateBy);
 
@@ -101,6 +135,9 @@ public static class FlightSettlement
                     notes.Add($"Beim Abheben nicht in Ordnung: {issue}");
                 }
                 if (r.DepartureIssues.Count > 0) reputation -= 1;
+                foreach (var (type, share) in ViolationPenalties(r.Violations))
+                    if (share > 0)
+                        lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * share, 0), $"Regelverstoß: {ViolationText(type)}"));
                 break;
             case FlightOutcome.Diverted:
                 notes.Add($"Nicht am Ziel {c.Destination} angekommen (Endposition {landedAt.Ident}). Keine Vergütung.");
@@ -111,10 +148,20 @@ public static class FlightSettlement
                 reputation = -10;
                 break;
             default:
-                notes.Add("Auftrag wegen Regelverstoß (Slew, Teleport, Tanken im Flug, Lade- oder Flugzeugwechsel) annulliert.");
-                reputation = -5;
+                reputation = 0;
                 break;
         }
+
+        // Rule violations cost part of the payout (above) and reputation, but never void the flight.
+        var penalised = ViolationPenalties(r.Violations);
+        if (outcome != FlightOutcome.Crashed && penalised.Count > 0)
+        {
+            reputation -= Math.Min(3, penalised.Count);
+            notes.Add("Regelverstoß: " + string.Join(", ", penalised.Select(p => $"{ViolationText(p.Type)} (−{p.Share:P0})")) +
+                      (outcome == FlightOutcome.Diverted ? " – keine Vergütung, nur Ruf." : "."));
+        }
+        if (r.Violations.Any(v => v.Type == ViolationType.SimRate))
+            notes.Add("Zeitbeschleunigung genutzt (nur vermerkt, ohne Abzug).");
 
         // Variable costs are always due: the flight happened, whatever the outcome.
         var fuelPrice = CostModel.FuelPricePerKg(t, i.Profile.FuelType, i.Origin, i.DepartureGameTime);

@@ -2,7 +2,7 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## Unveröffentlicht
+## 0.1.3 – 2026-10-30
 
 ### Neu
 - **Tankstand bleibt im Flugzeug** (*Einstellungen → Beladung*, standardmäßig an): Der Resttreibstoff wird nach dem Flug

@@ -2,13 +2,13 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## Unveröffentlicht
+## 0.1.4 – 2026-10-31
 
 ### Neu
 - **Hin- und Rückflüge:** Linienflüge, Charter, VIP-Charter und Lufttaxi kommen teils als Paket aus Hin- und Rückflug
   (Chip „Hin & Rück“ in der Angebotsliste). Beide Strecken werden zusammen angenommen, der Rückflug startet automatisch,
   sobald das Flugzeug am Ziel steht. Wer beide fliegt, bekommt einen Bonus (10–15 % auf beide Vergütungen). Wer den
-  Hinflug storniert, storniert beide.
+  Hinflug storniert, storniert beide. Die Karte des Rückflugs bleibt eingeklappt, bis er an der Reihe ist.
 
 ### Geändert
 - **Gut gebuchte Flüge:** Bei Linien- und Charterflügen sind die meisten Plätze belegt (im Mittel 85–90 %), bei VIP-Charter

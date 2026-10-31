@@ -137,6 +137,12 @@ public sealed class MissionContract
     public double? FuelAtBlockOffKg { get; set; }
     /// <summary>Real time (UTC) the job was first armed at its origin; older GSX receipts there belong to the previous flight.</summary>
     public DateTime? ArmedAtUtc { get; set; }
+    /// <summary>Shared by the outbound and return leg of a package; null for single jobs.</summary>
+    public Guid? PackageId { get; set; }
+    /// <summary>1 = outbound, 2 = return leg of a package.</summary>
+    public int? PackageLeg { get; set; }
+
+    public bool IsReturnLeg => PackageLeg == 2;
 
     public int TotalPassengers => Adults + Children + Infants;
     public IReadOnlyList<string> DepartureIssueList =>

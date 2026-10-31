@@ -22,6 +22,8 @@ wirtschaftliche Karriere einbettet: Aufträge annehmen, Flotte aufbauen, Kosten 
 
 - **Auftragsmarkt** – Linien-, Charter-, VIP-, Lufttaxi-, Fracht-, Ambulanz- und Buschflüge, passend zu Flugzeug, Reichweite und
   Pistenanforderungen. Großstädte und Hauptstädte werden als Ziele bevorzugt; Militärflugplätze stehen nur Militärflugzeugen offen.
+  Linien- und Charterflüge sind meist gut gebucht, die Vergütung richtet sich nach der Auslastung. Manche Aufträge kommen als
+  Paket aus Hin- und Rückflug („Hin & Rück“) mit Bonus, wenn beide Strecken geflogen werden.
 - **Flotte und Finanzen** – Flugzeuge kaufen, leasen oder mieten; Treibstoff, Gebühren, Crew, Wartung und Versicherung
   werden realistisch verbucht. Flugzeuge lassen sich per Überführungsflug an andere Standorte verlegen. Der Resttreibstoff
   bleibt im Flugzeug und wird beim nächsten Auftrag im Simulator gesetzt; bezahlt wird nur, was nachgetankt wird.
@@ -68,8 +70,8 @@ Karrieren und eigene Inhalte bleiben bei Updates und bei einer Deinstallation er
 3. **Flugzeug beschaffen** – unter *Flotte* kaufen, leasen oder mieten. Das Flugzeug steht an der Heimatbasis.
 4. **Auftrag annehmen** – unter *Aufträge* den Markt durchsuchen (Filter nach Flugzeug, Missionstyp, Distanz, Zuladung u. a.)
    und einen Auftrag annehmen.
-5. **Flug vorbereiten** – im Simulator am Abflughafen mit dem passenden Flugzeug laden. Planung in SimBrief, OFP-Import,
-   Beladung und Flugplan-Export sind bis zum Abheben möglich; die Abflug-Ampel zeigt den Stand.
+5. **Flug vorbereiten** – im Simulator am Abflughafen mit dem passenden Flugzeug laden. Die Schritte unter dem Auftrag
+   (In SimBrief planen → OFP laden → Im Sim beladen → Beladung prüfen) sind bis zum Abheben möglich; die Abflug-Ampel zeigt den Stand.
 6. **Fliegen** – der Auftrag startet beim Abheben. Nach dem Abstellen am Ziel (Parkbremse gesetzt, Triebwerke aus) folgt
    die Abrechnung mit Erlösen, Kosten, Score, Reputation und Verschleiß.
 

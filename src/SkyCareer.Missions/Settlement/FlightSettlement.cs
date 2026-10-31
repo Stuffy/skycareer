@@ -18,7 +18,8 @@ public sealed record SettlementInput(
     DateTime DepartureGameTime,
     EconomyTables Economy,
     bool ExternalGroundCosts = false, // fuel, handling and catering are paid from GSX receipts instead
-    double? FuelUpliftKg = null);     // fuel stays in the aircraft: pay what was added since the last flight, not what was burnt
+    double? FuelUpliftKg = null,      // fuel stays in the aircraft: pay what was added since the last flight, not what was burnt
+    decimal PackageBonus = 0);        // return leg of a package whose outbound was flown: bonus on both payouts
 
 public sealed record SettlementResult(
     FlightOutcome Outcome,
@@ -121,6 +122,8 @@ public static class FlightSettlement
                 lines.Add(new(LedgerCategory.MissionRevenue, c.Payout, $"{i.Type.Name} {c.Origin}→{c.Destination}"));
                 if (outcome == FlightOutcome.Completed && i.Type.Pay.OnTimeBonus > 0)
                     lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * i.Type.Pay.OnTimeBonus, 0), "Pünktlichkeitsbonus"));
+                if (i.PackageBonus > 0)
+                    lines.Add(new(LedgerCategory.Bonus, Math.Round(i.PackageBonus, 0), "Hin- und Rückflug-Bonus"));
                 if (outcome == FlightOutcome.Late)
                 {
                     lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * 0.25m, 0), $"Verspätung {lateBy.TotalMinutes:N0} min"));

@@ -26,8 +26,19 @@ public sealed record MissionRequirements
     public IReadOnlyList<RunwaySurface> Surfaces { get; init; } = [];
 }
 
+/// <summary>
+/// Passenger numbers. With <see cref="LoadFactor"/> the seated count leans towards a full cabin (mean seat occupancy,
+/// normally spread by <see cref="LoadFactorSpread"/>); without it the count is drawn evenly between min and max.
+/// </summary>
 public sealed record PaxRule(int Min, int Max, double ChildShare = 0.05, double InfantShare = 0.01,
-    BaggageProfile Baggage = BaggageProfile.European);
+    BaggageProfile Baggage = BaggageProfile.European)
+{
+    public double? LoadFactor { get; init; }
+    public double LoadFactorSpread { get; init; } = 0.1;
+}
+
+/// <summary>Chance that an offer comes as an outbound + return package, and the bonus share on both payouts when both are flown.</summary>
+public sealed record ReturnRule(double Chance, decimal Bonus = 0.1m);
 
 public sealed record CargoRule(double MinKg, double MaxKg, IReadOnlyList<string> Kinds);
 
@@ -102,6 +113,12 @@ public sealed record PayRule
     public decimal PerNm { get; init; }
     public decimal PerPax { get; init; }
     public decimal PerCargoKg { get; init; }
+    /// <summary>Ticket share per seated passenger and nautical mile.</summary>
+    public decimal PerPaxNm { get; init; }
+    /// <summary>
+    /// Share (0–1) of the hourly-rate part that depends on seat occupancy: 0.5 pays a half-full cabin 75 % of it.
+    /// </summary>
+    public decimal OccupancyShare { get; init; }
     /// <summary>
     /// Share of the aircraft's market hourly rate (<see cref="FleetEconomics.HourlyRate"/>) paid per planned block
     /// hour. Real charter prices follow the aircraft class, so a Citation X earns more than a Caravan on the same trip.
@@ -140,6 +157,8 @@ public sealed record MissionType
     public DistanceRule Distance { get; init; } = new(20, 500);
     public DestinationRule Destinations { get; init; } = new();
     public PayRule Pay { get; init; } = new();
+    /// <summary>Offers may come with a return flight (null = never).</summary>
+    public ReturnRule? ReturnFlight { get; init; }
     public ScoringRule Scoring { get; init; } = new();
     public SimBriefUsage SimBrief { get; init; } = SimBriefUsage.Optional;
     public FlightRulesRequirement FlightRules { get; init; } = FlightRulesRequirement.Any;

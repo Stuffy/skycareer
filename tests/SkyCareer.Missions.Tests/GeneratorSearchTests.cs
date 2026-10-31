@@ -1,6 +1,7 @@
 using SkyCareer.Domain;
 using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Career;
+using SkyCareer.Domain.Loading;
 using SkyCareer.Domain.World;
 using SkyCareer.Missions.Generation;
 
@@ -172,5 +173,75 @@ public class GeneratorSearchTests
         Assert.True(new MissionSearch { RequireIls = true }.Matches(contract, dest with { HasIls = true }));
         Assert.False(new MissionSearch { RequirePaved = true }.Matches(contract, null));
         Assert.False(new MissionSearch { Sizes = new HashSet<AirportSize> { AirportSize.Large } }.Matches(contract, dest));
+    }
+
+    private static List<MissionOffer> Offers(MissionType type, AircraftProfile aircraft, int n, int seed = 5)
+    {
+        var gen = new StandardMissionGenerator();
+        var rng = new Random(seed);
+        return Enumerable.Range(0, n)
+            .Select(_ => gen.TryGenerate(new GenerationContext(type, aircraft, Origin, Grid(), DateTimeOffset.UnixEpoch, rng)))
+            .OfType<MissionOffer>().ToList();
+    }
+
+    [Fact]
+    public void Scheduled_flights_lean_towards_a_full_cabin_with_some_spread()
+    {
+        var a320 = Content.Aircraft.Single(a => a.Id == "a20n");
+        var offers = Offers(Content.MissionTypes.Single(t => t.Id == "scheduled_pax"), a320, 200);
+        var occupancy = offers.Select(o => o.Passengers.Seated / (double)a320.PassengerSeats).ToList();
+
+        Assert.True(offers.Count > 100);
+        Assert.InRange(occupancy.Average(), 0.75, 0.92);
+        Assert.Contains(occupancy, x => x >= 0.99);
+        Assert.Contains(occupancy, x => x < 0.8);
+        Assert.All(offers, o => Assert.True(o.PlannedLoad.IsWithinLimits));
+    }
+
+    [Fact]
+    public void Without_a_load_factor_passengers_stay_evenly_spread()
+    {
+        var type = WideType with { Passengers = new PaxRule(1, 9) };
+        var seated = Offers(type, Jet(), 300).Select(o => o.Passengers.Seated).ToList();
+        Assert.InRange(seated.Average(), 4, 6);
+        Assert.Contains(1, seated);
+    }
+
+    [Fact]
+    public void Pay_follows_the_passengers_and_cabin_occupancy()
+    {
+        var scheduled = Content.MissionTypes.Single(t => t.Id == "scheduled_pax");
+        var a320 = Content.Aircraft.Single(a => a.Id == "a20n");
+        var half = StandardMissionGenerator.Payout(scheduled, a320, 600, new PassengerCount(87), Mass.Zero);
+        var full = StandardMissionGenerator.Payout(scheduled, a320, 600, new PassengerCount(174), Mass.Zero);
+        Assert.True(full.Amount > half.Amount * 1.25m, $"full {full.Amount} vs half {half.Amount}");
+
+        // Without passengers in the rule the occupancy share has no effect.
+        var noPax = WideType with { Pay = new PayRule { Base = 100, HourlyRateFactor = 1, OccupancyShare = 0.5m } };
+        Assert.Equal(StandardMissionGenerator.Payout(noPax with { Pay = noPax.Pay with { OccupancyShare = 0 } }, a320, 600, new PassengerCount(0), Mass.Zero),
+            StandardMissionGenerator.Payout(noPax, a320, 600, new PassengerCount(0), Mass.Zero));
+    }
+
+    [Fact]
+    public void Return_legs_fly_back_after_the_outbound()
+    {
+        var scheduled = Content.MissionTypes.Single(t => t.Id == "scheduled_pax");
+        var a320 = Content.Aircraft.Single(a => a.Id == "a20n");
+        var offers = Offers(scheduled, a320, 100);
+        var packages = offers.Where(o => o.Return is not null).ToList();
+
+        Assert.InRange(packages.Count / (double)offers.Count, 0.4, 0.8);
+        Assert.All(packages, o =>
+        {
+            var back = o.Return!;
+            Assert.Equal(o.Destination.Ident, back.Origin.Ident);
+            Assert.Equal(o.Origin.Ident, back.Destination.Ident);
+            Assert.True(back.Deadline > o.Deadline);
+            Assert.Equal(o.ExpiresAt, back.ExpiresAt);
+            Assert.True(back.PlannedLoad.IsWithinLimits);
+            Assert.Null(back.Return);
+        });
+        Assert.DoesNotContain(Offers(Content.MissionTypes.Single(t => t.Id == "cargo_feeder"), Content.Aircraft.Single(a => a.Id == "c208b"), 50),
+            o => o.Return is not null);
     }
 }

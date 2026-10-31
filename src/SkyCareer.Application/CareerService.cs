@@ -36,6 +36,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     /// <summary>Ground time added after each flight before the next can depart.</summary>
     public static readonly TimeSpan Turnaround = TimeSpan.FromMinutes(30);
     public const int LeaseTermMonths = 36;
+    /// <summary>Share of the payout charged for cancelling an accepted job.</summary>
+    public const decimal CancellationPenalty = 0.1m;
 
     public Guid? ActiveCareerId { get; private set; }
     public event Action? Changed;
@@ -532,6 +534,15 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 var contract = ToContract(offer, career, aircraft);
                 db.Contracts.Add(contract);
                 offers.Add(contract);
+                if (offer.Return is { } back)
+                {
+                    var returnLeg = ToContract(back, career, aircraft);
+                    contract.PackageId = returnLeg.PackageId = Guid.NewGuid();
+                    contract.PackageLeg = 1;
+                    returnLeg.PackageLeg = 2;
+                    db.Contracts.Add(returnLeg);
+                    offers.Add(returnLeg);
+                }
                 recent.Add(offer.Destination.Ident);
                 perType[type.Id] = (typeOffers + 1, typeLarge + (offer.Destination.Size == AirportSize.Large ? 1 : 0),
                     typeCapital + (DestinationRule.ServesCapital(offer.Destination) ? 1 : 0));
@@ -539,12 +550,15 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             }
             created += added;
 
-            // Keep the market manageable: drop the oldest untouched offers beyond the cap.
-            foreach (var old in offers.Where(o => o.AircraftId == aircraft.Id && o.Status == ContractStatus.Offered)
+            // Keep the market manageable: drop the oldest untouched offers beyond the cap (a package counts once).
+            foreach (var old in offers.Where(o => o.AircraftId == aircraft.Id && o.Status == ContractStatus.Offered && !o.IsReturnLeg)
                          .OrderByDescending(o => o.OfferedAt).Skip(MaxOffersPerAircraft).ToList())
             {
-                db.Contracts.Remove(old);
-                offers.Remove(old);
+                foreach (var leg in offers.Where(o => o == old || old.PackageId != null && o.PackageId == old.PackageId).ToList())
+                {
+                    db.Contracts.Remove(leg);
+                    offers.Remove(leg);
+                }
             }
         }
 
@@ -594,6 +608,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
         if (c.Status != ContractStatus.Offered) throw new CareerException("Angebot ist nicht mehr verfügbar.");
+        if (c.IsReturnLeg) throw new CareerException("Der Rückflug wird zusammen mit dem Hinflug angenommen.");
         if (c.ExpiresAt < career.GameTime) throw new CareerException("Angebot ist abgelaufen.");
         var aircraft = await RequireAircraft(db, c.AircraftId);
         if (!string.Equals(aircraft.Location, c.Origin, StringComparison.OrdinalIgnoreCase))
@@ -601,19 +616,31 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         if (await db.Contracts.AnyAsync(x => x.AircraftId == c.AircraftId && (x.Status == ContractStatus.Accepted || x.Status == ContractStatus.InProgress)))
             throw new CareerException("Dieses Flugzeug hat bereits einen angenommenen Auftrag.");
         c.Status = ContractStatus.Accepted;
+        if (c.PackageId is { } package)
+            foreach (var leg in await db.Contracts.Where(x => x.PackageId == package && x.Id != c.Id && x.Status == ContractStatus.Offered).ToListAsync())
+                leg.Status = ContractStatus.Accepted;
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }
 
-    /// <summary>Cancelling an accepted job costs 10 % of the payout and some reputation.</summary>
+    /// <summary>
+    /// Cancelling an accepted job costs 10 % of the payout and some reputation. Cancelling a package's outbound cancels
+    /// its return leg too; the return leg alone can be dropped later (its bonus is lost).
+    /// </summary>
     public async Task CancelAsync(Guid contractId)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
         if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress)) throw new CareerException("Nur angenommene Aufträge können storniert werden.");
-        c.Status = ContractStatus.Cancelled;
-        Book(db, career, LedgerCategory.Penalty, -Math.Round(c.Payout * 0.1m, 0), $"Stornierung {c.Origin}→{c.Destination}", c.AircraftId);
+        var legs = new List<MissionContract> { c };
+        if (c is { PackageId: { } package, IsReturnLeg: false })
+            legs.AddRange(await db.Contracts.Where(x => x.PackageId == package && x.Id != c.Id && x.Status == ContractStatus.Accepted).ToListAsync());
+        foreach (var leg in legs)
+        {
+            leg.Status = ContractStatus.Cancelled;
+            Book(db, career, LedgerCategory.Penalty, -Math.Round(leg.Payout * CancellationPenalty, 0), $"Stornierung {leg.Origin}→{leg.Destination}", leg.AircraftId);
+        }
         career.Reputation = Math.Max(0, career.Reputation - 1);
         await db.SaveChangesAsync();
         Changed?.Invoke();
@@ -682,7 +709,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             ? Math.Max(0, loaded - before)
             : null;
         var s = FlightSettlement.Settle(new SettlementInput(type, c, profile, aircraft, origin, destination, nearest, result,
-            departure, EconomyTables.For(career.Difficulty), ExternalGroundCosts: career.GsxCostsEnabled, FuelUpliftKg: uplift));
+            departure, EconomyTables.For(career.Difficulty), ExternalGroundCosts: career.GsxCostsEnabled, FuelUpliftKg: uplift,
+            PackageBonus: await PackageBonusAsync(db, c, type)));
 
         var flight = new FlightRecord
         {
@@ -1102,10 +1130,28 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         aircraft.UnavailableReason = "Planmäßiger Check";
     }
 
-    /// <summary>Offers are made for the aircraft's current airport; once it has moved they can never start.</summary>
-    private static Task<int> DropOffersAwayFromAsync(SkyCareerDb db, FleetAircraft aircraft, CancellationToken ct = default) =>
-        db.Contracts.Where(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.Offered && c.Origin != aircraft.Location)
+    /// <summary>The return leg's bonus on both payouts, when the package's outbound was flown (on time or late).</summary>
+    private static async Task<decimal> PackageBonusAsync(SkyCareerDb db, MissionContract c, MissionType type)
+    {
+        if (c is not { IsReturnLeg: true, PackageId: { } package }) return 0;
+        var outbound = await db.Contracts.FirstOrDefaultAsync(x => x.PackageId == package && x.PackageLeg == 1);
+        if (outbound?.Status != ContractStatus.Completed) return 0;
+        return (type.ReturnFlight?.Bonus ?? 0.1m) * (outbound.Payout + c.Payout);
+    }
+
+    /// <summary>
+    /// Offers are made for the aircraft's current airport; once it has moved they can never start. A package's return
+    /// leg starts elsewhere and stays as long as its outbound is still on offer here.
+    /// </summary>
+    private static Task<int> DropOffersAwayFromAsync(SkyCareerDb db, FleetAircraft aircraft, CancellationToken ct = default)
+    {
+        var startable = db.Contracts
+            .Where(o => o.AircraftId == aircraft.Id && o.Status == ContractStatus.Offered && o.PackageLeg == 1 && o.Origin == aircraft.Location)
+            .Select(o => o.PackageId);
+        return db.Contracts.Where(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.Offered
+                                       && (c.PackageLeg == 2 ? !startable.Contains(c.PackageId) : c.Origin != aircraft.Location))
             .ExecuteDeleteAsync(ct);
+    }
 
     private static void ExpireOffers(SkyCareerDb db, Career career)
     {

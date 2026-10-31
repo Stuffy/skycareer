@@ -21,6 +21,8 @@ public sealed record MissionOffer
     public required DateTimeOffset ExpiresAt { get; init; }
     public required Money Payout { get; init; }
     public required LoadSheet PlannedLoad { get; init; }
+    /// <summary>The return leg (destination → origin) when the offer comes as a package; flown after this one.</summary>
+    public MissionOffer? Return { get; init; }
 }
 
 public sealed record GenerationContext(
@@ -111,6 +113,20 @@ public sealed class StandardMissionGenerator : IMissionGenerator
             c => Math.Pow(DistanceWeight(c.Dist, preferred), Math.Clamp(rule.DistanceInfluence, 0, 1))
                  * DensityCompensation(c.Dist, preferred) * rule.WeightFor(c.Airport), rng);
 
+        var outbound = TryBuild(ctx, origin, dest, dist, now, search);
+        if (outbound is null) return null;
+        if (type.ReturnFlight is not { } ret || rng.NextDouble() >= ret.Chance) return outbound;
+
+        // The way back starts after the outbound's deadline plus a turnaround; the search only shaped the outbound.
+        var back = TryBuild(ctx, dest, origin, dist, outbound.Deadline.AddMinutes(30), MissionSearch.Any);
+        return back is null ? outbound : outbound with { Return = back with { ExpiresAt = outbound.ExpiresAt } };
+    }
+
+    /// <summary>Sizes the load for one leg, trims it to the aircraft's limits and prices it; null if the rules can't be met.</summary>
+    private static MissionOffer? TryBuild(GenerationContext ctx, Airport from, Airport to, double dist, DateTimeOffset start, MissionSearch search)
+    {
+        var (type, aircraft, _, _, now, rng) = ctx;
+
         // Load limits from the mission rule narrowed by the search.
         int paxMin = Math.Max(type.Passengers?.Min ?? 0, search.PaxMin ?? 0);
         int paxMax = Math.Min(Math.Min(type.Passengers?.Max ?? 0, aircraft.PassengerSeats), search.PaxMax ?? int.MaxValue);
@@ -135,10 +151,7 @@ public sealed class StandardMissionGenerator : IMissionGenerator
         }
         if (!sheet.IsWithinLimits || pax.Seated < paxMin || cargo.Kg < cargoMin) return null;
 
-        double blockHours = dist / aircraft.CruiseKtas + 0.5;
-        var pay = type.Pay;
-        var payout = new Money(Math.Round(pay.Base + pay.PerNm * (decimal)dist + pay.PerPax * pax.Total + pay.PerCargoKg * (decimal)cargo.Kg
-                                          + pay.HourlyRateFactor * FleetEconomics.HourlyRate(aircraft) * (decimal)blockHours, 0));
+        var payout = Payout(type, aircraft, dist, pax, cargo);
         if (search.PayoutMin is { } minPay && payout.Amount < minPay) return null;
 
         return new MissionOffer
@@ -146,17 +159,39 @@ public sealed class StandardMissionGenerator : IMissionGenerator
             Id = Guid.NewGuid(),
             Type = type,
             Aircraft = aircraft,
-            Origin = origin,
-            Destination = dest,
+            Origin = from,
+            Destination = to,
             DistanceNm = dist,
             Passengers = pax,
             Cargo = cargo,
             CargoKind = kind,
-            Deadline = now.AddHours(blockHours * 1.5 + 2),
+            Deadline = start.AddHours(BlockHours(aircraft, dist) * 1.5 + 2),
             ExpiresAt = now.AddHours(type.OfferValidityHours),
             Payout = payout,
             PlannedLoad = sheet
         };
+    }
+
+    public static double BlockHours(AircraftProfile aircraft, double distanceNm) => distanceNm / aircraft.CruiseKtas + 0.5;
+
+    /// <summary>Seats the mission can fill on this aircraft (the type's maximum may be lower than the cabin).</summary>
+    public static int Capacity(MissionType type, AircraftProfile aircraft) =>
+        type.Passengers is { } p ? Math.Min(p.Max, aircraft.PassengerSeats) : 0;
+
+    /// <summary>
+    /// Mission pay: fixed and distance terms, per passenger (plus a ticket share per passenger and nm), per cargo kg and a
+    /// share of the aircraft's hourly rate per block hour. With <see cref="PayRule.OccupancyShare"/> part of the hourly
+    /// share follows how full the cabin is, so a half-empty flight pays noticeably less.
+    /// </summary>
+    public static Money Payout(MissionType type, AircraftProfile aircraft, double dist, PassengerCount pax, Mass cargo)
+    {
+        var pay = type.Pay;
+        int capacity = Capacity(type, aircraft);
+        decimal occupancy = capacity > 0 ? (decimal)Math.Min(1, pax.Seated / (double)capacity) : 1;
+        decimal hourly = pay.HourlyRateFactor * FleetEconomics.HourlyRate(aircraft) * (decimal)BlockHours(aircraft, dist)
+                         * (1 - pay.OccupancyShare + pay.OccupancyShare * occupancy);
+        return new Money(Math.Round(pay.Base + pay.PerNm * (decimal)dist + pay.PerPax * pax.Total + pay.PerPaxNm * pax.Seated * (decimal)dist
+                                    + pay.PerCargoKg * (decimal)cargo.Kg + hourly, 0));
     }
 
     /// <summary>Distance the generator aims for: a share of the range, kept inside the allowed window.</summary>
@@ -196,11 +231,17 @@ public sealed class StandardMissionGenerator : IMissionGenerator
     private static PassengerCount DrawPassengers(PaxRule? rule, int min, int max, Random rng)
     {
         if (rule is null || max <= 0) return new PassengerCount(0);
-        int seated = rng.Next(min, max + 1);
+        int seated = rule.LoadFactor is { } lf
+            ? Math.Clamp((int)Math.Round(max * Math.Clamp(lf + Gaussian(rng) * rule.LoadFactorSpread, Math.Max(0, lf - 2 * rule.LoadFactorSpread), 1)), min, max)
+            : rng.Next(min, max + 1);
         int children = Math.Min(seated, (int)Math.Round(seated * rule.ChildShare * rng.NextDouble() * 2));
         int infants = (int)Math.Round(seated * rule.InfantShare * rng.NextDouble() * 2);
         return new PassengerCount(seated - children, children, infants);
     }
+
+    /// <summary>Standard normal sample (Box–Muller).</summary>
+    private static double Gaussian(Random rng) =>
+        Math.Sqrt(-2 * Math.Log(1 - rng.NextDouble())) * Math.Cos(2 * Math.PI * rng.NextDouble());
 
     private static (Mass, string) DrawCargo(CargoRule? rule, double minKg, Random rng)
     {

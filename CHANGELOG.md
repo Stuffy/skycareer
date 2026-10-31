@@ -2,6 +2,22 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## Unveröffentlicht
+
+### Neu
+- **Hin- und Rückflüge:** Linienflüge, Charter, VIP-Charter und Lufttaxi kommen teils als Paket aus Hin- und Rückflug
+  (Chip „Hin & Rück“ in der Angebotsliste). Beide Strecken werden zusammen angenommen, der Rückflug startet automatisch,
+  sobald das Flugzeug am Ziel steht. Wer beide fliegt, bekommt einen Bonus (10–15 % auf beide Vergütungen). Wer den
+  Hinflug storniert, storniert beide.
+
+### Geändert
+- **Gut gebuchte Flüge:** Bei Linien- und Charterflügen sind die meisten Plätze belegt (im Mittel 85–90 %), bei VIP-Charter
+  und Lufttaxi etwas weniger; ganz leere oder immer volle Flüge gibt es nicht mehr. Die Liste zeigt die Auslastung.
+- **Vergütung nach Auslastung:** Ein Teil der Vergütung hängt davon ab, wie voll die Kabine ist, dazu kommt bei Linie und
+  Charter ein Betrag pro Passagier und Strecke. Halbvolle Flüge zahlen spürbar weniger.
+- **Klarere Vorbereitung:** Die Schritte unter einem Auftrag sind nummeriert und in Reihenfolge (In SimBrief planen →
+  OFP laden → Im Sim beladen → Beladung prüfen); erledigte Schritte bekommen einen Haken, der nächste ist hervorgehoben.
+
 ## 0.1.3 – 2026-10-30
 
 ### Neu

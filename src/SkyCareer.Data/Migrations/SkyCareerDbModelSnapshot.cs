@@ -522,6 +522,12 @@ namespace SkyCareer.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PackageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PackageLeg")
+                        .HasColumnType("INTEGER");
+
                     b.Property<double>("PassengerMassKg")
                         .HasColumnType("REAL");
 

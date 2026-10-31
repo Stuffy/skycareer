@@ -170,7 +170,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.True(first.Created > 0);
         Assert.False(first.IlsUnavailable);
         Assert.True(first.IlsChecked >= 3);
-        var offers = await svc.GetContractsAsync(ContractStatus.Offered);
+        var offers = (await svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !o.IsReturnLeg).ToList();
         Assert.All(offers, o => Assert.Contains(o.Destination, new[] { "EDDM", "EDDN" }));
         Assert.True((await svc.GetAirportsAsync(["EDDM"]))["EDDM"].HasIls);
 
@@ -205,7 +205,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var r = await _svc.SearchMarketAsync(search, rng: new Random(8));
 
         Assert.True(r.Created > 0);
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var offers = await OffersAsync();
         Assert.All(offers, o =>
         {
             Assert.Equal("charter", o.MissionTypeId);
@@ -214,7 +214,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         });
 
         for (int i = 0; i < 6; i++) await _svc.SearchMarketAsync(MissionSearch.Any with { }, rng: new Random(20 + i));
-        Assert.True((await _svc.GetContractsAsync(ContractStatus.Offered)).Count <= CareerService.MaxOffersPerAircraft);
+        Assert.True((await OffersAsync()).Count <= CareerService.MaxOffersPerAircraft);
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } }, rng: new Random(6));
 
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var offers = await OffersAsync();
         Assert.Equal(CareerService.OffersPerSearch, offers.Count);
         // Airline jobs need 150 nm+ and a large/medium airport; in the test data only EDDM and EDDB qualify, so the
         // offers must share these hubs.
@@ -248,7 +248,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } }, rng: new Random(3));
 
-        var withPax = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.Adults > 0).ToList();
+        var withPax = (await OffersAsync()).Where(o => o.Adults > 0).ToList();
         Assert.NotEmpty(withPax);
         // Like SimBrief: children weigh as adults; infants keep their lap mass.
         Assert.All(withPax, o =>
@@ -260,7 +260,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await _svc.UpdateSimBriefDetailedLoadAsync(true);
         await _svc.DebugClearMarketAsync();
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } }, rng: new Random(3));
-        var varied = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.Adults > 0).ToList();
+        var varied = (await OffersAsync()).Where(o => o.Adults > 0).ToList();
         var perBag = varied.Select(o => o.BaggageKg / (o.Adults + o.Children)).ToList();
         Assert.InRange(perBag.Average(), 18, 22);
         Assert.True(perBag.Distinct().Count() > perBag.Count / 2);
@@ -274,7 +274,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter" } }, rng: new Random(8));
 
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var offers = await OffersAsync();
         Assert.NotEmpty(offers);
         Assert.True((await _svc.FindAirportAsync("EDDB"))!.IsCapital);
         double share = _svc.MissionType("charter").Destinations.MinCapitalShare;
@@ -289,7 +289,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(1));
-        Assert.NotEmpty(await _svc.GetContractsAsync(ContractStatus.Offered));
+        Assert.NotEmpty(await OffersAsync());
         decimal cashBefore = (await _svc.GetCareerAsync()).Cash;
 
         var estimate = await _svc.EstimateRelocationAsync(plane.Id, "eddm");
@@ -305,7 +305,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.False(moved.IsAvailable(career.GameTime));
         Assert.Equal("Überführung nach EDDM", moved.UnavailableReason);
         Assert.Equal(1, moved.Cycles);
-        Assert.Empty(await _svc.GetContractsAsync(ContractStatus.Offered));
+        Assert.Empty(await OffersAsync());
     }
 
     [Fact]
@@ -346,7 +346,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         // Instant completion settles a perfect flight and moves the aircraft.
         await _svc.RefreshMarketAsync(new Random(3));
-        var offer = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var offer = (await OffersAsync()).First();
         await _svc.AcceptAsync(offer.Id);
         var result = await _svc.DebugCompleteContractAsync(offer.Id);
         Assert.Equal(FlightOutcome.Completed, result.Outcome);
@@ -355,21 +355,84 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.MissionRevenue);
     }
 
+    private async Task<(MissionContract Outbound, MissionContract Return)> CharterPackageAsync(int seed = 6)
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("kingair350", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter", "air_taxi" } }, rng: new Random(seed));
+        var all = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var outbound = all.First(o => o.PackageLeg == 1);
+        return (outbound, all.Single(o => o.PackageId == outbound.PackageId && o.IsReturnLeg));
+    }
+
+    [Fact]
+    public async Task Return_flights_are_accepted_and_paid_as_a_package()
+    {
+        var (outbound, back) = await CharterPackageAsync();
+        Assert.Equal(outbound.Destination, back.Origin);
+        Assert.Equal(outbound.Origin, back.Destination);
+
+        // The return leg can't be taken alone, but stays on the market with its outbound.
+        await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(back.Id));
+        await _svc.RefreshMarketAsync(new Random(7));
+        Assert.Contains(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Id == back.Id);
+
+        await _svc.AcceptAsync(outbound.Id);
+        Assert.Equal(2, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Count);
+        var first = await _svc.DebugCompleteContractAsync(outbound.Id);
+        Assert.DoesNotContain(first.Lines, l => l.Description == "Hin- und Rückflug-Bonus");
+        Assert.Equal(back.Origin, (await _svc.GetFleetAsync()).Single().Location);
+        Assert.Equal(back.Id, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().Id);
+
+        var second = await _svc.DebugCompleteContractAsync(back.Id);
+        var bonus = Assert.Single(second.Lines, l => l.Description == "Hin- und Rückflug-Bonus");
+        var rule = _svc.MissionType(back.MissionTypeId).ReturnFlight!;
+        Assert.Equal(Math.Round(rule.Bonus * (outbound.Payout + back.Payout), 0), bonus.Amount);
+        Assert.Equal(outbound.Origin, (await _svc.GetFleetAsync()).Single().Location);
+    }
+
+    [Fact]
+    public async Task Cancelling_the_outbound_cancels_the_package_and_a_diversion_loses_the_bonus()
+    {
+        var (outbound, back) = await CharterPackageAsync();
+        await _svc.AcceptAsync(outbound.Id);
+        decimal cash = (await _svc.GetCareerAsync()).Cash;
+        await _svc.CancelAsync(outbound.Id);
+        Assert.Empty(await _svc.GetContractsAsync(ContractStatus.Accepted));
+        Assert.Equal(2, (await _svc.GetContractsAsync(ContractStatus.Cancelled)).Count);
+        Assert.Equal(cash - Math.Round(outbound.Payout * 0.1m, 0) - Math.Round(back.Payout * 0.1m, 0), (await _svc.GetCareerAsync()).Cash);
+
+        // Second package: the outbound ends back at its origin (diversion), so the return leg pays no bonus.
+        (outbound, back) = await CharterPackageAsync(8);
+        await _svc.AcceptAsync(outbound.Id);
+        await _svc.StartFlightAsync(outbound.Id);
+        var origin = (await _svc.FindAirportAsync(outbound.Origin))!;
+        var diverted = await _svc.CompleteFlightAsync(outbound.Id, new FlightResult
+        {
+            AirTime = TimeSpan.FromMinutes(40), BlockTime = TimeSpan.FromMinutes(50), FuelUsedKg = 200, FinalPosition = origin.Position
+        });
+        Assert.Equal(FlightOutcome.Diverted, diverted.Outcome);
+        Assert.Equal(back.Id, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().Id);
+        var second = await _svc.DebugCompleteContractAsync(back.Id);
+        Assert.DoesNotContain(second.Lines, l => l.Description == "Hin- und Rückflug-Bonus");
+    }
+
     [Fact]
     public async Task Debug_market_reset_only_removes_offers()
     {
         await NewCareer();
         await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(4));
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
-        await _svc.AcceptAsync(offers[0].Id);
-        var deadline = offers[0].Deadline;
-        await _svc.DebugExtendDeadlineAsync(offers[0].Id, TimeSpan.FromHours(24));
+        var all = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var single = all.First(o => o.PackageId is null);
+        await _svc.AcceptAsync(single.Id);
+        var deadline = single.Deadline;
+        await _svc.DebugExtendDeadlineAsync(single.Id, TimeSpan.FromHours(24));
 
         int removed = await _svc.DebugClearMarketAsync();
 
-        Assert.Equal(offers.Count - 1, removed);
-        Assert.Empty(await _svc.GetContractsAsync(ContractStatus.Offered));
+        Assert.Equal(all.Count - 1, removed);
+        Assert.Empty(await OffersAsync());
         var accepted = Assert.Single(await _svc.GetContractsAsync(ContractStatus.Accepted));
         Assert.Equal(deadline.AddHours(24), accepted.Deadline);
     }
@@ -390,7 +453,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await Assert.ThrowsAsync<CareerException>(() => _svc.RelocateAircraftAsync(plane.Id, "XXXX", false));   // unknown
 
         await _svc.RefreshMarketAsync(new Random(2));
-        var offer = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var offer = (await OffersAsync()).First();
         await _svc.AcceptAsync(offer.Id);
         await Assert.ThrowsAsync<CareerException>(() => _svc.RelocateAircraftAsync(plane.Id, "EDDF", false)); // accepted job waits
     }
@@ -401,7 +464,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(3));
-        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).OrderByDescending(o => o.Payout).First();
+        var job = (await OffersAsync()).OrderByDescending(o => o.Payout).First();
         var dest = (await _svc.FindAirportAsync(job.Destination))!;
         await _svc.AcceptAsync(job.Id);
         await _svc.StartFlightAsync(job.Id);
@@ -494,6 +557,13 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Contains(s.Notes, n => n.Contains("erst ab dem App-Neustart"));
     }
 
+    /// <summary>
+    /// Offers that can be accepted (a package's return leg comes with its outbound), single jobs first so flows that
+    /// take the first offer don't depend on whether a package was drawn.
+    /// </summary>
+    private async Task<List<MissionContract>> OffersAsync() =>
+        (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !o.IsReturnLeg).OrderBy(o => o.PackageId is not null).ToList();
+
     /// <summary>Stands in for the app's flight monitor: feeds telemetry into a real <see cref="FlightSession"/>.</summary>
     private sealed class FakeHost : IFlightSessionHost
     {
@@ -559,7 +629,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         await _svc.AcquireAircraftAsync("c208b", ownership);
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "cargo_feeder" } }, rng: new Random(4));
-        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).OrderBy(o => o.DistanceNm).First();
+        var job = (await OffersAsync()).OrderBy(o => o.DistanceNm).First();
         await _svc.AcceptAsync(job.Id);
         job = (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single();
 
@@ -646,7 +716,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
         await _svc.RefreshMarketAsync(new Random(7));
-        var next = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var next = (await OffersAsync()).First();
         await _svc.AcceptAsync(next.Id);
         automation.Invalidate();
         await automation.TickAsync();
@@ -702,11 +772,11 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var first = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         var second = await _svc.AcquireAircraftAsync("c172", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(3));
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
-        var flown = offers.First(o => o.AircraftId == first.Id);
+        var offers = await OffersAsync();
+        var flown = offers.First(o => o.AircraftId == first.Id && o.PackageId is null);
         await _svc.AcceptAsync(flown.Id);
         await _svc.DebugCompleteContractAsync(flown.Id);
-        var open = (await _svc.GetContractsAsync(ContractStatus.Offered)).First(o => o.AircraftId == second.Id);
+        var open = (await OffersAsync()).First(o => o.AircraftId == second.Id && o.PackageId is null);
         await _svc.AcceptAsync(open.Id);
 
         var d1 = await _svc.GetAircraftDetailsAsync(first.Id);
@@ -839,7 +909,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var aircraft = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         Assert.True(await _svc.RefreshMarketAsync(new Random(3)) > 0);
 
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var offers = await OffersAsync();
         Assert.All(offers, o => Assert.Equal("EDDF", o.Origin));
         var job = offers.OrderByDescending(o => o.Payout).First();
         var dest = (await _svc.FindAirportAsync(job.Destination))!;
@@ -883,7 +953,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(5));
-        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).First(o => o.Destination != "EDFE");
+        var job = (await OffersAsync()).First(o => o.Destination != "EDFE");
         await _svc.AcceptAsync(job.Id);
         await _svc.StartFlightAsync(job.Id);
 
@@ -910,7 +980,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(9));
-        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var job = (await OffersAsync()).First();
         await _svc.AcceptAsync(job.Id);
         await _svc.StartFlightAsync(job.Id);
         var dest = (await _svc.FindAirportAsync(job.Destination))!;
@@ -1018,7 +1088,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer(Difficulty.Easy); // a new C172 (450,000 €) exceeds the Normal starting capital
         var plane = await _svc.AcquireAircraftAsync("c172", Ownership.Owned);
         await _svc.RefreshMarketAsync(new Random(1));
-        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var job = (await OffersAsync()).First();
         await _svc.AcceptAsync(job.Id);
         await Assert.ThrowsAsync<CareerException>(() => _svc.DisposeAircraftAsync(plane.Id));
 
@@ -1064,7 +1134,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         // First flight: nothing known about the tanks, so the burn is paid as before.
         await _svc.RefreshMarketAsync(new Random(3));
-        var first = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var first = (await OffersAsync()).First();
         await _svc.AcceptAsync(first.Id);
         await _svc.MarkFuelRestoredAsync(first.Id);
         Assert.NotNull((await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().FuelRestoredAtUtc);
@@ -1075,7 +1145,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         // Second flight: only what's added on top of the remaining fuel is paid.
         await _svc.RefreshMarketAsync(new Random(4));
-        var second = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var second = (await OffersAsync()).First();
         await _svc.AcceptAsync(second.Id);
         var block = _svc.BuildLoadSheet(second, _svc.Profile(plane.ProfileId)).Fuel.Block.Kg;
         var r2 = await _svc.DebugCompleteContractAsync(second.Id);
@@ -1086,7 +1156,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         // Switched off: back to paying the burn.
         await _svc.UpdatePersistFuelAsync(false);
         await _svc.RefreshMarketAsync(new Random(5));
-        var third = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var third = (await OffersAsync()).First();
         await _svc.AcceptAsync(third.Id);
         var r3 = await _svc.DebugCompleteContractAsync(third.Id);
         Assert.Contains(r3.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Treibstoff"));
@@ -1098,15 +1168,15 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(3));
-        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var offers = await OffersAsync();
         var job = offers.First();
         var other = offers.First(o => o.Id != job.Id);
         await _svc.AcceptAsync(job.Id);
         await _svc.DebugCompleteContractAsync(job.Id);
 
-        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin != job.Destination);
+        Assert.DoesNotContain(await OffersAsync(), o => o.Origin != job.Destination);
         await _svc.RefreshMarketAsync(new Random(4));
-        var fresh = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var fresh = await OffersAsync();
         Assert.NotEmpty(fresh);
         Assert.All(fresh, o => Assert.Equal(job.Destination, o.Origin));
         await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(other.Id));
@@ -1123,7 +1193,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
             });
             await db.SaveChangesAsync();
         }
-        var staleOffer = (await _svc.GetContractsAsync(ContractStatus.Offered)).Single(o => o.Origin == job.Origin);
+        var staleOffer = (await OffersAsync()).Single(o => o.Origin == job.Origin);
         await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(staleOffer.Id));
         await _svc.RefreshMarketAsync(new Random(5));
         Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin == job.Origin);
@@ -1135,7 +1205,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await NewCareer();
         var plane = await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
         await _svc.RefreshMarketAsync(new Random(3));
-        var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).First();
+        var job = (await OffersAsync()).First();
         await _svc.AcceptAsync(job.Id);
 
         static GsxReceipt Receipt(string id, GsxReceiptKind kind, string icao, DateTime created, decimal eur) =>
@@ -1178,7 +1248,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         // The next job from there is armed: a late deboarding receipt of the last flight still goes to that flight.
         await _svc.RefreshMarketAsync(new Random(5));
-        var next = (await _svc.GetContractsAsync(ContractStatus.Offered)).First(c => c.Origin == job.Destination);
+        var next = (await OffersAsync()).First(c => c.Origin == job.Destination);
         await _svc.AcceptAsync(next.Id);
         await _svc.MarkArmedAsync(next.Id);
         await _svc.MarkArmedAsync(next.Id);   // kept from the first time

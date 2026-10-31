@@ -54,14 +54,35 @@
     var sheet = profile is null ? null : Career.BuildLoadSheet(c, profile);
     bool tracking = Monitor.ContractId == c.Id;
     var readiness = Departure.Automation.Readiness.GetValueOrDefault(c.Id);
+    bool collapsible = IsWaitingReturn(c, aircraft);
+    bool collapsed = collapsible && !_expanded.Contains(c.Id);
 
-    <MudPaper Class="pa-4 mb-4" Elevation="3">
+    <MudPaper Class="@(collapsed ? "pa-3 mb-4" : "pa-4 mb-4")" Elevation="3">
         <MudStack Row="true" AlignItems="AlignItems.Center">
             <MudText Typo="Typo.h6">@type.Name: @c.Origin → @c.Destination</MudText>
             <MudChip T="string" Size="Size.Small" Color="@(c.Status == ContractStatus.InProgress ? Color.Warning : tracking ? Color.Success : Color.Info)">@StatusText(c, tracking)</MudChip>
+            @if (c.PackageLeg is { } leg)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt">
+                    @(leg == 1 ? "Hinflug 1/2" : "Rückflug 2/2")
+                </MudChip>
+            }
             <MudSpacer />
             <MudText>@Eur(c.Payout)</MudText>
+            @if (collapsible)
+            {
+                <MudIconButton Size="Size.Small" Icon="@(collapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)"
+                               title="@(collapsed ? "Details anzeigen" : "Einklappen")" OnClick="() => ToggleExpanded(c.Id)" />
+            }
         </MudStack>
+        @if (collapsed)
+        {
+            <MudText Typo="Typo.body2">
+                @c.DistanceNm.ToString("N0") nm · Deadline @c.Deadline.ToString("dd.MM. HH:mm") UTC · @PaxText(c) · startet nach dem Hinflug in @c.Origin
+            </MudText>
+        }
+        else
+        {
         <MudText Typo="Typo.body2" Class="mb-2">
             @aircraft?.Registration (@profile?.Name) · @c.DistanceNm.ToString("N0") nm · Deadline @c.Deadline.ToString("dd.MM. HH:mm") UTC
             · @PaxText(c) @(c.CargoKg > 0 ? $"· Fracht {c.CargoKg:N0} kg ({c.CargoKind})" : "")
@@ -183,22 +204,32 @@
             </MudPaper>
         }
 
+        @if (c.Status == ContractStatus.Accepted && PreparationSteps(c, type, profile, sheet) is { Count: > 0 } steps)
+        {
+            var next = steps.FirstOrDefault(s => !s.Done);
+            <MudText Typo="Typo.subtitle2" Class="mt-1">Vorbereitung</MudText>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+                @for (int i = 0; i < steps.Count; i++)
+                {
+                    var step = steps[i];
+                    int number = i + 1;
+                    if (i > 0)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                    }
+                    <MudButton Size="Size.Small" Variant="@(step == next ? Variant.Filled : Variant.Outlined)" Color="@(step == next ? Color.Primary : Color.Default)"
+                               StartIcon="@(step.Done ? Icons.Material.Filled.CheckCircle : null)" Disabled="@(Busy || step.Disabled)" OnClick="step.Action"
+                               title="@step.Hint">@($"{number}. {step.Label}")</MudButton>
+                }
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="d-block mb-2">Danach im Simulator abheben – der Auftrag startet automatisch.</MudText>
+        }
+
         <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
             @if (c.Status == ContractStatus.Accepted)
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => ExportPlan(c, type)"
+                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="Busy" OnClick="() => ExportPlan(c, type)" StartIcon="@Icons.Material.Filled.Map"
                            title="MSFS-Flugplan für BeyondATC (Import ‚.PLN‘) und das EFB im Sim">Flugplan (.pln)</MudButton>
-            }
-            @if (type.SimBrief != SimBriefUsage.None && c.Status == ContractStatus.Accepted && profile is not null)
-            {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => OpenSimBrief(c, profile)">In SimBrief planen</MudButton>
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => ImportOfp(c, profile)">OFP laden</MudButton>
-            }
-            @if (sheet is not null && c.Status == ContractStatus.Accepted)
-            {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || Monitor.Loader is null || sheet.Aircraft.Loading != LoadingMethod.SimConnectStations)"
-                           OnClick="() => LoadIntoSim(c, sheet)">Im Sim beladen</MudButton>
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || Monitor.Inspector is null)" OnClick="() => VerifyLoad(c, sheet)">Beladung prüfen</MudButton>
             }
             @if (c.Status == ContractStatus.Accepted && Monitor.HasSession && !tracking && Monitor.Phase is FlightPhase.Preflight or FlightPhase.TaxiOut)
             {
@@ -216,6 +247,7 @@
             <MudSpacer />
             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => Cancel(c)">Stornieren</MudButton>
         </MudStack>
+        }
     </MudPaper>
 }
 
@@ -287,17 +319,34 @@
                 {
                     var t = Career.MissionType(o.MissionTypeId);
                     <tr @onclick="() => SelectOffer(o.Id)" style="cursor:pointer; @(o.Id == _selected ? "background:rgba(255,255,255,0.08)" : "")" id="@($"offer-{o.Id:N}")">
-                        @{ var plane = _fleet.FirstOrDefault(f => f.Id == o.AircraftId); }
+                        @{ var plane = _fleet.FirstOrDefault(f => f.Id == o.AircraftId); var back = ReturnOf(o); }
                         <td>@plane?.Registration<br /><MudText Typo="Typo.caption">@(plane is null ? "" : Career.ProfileName(plane.ProfileId))</MudText></td>
                         <td><span style="color:@ColorFor(t)">●</span> @t.Name<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief</MudText></td>
-                        <td>@o.Origin → @o.Destination<br /><MudText Typo="Typo.caption">@o.DistanceNm.ToString("N0") nm@(CityOf(o.Destination) is { Length: > 0 } city ? $" · {city}" : "")</MudText></td>
+                        <td>
+                            @o.Origin → @o.Destination
+                            @if (back is not null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt" Class="ml-1">Hin &amp; Rück</MudChip>
+                            }
+                            <br /><MudText Typo="Typo.caption">@o.DistanceNm.ToString("N0") nm@(CityOf(o.Destination) is { Length: > 0 } city ? $" · {city}" : "")</MudText>
+                            @if (back is not null)
+                            {
+                                <br /><MudText Typo="Typo.caption">zurück: @back.TotalPassengers Pax · @Eur(back.Payout) · bis @back.Deadline.ToString("dd.MM. HH:mm")</MudText>
+                            }
+                        </td>
                         <td>@DestinationInfo(o.Destination)</td>
                         <td>@PaxText(o)@(o.CargoKg > 0 ? $", {o.CargoKg:N0} kg {o.CargoKind}" : "")</td>
                         <td>@o.PlannedBlockFuelKg.ToString("N0") kg</td>
                         <td>@o.Deadline.ToString("dd.MM. HH:mm")</td>
                         <td>@o.ExpiresAt.ToString("dd.MM. HH:mm")</td>
-                        <td><b>@Eur(o.Payout)</b></td>
-                        <td @onclick:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Accept(o)">Annehmen</MudButton></td>
+                        <td>
+                            <b>@Eur(OfferValue(o))</b>
+                            @if (back is not null)
+                            {
+                                <br /><MudText Typo="Typo.caption">inkl. Rückflug und @Eur(PackageBonus(o, back)) Bonus</MudText>
+                            }
+                        </td>
+                        <td @onclick:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Accept(o)">@(back is null ? "Annehmen" : "Beide annehmen")</MudButton></td>
                     </tr>
                 }
             </tbody>
@@ -361,7 +410,9 @@
     /// <summary>GSX follows the job in flight, otherwise the first accepted one; stops when no job is open.</summary>
     private async Task TrackGsxAsync()
     {
-        var job = _active.FirstOrDefault(c => c.Status == ContractStatus.InProgress) ?? _active.FirstOrDefault();
+        var job = _active.FirstOrDefault(c => c.Status == ContractStatus.InProgress)
+                  ?? _active.FirstOrDefault(c => _fleet.Any(f => f.Id == c.AircraftId && f.Location == c.Origin))
+                  ?? _active.FirstOrDefault();
         var aircraft = job is null ? null : _fleet.FirstOrDefault(f => f.Id == job.AircraftId);
         if (job is null || aircraft is null)
         {
@@ -431,7 +482,9 @@
         _persistFuel = career.PersistFuel;
         _fleet = await Career.GetFleetAsync();
         _offers = await Career.GetContractsAsync(ContractStatus.Offered);
-        _active = await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress);
+        // A package's return leg waits below its outbound.
+        _active = (await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress))
+            .OrderBy(c => c.Status != ContractStatus.InProgress).ThenBy(c => c.IsReturnLeg).ToList();
         if (Filter.AircraftId is { } f && _fleet.All(a => a.Id != f)) Filter.AircraftId = null;
         _airportDataOutdated = await Career.AirportDataOutdatedAsync();
 
@@ -449,7 +502,7 @@
         get
         {
             var search = Filter.ToSearch();
-            return _offers.Where(o => (Filter.AircraftId is not { } id || o.AircraftId == id) &&
+            return _offers.Where(o => !o.IsReturnLeg && (Filter.AircraftId is not { } id || o.AircraftId == id) &&
                                       _fleet.Any(f => f.Id == o.AircraftId && f.Location == o.Origin) &&
                                       search.Matches(o, _airports.GetValueOrDefault(o.Destination)));
         }
@@ -469,7 +522,7 @@
                 OfferColumn.BlockFuel => o => o.PlannedBlockFuelKg,
                 OfferColumn.Deadline => o => o.Deadline,
                 OfferColumn.Expires => o => o.ExpiresAt,
-                _ => o => o.Payout
+                _ => o => OfferValue(o)
             };
             return Filter.SortDescending ? VisibleOffers.OrderByDescending(key) : VisibleOffers.OrderBy(key);
         }
@@ -531,7 +584,7 @@
     {
         if (!_airports.TryGetValue(c.Origin, out var from) || !_airports.TryGetValue(c.Destination, out var to)) return null;
         var type = Career.MissionType(c.MissionTypeId);
-        string label = $"{type.Name}: {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm · {Eur(c.Payout)}{(accepted ? " (angenommen)" : "")}";
+        string label = $"{type.Name}: {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm · {Eur(c.Payout)}{(c.PackageId is not null ? " (Hin & Rück)" : "")}{(accepted ? " (angenommen)" : "")}";
         string registration = _fleet.FirstOrDefault(f => f.Id == c.AircraftId) is { } plane
             ? $"{plane.Registration} ({Career.ProfileName(plane.ProfileId)})" : "";
         var details = new List<string>
@@ -543,6 +596,52 @@
         return new MissionMap.Route(c.Id, [from.Position.Latitude, from.Position.Longitude], [to.Position.Latitude, to.Position.Longitude],
             label, ColorFor(type), accepted, c.Id == _selected, to.Ident,
             MissionTexts.City(to) is { Length: > 0 } city ? $"{to.Name} ({city})" : to.Name, type.Name, details, Eur(c.Payout));
+    }
+
+    /// <summary>Return legs opened by the user; a waiting return leg is shown collapsed.</summary>
+    private readonly HashSet<Guid> _expanded = [];
+
+    private void ToggleExpanded(Guid id)
+    {
+        if (!_expanded.Remove(id)) _expanded.Add(id);
+    }
+
+    /// <summary>A return leg whose aircraft hasn't reached its origin yet (the outbound is still ahead).</summary>
+    private static bool IsWaitingReturn(MissionContract c, FleetAircraft? aircraft) =>
+        c is { IsReturnLeg: true, Status: ContractStatus.Accepted } && aircraft is not null &&
+        !string.Equals(aircraft.Location, c.Origin, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The return leg of a package outbound (on the market or accepted).</summary>
+    private MissionContract? ReturnOf(MissionContract c) =>
+        c is { PackageId: { } package, IsReturnLeg: false } ? _offers.Concat(_active).FirstOrDefault(x => x.PackageId == package && x.IsReturnLeg) : null;
+
+    private decimal PackageBonus(MissionContract outbound, MissionContract back) =>
+        Math.Round((Career.MissionType(back.MissionTypeId).ReturnFlight?.Bonus ?? 0.1m) * (outbound.Payout + back.Payout), 0);
+
+    /// <summary>What accepting the offer is worth: with a return leg both payouts plus the package bonus.</summary>
+    private decimal OfferValue(MissionContract o) => ReturnOf(o) is { } back ? o.Payout + back.Payout + PackageBonus(o, back) : o.Payout;
+
+    private sealed record PrepStep(string Label, bool Done, bool Disabled, Func<Task> Action, string? Hint = null);
+
+    /// <summary>The preparation of an accepted job in the order it is done; steps that don't apply to the type or aircraft are left out.</summary>
+    private List<PrepStep> PreparationSteps(MissionContract c, MissionType type, AircraftProfile? profile, LoadSheet? sheet)
+    {
+        var steps = new List<PrepStep>();
+        bool ofp = c.OfpBlockFuelKg is not null;
+        bool loadOk = _loadCheck.TryGetValue(c.Id, out var check) && check.Count == 0;
+        if (type.SimBrief != SimBriefUsage.None && profile is not null)
+        {
+            steps.Add(new("In SimBrief planen", ofp, false, () => { OpenSimBrief(c, profile); return Task.CompletedTask; },
+                "Öffnet SimBrief mit Strecke, Flugzeug und Beladung des Auftrags"));
+            steps.Add(new("OFP laden", ofp, false, () => ImportOfp(c, profile), "Übernimmt den zuletzt in SimBrief erzeugten OFP (Treibstoff, Route)"));
+        }
+        if (sheet is not null && sheet.Aircraft.Loading == LoadingMethod.SimConnectStations)
+            steps.Add(new("Im Sim beladen", loadOk, Monitor.Loader is null, () => LoadIntoSim(c, sheet),
+                Monitor.Loader is null ? "Nur mit Verbindung zu MSFS" : "Setzt Zuladung und Treibstoff laut Load-Sheet"));
+        if (sheet is not null)
+            steps.Add(new("Beladung prüfen", loadOk, Monitor.Inspector is null, () => VerifyLoad(c, sheet),
+                Monitor.Inspector is null ? "Nur mit Verbindung zu MSFS" : "Vergleicht Zuladung und Treibstoff im Sim mit dem Load-Sheet"));
+        return steps;
     }
 
     /// <summary>"In Liste zeigen" from a map popup: highlight the row and scroll to it.</summary>
@@ -603,11 +702,16 @@
         }
     });
 
-    private Task Accept(MissionContract o) => Run(() => Career.AcceptAsync(o.Id), "Auftrag angenommen.");
+    private Task Accept(MissionContract o) => Run(() => Career.AcceptAsync(o.Id), ReturnOf(o) is null ? "Auftrag angenommen." : "Hin- und Rückflug angenommen.");
 
     private async Task Cancel(MissionContract c)
     {
-        if (await Dialogs.ShowMessageBoxAsync("Stornieren", $"Auftrag stornieren? Vertragsstrafe {Eur(Math.Round(c.Payout * 0.1m, 0))}.", yesText: "Stornieren", cancelText: "Zurück") != true)
+        var back = ReturnOf(c) is { Status: ContractStatus.Accepted } r ? r : null;
+        decimal penalty = Math.Round(c.Payout * CareerService.CancellationPenalty, 0) + (back is null ? 0 : Math.Round(back.Payout * CareerService.CancellationPenalty, 0));
+        string question = back is not null ? $"Hin- und Rückflug stornieren? Vertragsstrafe {Eur(penalty)}."
+            : c.IsReturnLeg ? $"Rückflug stornieren? Vertragsstrafe {Eur(penalty)}, der Paket-Bonus entfällt."
+            : $"Auftrag stornieren? Vertragsstrafe {Eur(penalty)}.";
+        if (await Dialogs.ShowMessageBoxAsync("Stornieren", question, yesText: "Stornieren", cancelText: "Zurück") != true)
             return;
         await Run(async () =>
         {
@@ -683,8 +787,16 @@
         });
     }
 
-    private static string PaxText(MissionContract c) => c.TotalPassengers == 0 ? "–"
-        : c.Children + c.Infants > 0 ? $"{c.TotalPassengers} Pax ({c.Children} Kinder, {c.Infants} Babys)" : $"{c.TotalPassengers} Pax";
+    private string PaxText(MissionContract c) => c.TotalPassengers == 0 ? "–"
+        : $"{c.TotalPassengers} Pax{OccupancyText(c)}{(c.Children + c.Infants > 0 ? $" ({c.Children} Kinder, {c.Infants} Babys)" : "")}";
+
+    /// <summary>" · 79 % belegt" when the mission fills seats of a known aircraft.</summary>
+    private string OccupancyText(MissionContract c)
+    {
+        if (_fleet.FirstOrDefault(f => f.Id == c.AircraftId) is not { } plane) return "";
+        int capacity = SkyCareer.Missions.Generation.StandardMissionGenerator.Capacity(Career.MissionType(c.MissionTypeId), Career.Profile(plane.ProfileId));
+        return capacity > 0 ? $" · {(c.Adults + c.Children) / (double)capacity:P0} belegt" : "";
+    }
 
     private static string OutcomeText(FlightOutcome o) => o switch
     {

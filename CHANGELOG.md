@@ -2,7 +2,7 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## Unveröffentlicht
+## 0.1.5 – 2026-10-31
 
 ### Behoben
 - Flugzeuge, die keine Parkbremse an den Simulator melden (z. B. Fenix A320/A321), wurden am Ziel nie als geparkt erkannt

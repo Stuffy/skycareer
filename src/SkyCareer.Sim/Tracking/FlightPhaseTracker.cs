@@ -38,6 +38,11 @@ public sealed class FlightPhaseTracker
         public TimeSpan LevelConfirm { get; init; } = TimeSpan.FromSeconds(60);
         public TimeSpan VerticalConfirm { get; init; } = TimeSpan.FromSeconds(30);
         public TimeSpan ParkedConfirm { get; init; } = TimeSpan.FromSeconds(5);
+        /// <summary>
+        /// Stationary with all engines off counts as parked after this long even without the parking brake: add-on
+        /// aircraft (e.g. Fenix) drive their own brake logic and never set BRAKE PARKING POSITION.
+        /// </summary>
+        public TimeSpan ParkedWithoutBrakeConfirm { get; init; } = TimeSpan.FromSeconds(30);
     }
 
     private readonly Options _opt;
@@ -203,7 +208,11 @@ public sealed class FlightPhaseTracker
                     SetPhase(FlightPhase.Climb, t);
                     break;
                 }
-                if (Held("parked", t.OnGround && t.GroundSpeedKt < 1 && t.ParkingBrake && !t.AnyEngineRunning, _opt.ParkedConfirm, t))
+                bool stopped = t.OnGround && t.GroundSpeedKt < 1 && !t.AnyEngineRunning;
+                // Evaluate both so each hold timer stays current.
+                bool withBrake = Held("parked", stopped && t.ParkingBrake, _opt.ParkedConfirm, t);
+                bool withoutBrake = Held("parked-nobrake", stopped, _opt.ParkedWithoutBrakeConfirm, t);
+                if (withBrake || withoutBrake)
                 {
                     BlockOn = t.Timestamp;
                     SetPhase(FlightPhase.Arrived, t);

@@ -108,7 +108,16 @@
                         <tr><td>Treibstoff</td><td>@t.FuelKg.ToString("N0") kg</td></tr>
                         <tr><td>Payload</td><td>@t.PayloadKg.ToString("N0") kg</td></tr>
                         <tr><td>Gesamtgewicht</td><td>@t.TotalWeightKg.ToString("N0") kg</td></tr>
-                        <tr><td>Am Boden / Parkbremse</td><td>@(t.OnGround ? "ja" : "nein") / @(t.ParkingBrake ? "gesetzt" : "gelöst")</td></tr>
+                        <tr>
+                            <td>Am Boden / Parkbremse</td>
+                            <td>
+                                @(t.OnGround ? "ja" : "nein") / @(t.ParkingBrake ? "gesetzt" : "gelöst")
+                                @if (Monitor.Phase == FlightPhase.TaxiIn && !t.ParkingBrake)
+                                {
+                                    <br /><MudText Typo="Typo.caption">Meldet das Flugzeug keine Parkbremse (z. B. Fenix), gilt es nach 30 s Stillstand mit abgestellten Triebwerken als geparkt.</MudText>
+                                }
+                            </td>
+                        </tr>
                     </tbody>
                 </MudSimpleTable>
             }

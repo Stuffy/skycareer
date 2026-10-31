@@ -2,6 +2,13 @@
 
 Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## Unveröffentlicht
+
+### Behoben
+- Flugzeuge, die keine Parkbremse an den Simulator melden (z. B. Fenix A320/A321), wurden am Ziel nie als geparkt erkannt
+  und nicht abgerechnet. Jetzt gilt ein Flugzeug auch nach 30 Sekunden Stillstand mit abgestellten Triebwerken als geparkt;
+  mit gesetzter Parkbremse wie bisher nach 5 Sekunden.
+
 ## 0.1.4 – 2026-10-31
 
 ### Neu

@@ -149,4 +149,36 @@ public class FlightTrackingTests
             File.Delete(path);
         }
     }
+
+    /// <summary>A standard flight up to taxiing in, without setting the parking brake at the stand.</summary>
+    private static SyntheticFlight TaxiedInWithoutBrake() => new SyntheticFlight()
+        .Hold(30, t => t with { AnyEngineRunning = true })
+        .Hold(120, t => t with { ParkingBrake = false, GroundSpeedKt = 12 })
+        .Hold(20, t => t with { GroundSpeedKt = 60 })
+        .Hold(300, t => t with { OnGround = false, GroundSpeedKt = 110, VerticalSpeedFpm = 800 })
+        .Hold(600, t => t with { VerticalSpeedFpm = 0, GroundSpeedKt = 160 })
+        .Hold(240, t => t with { VerticalSpeedFpm = -800, GroundSpeedKt = 140 })
+        .Hold(1, t => t with { OnGround = true, VerticalSpeedFpm = 0, TouchdownVsFpm = -180, GForce = 1.2, GroundSpeedKt = 70 })
+        .Hold(20, t => t with { GForce = 1, GroundSpeedKt = 40 })
+        .Hold(120, t => t with { GroundSpeedKt = 12 });
+
+    [Fact]
+    public void Parked_is_detected_without_a_parking_brake_signal_after_30_seconds()
+    {
+        // Add-on aircraft like the Fenix never set BRAKE PARKING POSITION: stationary with engines off has to do.
+        var waiting = TaxiedInWithoutBrake().Hold(60, t => t with { GroundSpeedKt = 0 });   // engines still running
+        Assert.Equal(FlightPhase.TaxiIn, Run(waiting.Samples).Phases.Phase);
+
+        var shortStop = TaxiedInWithoutBrake().Hold(20, t => t with { GroundSpeedKt = 0, AnyEngineRunning = false });
+        Assert.Equal(FlightPhase.TaxiIn, Run(shortStop.Samples).Phases.Phase);
+
+        var parked = TaxiedInWithoutBrake().Hold(32, t => t with { GroundSpeedKt = 0, AnyEngineRunning = false });
+        var session = Run(parked.Samples);
+        Assert.Equal(FlightPhase.Arrived, session.Phases.Phase);
+        Assert.NotNull(session.Phases.BlockOn);
+
+        // With the brake it stays quick.
+        var braked = TaxiedInWithoutBrake().Hold(7, t => t with { GroundSpeedKt = 0, AnyEngineRunning = false, ParkingBrake = true });
+        Assert.Equal(FlightPhase.Arrived, Run(braked.Samples).Phases.Phase);
+    }
 }

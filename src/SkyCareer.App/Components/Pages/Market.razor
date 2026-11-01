@@ -407,12 +407,13 @@
             Snackbar.Add(T("Switching is only possible on the ground before taxiing."), Severity.Warning);
     }
 
-    /// <summary>GSX follows the job in flight, otherwise the first accepted one; stops when no job is open.</summary>
+    /// <summary>
+    /// GSX is pointed at a job by the automation (armed or resumed); this only refreshes its load sheet and settings and
+    /// stops GSX once that job is no longer open. With several aircraft on jobs, picking one here would retarget GSX.
+    /// </summary>
     private async Task TrackGsxAsync()
     {
-        var job = _active.FirstOrDefault(c => c.Status == ContractStatus.InProgress)
-                  ?? _active.FirstOrDefault(c => _fleet.Any(f => f.Id == c.AircraftId && f.Location == c.Origin))
-                  ?? _active.FirstOrDefault();
+        var job = _active.FirstOrDefault(c => c.Id == Gsx.ContractId);
         var aircraft = job is null ? null : _fleet.FirstOrDefault(f => f.Id == job.AircraftId);
         if (job is null || aircraft is null)
         {

@@ -2,6 +2,17 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **Settlement after GSX deboarding:** GSX reports a completed deboarding only for a moment; SkyCareer missed it and
+  settled the flight only after the 20-minute timeout. It now settles about 15 seconds after deboarding.
+- **Several aircraft on jobs:** the job of the aircraft type loaded in the sim is prepared first, and loading another
+  aircraft at the stand switches to its job. Fuel, GSX, wear and GSX receipts only follow that job; the market page no
+  longer points GSX at another job.
+- A flight left unsettled when the app was closed no longer takes over another aircraft: once its recording ended at the
+  gate it is settled from the recorded data, otherwise it waits until its aircraft is loaded again.
+
 ## 0.2.0 – 2026-11-01
 
 ### Added

@@ -18,6 +18,8 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
     private IFlightDataSource? _source;
     private FlightJournal? _journal;
     private ConnectionState _lastLoggedState = ConnectionState.Disconnected;
+    /// <summary>False for a session settled from its journal alone: live telemetry belongs to another aircraft.</summary>
+    private bool _live = true;
 
     /// <summary>Saved tracks and the running journals of career flights (next to the database).</summary>
     public static string TracksDirectory => Path.Combine(Path.GetDirectoryName(SkyCareerDb.DefaultPath)!, "tracks");
@@ -62,6 +64,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
             CloseJournal(delete: true);
             Session = session;
             ContractId = contractId;
+            _live = true;
             DepartureIssues = [];
             if (contractId is { } id)
             {
@@ -78,11 +81,11 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
     /// and keeps recording. Without a journal the session is picked up from the current state (times estimated from
     /// <paramref name="startedAt"/>). Returns false when there is neither a journal nor live telemetry.
     /// </summary>
-    public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null)
+    public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null, bool live = true)
     {
         var history = FlightJournal.Read(TracksDirectory, contractId);
         var current = Latest;
-        if (history.Count == 0 && current is null) return false;
+        if (history.Count == 0 && (current is null || !live)) return false;
 
         var session = new FlightSession();
         foreach (var t in history) session.Process(t);
@@ -94,9 +97,12 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
             CloseJournal(delete: false);
             Session = session;
             ContractId = contractId;
+            _live = live;
+            // Opened even when not live, so ending the session removes the journal.
             OpenJournal(contractId, fresh: false);
         }
-        Log(history.Count > 0
+        Log(!live ? $"Flight settled from its journal ({history.Count} samples, phase {session.Phases.Phase}), live data ignored"
+            : history.Count > 0
             ? $"Flight tracking resumed from journal ({history.Count} samples, phase {session.Phases.Phase})"
             : $"Flight tracking resumed without journal (phase {session.Phases.Phase}, times estimated)");
         Changed?.Invoke();
@@ -110,8 +116,18 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
             CloseJournal(delete: true);
             Session = null;
             ContractId = null;
+            _live = true;
         }
         Changed?.Invoke();
+    }
+
+    public JournalEnd? ReadJournalEnd(Guid contractId)
+    {
+        var history = FlightJournal.Read(TracksDirectory, contractId);
+        if (history.Count == 0) return null;
+        var session = new FlightSession();
+        foreach (var t in history) session.Process(t);
+        return new JournalEnd(history[^1], session.Phases.Phase);
     }
 
     private void AttachLog(FlightSession session)
@@ -229,19 +245,24 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         Latest = t;
         lock (_sessionLock)
         {
-            Session?.Process(t);
-            try
-            {
-                _journal?.Append(t);
-            }
-            catch (IOException ex)
-            {
-                // Losing the journal only matters after a crash; keep tracking.
-                AppLog.Warn("Flight", "Could not write the flight journal", ex);
-                CloseJournal(delete: false);
-            }
+            if (_live) Record(t);
         }
         Changed?.Invoke();
+    }
+
+    private void Record(Telemetry t)
+    {
+        Session?.Process(t);
+        try
+        {
+            _journal?.Append(t);
+        }
+        catch (IOException ex)
+        {
+            // Losing the journal only matters after a crash; keep tracking.
+            AppLog.Warn("Flight", "Could not write the flight journal", ex);
+            CloseJournal(delete: false);
+        }
     }
 
     public async Task StopAsync()

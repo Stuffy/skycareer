@@ -21,8 +21,13 @@ public interface IFlightSessionHost
     /// <summary>Red departure checks recorded at liftoff; cleared when a new flight begins.</summary>
     IReadOnlyList<string> DepartureIssues { get; set; }
     void BeginFlight(Guid? contractId = null);
-    /// <summary>Continues tracking a job that is already flying (journal replay, or picked up from the current state).</summary>
-    bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null);
+    /// <summary>
+    /// Continues tracking a job that is already flying (journal replay, or picked up from the current state). With
+    /// <paramref name="live"/> false only the journal counts and live telemetry is ignored (another aircraft is loaded).
+    /// </summary>
+    bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null, bool live = true);
+    /// <summary>The last journal sample of a job and the phase its replay ends in; null without a journal.</summary>
+    JournalEnd? ReadJournalEnd(Guid contractId);
     void EndFlight();
     FlightSummary? Summarize();
     Task<string?> SaveTrackAsync(string name);
@@ -31,6 +36,9 @@ public interface IFlightSessionHost
     void Log(string message);
 }
 
+/// <summary>Where a job's flight journal ends (see <see cref="IFlightSessionHost.ReadJournalEnd"/>).</summary>
+public sealed record JournalEnd(Telemetry Last, FlightPhase Phase);
+
 /// <summary>Ground services (GSX deboarding) at the destination, as far as the settlement waits for them.</summary>
 public enum GroundServiceState { NotUsed, NotStarted, InProgress, Completed }
 
@@ -38,6 +46,7 @@ public enum GroundServiceState { NotUsed, NotStarted, InProgress, Completed }
 /// Runs a career flight without a start button: arms tracking when the aircraft sits at the departure airport of an
 /// accepted job, keeps the job editable on the ground, starts it at liftoff (unless position or type are wrong) and
 /// settles it once the aircraft is parked again (with GSX in use: once deboarding is done). Also evaluates the departure traffic light for every accepted job.
+/// With several aircraft on jobs, the job of the aircraft type loaded in the sim (profile sim match) is armed or resumed.
 /// Not thread-safe by itself: the caller serialises <see cref="TickAsync"/>.
 /// </summary>
 public sealed class FlightAutomation(CareerService career, IFlightSessionHost host)
@@ -67,6 +76,12 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     /// <summary>When the start wear was last tried per job, so a failing read is retried but not every tick.</summary>
     private readonly Dictionary<Guid, DateTime> _wearTried = [];
     private readonly HashSet<Guid> _wearFromResume = [];
+    /// <summary>Jobs settled from their journal alone (another aircraft is loaded): no GSX wait, no sim wear.</summary>
+    private readonly HashSet<Guid> _offline = [];
+    /// <summary>Journal ends of in-progress jobs that weren't picked up, so a journal is read once, not every tick.</summary>
+    private readonly Dictionary<Guid, JournalEnd?> _journalEnds = [];
+    /// <summary>The job picked by hand; not switched away from when the aircraft type doesn't match.</summary>
+    private Guid? _chosen;
     private DateTimeOffset? _deboardedAt;
     private volatile string? _settleNow;
     public SettlementResult? LastSettlement { get; private set; }
@@ -105,6 +120,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         if (_jobs.FirstOrDefault(j => j.Id == contractId) is not { Status: ContractStatus.Accepted }) return false;
         host.EndFlight();
         Arm(contractId);
+        _chosen = contractId;
         return true;
     }
 
@@ -166,6 +182,14 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
                     host.Log(L.F("Tracking for {0} → {1} ended: aircraft no longer at {0}", job.Origin, job.Destination));
                     host.EndFlight();
                 }
+                // Another aircraft loaded in the sim: follow the job of the aircraft that is there now.
+                else if (t is { OnGround: true } && phase != FlightPhase.TakeoffRoll && _chosen != job.Id && !MatchesSim(job, t)
+                         && Candidates(t).FirstOrDefault() is { } other && other.Id != job.Id && MatchesSim(other, t))
+                {
+                    host.Log(L.F("Aircraft changed in the sim: switching from {0} → {1} to {2} → {3}", job.Origin, job.Destination, other.Origin, other.Destination));
+                    host.EndFlight();
+                    Arm(other.Id);
+                }
                 return;
             }
             if (phase is FlightPhase.Crashed or FlightPhase.Arrived && host.Summarize()?.TakeoffTime is null)
@@ -177,7 +201,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             return;
         }
 
-        if (job.Status == ContractStatus.InProgress && job.SimWearAtStart is null && phase is not (FlightPhase.Arrived or FlightPhase.Crashed))
+        if (job.Status == ContractStatus.InProgress && job.SimWearAtStart is null && !_offline.Contains(job.Id) && phase is not (FlightPhase.Arrived or FlightPhase.Crashed))
         {
             // Not read at the stand (e.g. resumed after an app restart): better late than never, the rest still counts.
             await RecordStartWearAsync(job);
@@ -188,7 +212,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             Waiting = null;
             return;
         }
-        if (phase == FlightPhase.Arrived && _settleNow != job.Id.ToString() && WaitForGroundServices(job, t)) return;
+        if (phase == FlightPhase.Arrived && !_offline.Contains(job.Id) && _settleNow != job.Id.ToString() && WaitForGroundServices(job, t)) return;
         _settleNow = null;
         Waiting = null;
         _deboardedAt = null;
@@ -259,6 +283,8 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     private async Task RecordStartWearAsync(MissionContract job)
     {
         if (job.SimWearAtStart is not null) return;
+        // The sim's wear belongs to the aircraft loaded there, which must be the job's type.
+        if (!MatchesSim(job, host.Latest)) return;
         if (_wearTried.TryGetValue(job.Id, out var last) && DateTime.UtcNow - last < WearRetry) return;
         bool first = !_wearTried.ContainsKey(job.Id);
         _wearTried[job.Id] = DateTime.UtcNow;
@@ -278,8 +304,11 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         var track = await host.SaveTrackAsync($"{job.Origin}-{job.Destination}-{job.Id:N}");
         // Stored with the job at liftoff, so they survive an app restart mid-flight.
         var issues = job.DepartureIssueList.Count > 0 ? job.DepartureIssueList : host.DepartureIssues;
-        var result = FlightResultMapper.Map(summary, issues, await WearDeltaAsync(job));
-        if (job.SimWearAtStart is null)
+        bool offline = _offline.Remove(job.Id);
+        var result = FlightResultMapper.Map(summary, issues, offline ? null : await WearDeltaAsync(job));
+        if (offline)
+            result = result with { Notes = [.. result.Notes, L.T("Settled after an app restart from the recorded flight data; MSFS wear not recorded.")] };
+        else if (job.SimWearAtStart is null)
             result = result with { Notes = [.. result.Notes, L.T("MSFS wear not recorded (no start value).")] };
         else if (_wearFromResume.Remove(job.Id))
             result = result with { Notes = [.. result.Notes, L.T("MSFS wear only recorded from the app restart onwards.")] };
@@ -309,34 +338,70 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         return delta;
     }
 
-    /// <summary>After an app restart: picks up a job that is still flying (preferring the one whose aircraft is loaded).</summary>
+    /// <summary>
+    /// After an app restart: picks up a job that is still flying, but only with its aircraft type loaded, in the air or
+    /// near the flight (last journal position, origin or destination). A flight whose journal already ended while
+    /// another aircraft is loaded is settled from the journal alone; anything else waits and doesn't block arming.
+    /// </summary>
     private bool TryResume(Telemetry t)
     {
-        var job = _jobs
-            .Where(j => j.Status == ContractStatus.InProgress && _fleet.ContainsKey(j.AircraftId))
-            .OrderByDescending(j => career.Profile(_fleet[j.AircraftId].ProfileId).MatchesSimTitle(t.AircraftTitle))
-            .FirstOrDefault();
-        if (job is null) return false;
-        var startedAt = job.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : t.Timestamp;
-        if (!host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg)) return false;
-        host.Log(L.F("Flight {0} → {1} resumed after restart", job.Origin, job.Destination));
-        Resumed?.Invoke(job.Id);
-        return true;
+        foreach (var job in _jobs.Where(j => j.Status == ContractStatus.InProgress && _fleet.ContainsKey(j.AircraftId))
+                     .OrderByDescending(j => MatchesSim(j, t)))
+        {
+            if (!_journalEnds.TryGetValue(job.Id, out var end)) _journalEnds[job.Id] = end = host.ReadJournalEnd(job.Id);
+            var startedAt = job.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : t.Timestamp;
+            if (MatchesSim(job, t) && NearFlight(job, t, end))
+            {
+                if (!host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg)) continue;
+                _journalEnds.Remove(job.Id);
+                host.Log(L.F("Flight {0} → {1} resumed after restart", job.Origin, job.Destination));
+                Resumed?.Invoke(job.Id);
+                return true;
+            }
+            if (end is { Phase: FlightPhase.Arrived or FlightPhase.Crashed } && host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg, live: false))
+            {
+                _journalEnds.Remove(job.Id);
+                _offline.Add(job.Id);
+                host.Log(L.F("Flight {0} → {1} is settled from its recorded data: another aircraft is loaded in the sim", job.Origin, job.Destination));
+                return true;
+            }
+        }
+        return false;
     }
+
+    private bool NearFlight(MissionContract job, Telemetry t, JournalEnd? end)
+    {
+        if (!t.OnGround) return true;
+        var places = new List<SkyCareer.Domain.GeoPosition>();
+        if (end is not null) places.Add(end.Last.Position);
+        foreach (var icao in new[] { job.Origin, job.Destination })
+            if (_airports.TryGetValue(icao, out var airport)) places.Add(airport.Position);
+        return places.Any(p => t.Position.DistanceNmTo(p) <= DepartureCheck.MaxDistanceNm);
+    }
+
+    private bool MatchesSim(MissionContract job, Telemetry? t) =>
+        t is not null && _fleet.TryGetValue(job.AircraftId, out var aircraft) && career.Profile(aircraft.ProfileId).MatchesSimTitle(t.AircraftTitle);
+
+    /// <summary>
+    /// Accepted jobs whose aircraft and the sim are at the departure airport, the loaded type first. A job of another
+    /// type is still armed when nothing matches, so the departure light shows what is wrong; fuel, GSX and wear are then
+    /// left alone.
+    /// </summary>
+    private List<MissionContract> Candidates(Telemetry t) => _jobs
+        .Where(j => j.Status == ContractStatus.Accepted && _fleet.TryGetValue(j.AircraftId, out var a) && a.Location == j.Origin
+                    && _airports.TryGetValue(j.Origin, out var o) && t.Position.DistanceNmTo(o.Position) <= DepartureCheck.MaxDistanceNm)
+        .OrderByDescending(j => MatchesSim(j, t))
+        .ThenBy(j => j.Deadline)
+        .ToList();
 
     private void TryArm(Telemetry t)
     {
-        var candidates = _jobs
-            .Where(j => j.Status == ContractStatus.Accepted && _fleet.TryGetValue(j.AircraftId, out var a) && a.Location == j.Origin
-                        && _airports.TryGetValue(j.Origin, out var o) && t.Position.DistanceNmTo(o.Position) <= DepartureCheck.MaxDistanceNm)
-            .OrderByDescending(j => career.Profile(_fleet[j.AircraftId].ProfileId).MatchesSimTitle(t.AircraftTitle))
-            .ThenBy(j => j.Deadline)
-            .ToList();
-        if (candidates.Count > 0) Arm(candidates[0].Id);
+        if (Candidates(t).FirstOrDefault() is { } job) Arm(job.Id);
     }
 
     private void Arm(Guid contractId)
     {
+        _chosen = null;
         _groundReadiness = Readiness.GetValueOrDefault(contractId);
         host.BeginFlight(contractId);
         host.DepartureIssues = [];

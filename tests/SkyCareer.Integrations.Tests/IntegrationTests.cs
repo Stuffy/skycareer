@@ -137,6 +137,19 @@ public class GsxTests
 public class GsxCrewTests
 {
     [Fact]
+    public void Gsx_deboarding_counts_as_completed_after_gsx_resets_its_state()
+    {
+        var watch = new GsxDeboardingWatch();
+        var idle = new GsxState { Boarding = GsxServiceState.Callable, Deboarding = GsxServiceState.Callable };
+        Assert.Equal(GsxServiceState.Callable, watch.Observe(idle));   // not started yet
+        Assert.Equal(GsxServiceState.Performing, watch.Observe(idle with { Deboarding = GsxServiceState.Performing }));
+        // GSX shows Completed only briefly (here not even polled) and goes back to Callable.
+        Assert.Equal(GsxServiceState.Completed, watch.Observe(idle));
+        Assert.Equal(GsxServiceState.Completed, watch.Observe(idle with { Deboarding = GsxServiceState.Completed }));
+        Assert.Equal(GsxServiceState.Unknown, watch.Observe(GsxState.NotRunning));
+    }
+
+    [Fact]
     public void Gsx_counts_the_passengers_without_crew()
     {
         var mission = new PassengerCount(8, 0, 1);

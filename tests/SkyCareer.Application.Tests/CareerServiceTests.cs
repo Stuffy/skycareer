@@ -577,8 +577,8 @@ public sealed class CareerServiceTests : IAsyncLifetime
         public List<string> Log { get; } = [];
         /// <summary>Stands in for the on-disk flight journal; survives a simulated app restart when passed to a new host.</summary>
         public List<Telemetry> Journal { get; init; } = [];
-        public void BeginFlight(Guid? contractId = null) { _session = new FlightSession(); ContractId = contractId; Journal.Clear(); }
-        public void EndFlight() { _session = null; ContractId = null; Journal.Clear(); }
+        public void BeginFlight(Guid? contractId = null) { _session = new FlightSession(); ContractId = contractId; Live = true; Journal.Clear(); }
+        public void EndFlight() { _session = null; ContractId = null; Live = true; Journal.Clear(); }
         public FlightSummary? Summarize() => _session?.Summarize();
         public Task<string?> SaveTrackAsync(string name) => Task.FromResult<string?>(null);
         /// <summary>What the "sim" reports as wear; tests change it between arming and parking.</summary>
@@ -586,16 +586,28 @@ public sealed class CareerServiceTests : IAsyncLifetime
         public Task<AircraftWear?> ReadWearAsync() => Task.FromResult(Wear);
         void IFlightSessionHost.Log(string message) => Log.Add(message);
 
-        public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null)
+        public bool ResumeFlight(Guid contractId, DateTimeOffset startedAt, double? fuelAtBlockOffKg = null, bool live = true)
         {
-            if (Journal.Count == 0 && Latest is null) return false;
+            if (Journal.Count == 0 && (Latest is null || !live)) return false;
             var session = new FlightSession();
             foreach (var t in Journal) session.Process(t);
             if (Journal.Count == 0) session.Resume(Latest!, startedAt, fuelAtBlockOffKg);
             else session.ContinueAfterRestart(startedAt);
             _session = session;
             ContractId = contractId;
+            Live = live;
             return true;
+        }
+
+        /// <summary>False while a job is settled from its journal alone: fed telemetry is then ignored.</summary>
+        public bool Live { get; private set; } = true;
+
+        public JournalEnd? ReadJournalEnd(Guid contractId)
+        {
+            if (Journal.Count == 0) return null;
+            var session = new FlightSession();
+            foreach (var t in Journal) session.Process(t);
+            return new JournalEnd(Journal[^1], session.Phases.Phase);
         }
 
         public void Force(FlightPhase phase) => _session!.ForcePhase(phase, Latest!, freeze: true);
@@ -603,7 +615,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         public void Feed(Telemetry t)
         {
             Latest = t;
-            if (_session is null) return;
+            if (_session is null || !Live) return;
             _session.Process(t);
             if (ContractId is not null) Journal.Add(t);
         }
@@ -839,9 +851,11 @@ public sealed class CareerServiceTests : IAsyncLifetime
     [Fact]
     public async Task Liftoff_in_the_wrong_aircraft_does_not_start_the_job()
     {
-        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Airbus A320neo");
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Airbus A320neo", AircraftWear.FromSim(new Dictionary<int, double> { [37] = 0.95 }));
         Assert.Equal(job.Id, host.ContractId);   // armed anyway, so the light can show what is wrong
         Assert.Equal(Light.Red, automation.Readiness[job.Id][DepartureCheck.Type]!.Light);
+        // The A320's wear is not the Caravan's start value.
+        Assert.Null((await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().SimWearAtStart);
 
         var samples = Segment(parked with { AnyEngineRunning = true }, 20, t => t with { ParkingBrake = false, GroundSpeedKt = 12 }).ToList();
         samples.AddRange(Segment(samples[^1], 10, t => t with { GroundSpeedKt = 70 }));
@@ -852,6 +866,91 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.False(host.HasSession);
         Assert.Contains("Aircraft type", automation.NotStarted[job.Id]);
         Assert.Single(await _svc.GetContractsAsync(ContractStatus.Accepted));
+    }
+
+    /// <summary>A Caravan job (armed in the Caravan) and a King Air job, both aircraft and jobs at EDDF.</summary>
+    private async Task<(FlightAutomation Automation, FakeHost Host, MissionContract Caravan, MissionContract KingAir, Telemetry Parked)> TwoAircraftAsync()
+    {
+        var (automation, host, caravanJob, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        var kingAir = await _svc.AcquireAircraftAsync("kingair350", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter", "air_taxi" } }, kingAir.Id, new Random(6));
+        var offer = (await OffersAsync()).First(o => o.AircraftId == kingAir.Id && o.Origin == caravanJob.Origin);
+        await _svc.AcceptAsync(offer.Id);
+        automation.Invalidate();
+        return (automation, host, caravanJob, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single(c => c.Id == offer.Id), parked);
+    }
+
+    [Fact]
+    public async Task With_two_aircraft_the_job_of_the_loaded_type_is_armed()
+    {
+        var (automation, host, caravan, kingAir, parked) = await TwoAircraftAsync();
+        await automation.TickAsync();
+        Assert.Equal(caravan.Id, host.ContractId);
+
+        // Loading the King Air at the stand switches to its job, whichever deadline comes first.
+        host.Feed(parked with { Timestamp = parked.Timestamp.AddSeconds(1), AircraftTitle = "Beechcraft King Air 350i" });
+        await automation.TickAsync();
+        Assert.Equal(kingAir.Id, host.ContractId);
+        Assert.Contains(host.Log, l => l.Contains("Aircraft changed in the sim"));
+
+        // A job picked by hand stays armed, even in the other type.
+        Assert.True(automation.Choose(caravan.Id));
+        await automation.TickAsync();
+        Assert.Equal(caravan.Id, host.ContractId);
+    }
+
+    [Fact]
+    public async Task A_flight_left_unsettled_is_settled_from_its_journal_when_another_aircraft_is_loaded()
+    {
+        var (automation, host, caravan, kingAir, parked) = await TwoAircraftAsync();
+        await automation.TickAsync();
+        // GSX deboarding never starts and the app is closed while the settlement waits for it.
+        automation.GroundServices = _ => GroundServiceState.NotStarted;
+        await FlyCaravanJobAsync(automation, host, caravan, parked);
+        Assert.Equal(FlightPhase.Arrived, host.Phase);
+        Assert.Null(automation.LastSettlement);
+
+        // Restart with the King Air loaded at EDDF: the Caravan's flight is settled from the journal, without penalties.
+        var restarted = new FakeHost { Journal = [.. host.Journal], Wear = AircraftWear.FromSim(new Dictionary<int, double> { [37] = 0.5 }) };
+        var automation2 = new FlightAutomation(_svc, restarted) { GroundServices = _ => GroundServiceState.NotStarted };
+        Guid? resumed = null;
+        automation2.Resumed += id => resumed = id;
+        restarted.Feed(parked with { Timestamp = DateTimeOffset.UtcNow, AircraftTitle = "Beechcraft King Air 350i", AnyEngineRunning = true });
+        await automation2.TickAsync();
+        Assert.Equal(caravan.Id, restarted.ContractId);
+        Assert.Null(resumed);   // GSX isn't pointed at it
+        await automation2.TickAsync();
+
+        var s = automation2.LastSettlement;
+        Assert.NotNull(s);
+        Assert.Equal(caravan.Id, automation2.LastSettledContract!.Id);
+        Assert.Contains(s!.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
+        Assert.DoesNotContain(s.Lines, l => l.Category == LedgerCategory.Penalty);
+        Assert.Contains(s.Notes, n => n.Contains("from the recorded flight data"));
+
+        // Then the King Air's job is armed.
+        await automation2.TickAsync();
+        Assert.Equal(kingAir.Id, restarted.ContractId);
+    }
+
+    [Fact]
+    public async Task A_flight_in_progress_without_its_aircraft_does_not_block_other_jobs()
+    {
+        var (automation, host, caravan, kingAir, parked) = await TwoAircraftAsync();
+        await automation.TickAsync();
+        var roll = Segment(parked with { AnyEngineRunning = true }, 20, t => t with { ParkingBrake = false, GroundSpeedKt = 40 }).ToList();
+        roll.AddRange(Segment(roll[^1], 10, t => t with { OnGround = false, GroundSpeedKt = 100, VerticalSpeedFpm = 800, AltitudeAglFt = 500 }));
+        foreach (var t in roll) host.Feed(t);
+        await automation.TickAsync();
+        Assert.Equal(ContractStatus.InProgress, (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single().Status);
+
+        // Restart without journal, the King Air on the ground at EDDF: the Caravan's flight waits, the King Air job is armed.
+        var restarted = new FakeHost();
+        var automation2 = new FlightAutomation(_svc, restarted);
+        restarted.Feed(parked with { Timestamp = DateTimeOffset.UtcNow, AircraftTitle = "Beechcraft King Air 350i" });
+        await automation2.TickAsync();
+        Assert.Equal(kingAir.Id, restarted.ContractId);
+        Assert.Single(await _svc.GetContractsAsync(ContractStatus.InProgress));
     }
 
     [Fact]

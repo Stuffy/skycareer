@@ -88,6 +88,9 @@ public sealed class DepartureCoordinator : IDisposable
         var job = (await _career.GetContractsAsync(status).ConfigureAwait(false)).FirstOrDefault(c => c.Id == contractId);
         var aircraft = job is null ? null : (await _career.GetFleetAsync().ConfigureAwait(false)).FirstOrDefault(f => f.Id == job.AircraftId);
         if (job is null || aircraft is null) return null;
+        // A job armed although another type is loaded (so its light shows why) gets no GSX, fuel or arming time.
+        if (status == Domain.Career.ContractStatus.Accepted && !_career.Profile(aircraft.ProfileId).MatchesSimTitle(_monitor.Latest?.AircraftTitle))
+            return null;
         var career = await _career.GetCareerAsync().ConfigureAwait(false);
         _gsx.Track(job.Id, _career.BuildLoadSheet(job, _career.Profile(aircraft.ProfileId)), career.GsxSyncEnabled, career.GsxCostsEnabled,
             departed: status == Domain.Career.ContractStatus.InProgress);
@@ -101,6 +104,8 @@ public sealed class DepartureCoordinator : IDisposable
     private async Task RestoreFuelAsync(Domain.Career.MissionContract job, Domain.Career.FleetAircraft aircraft)
     {
         if (job.FuelRestoredAtUtc is not null || aircraft.FuelKg is not { } stored || _monitor.Loader is not { } loader) return;
+        // Still the armed job, and still its aircraft type in the sim.
+        if (_monitor.ContractId != job.Id || !_career.Profile(aircraft.ProfileId).MatchesSimTitle(_monitor.Latest?.AircraftTitle)) return;
         if (_monitor.Latest is not { OnGround: true } t || _monitor.Phase is not (null or Sim.Tracking.FlightPhase.Preflight)) return;
         try
         {

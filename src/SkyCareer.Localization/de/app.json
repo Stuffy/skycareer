@@ -77,14 +77,9 @@
   "Weight per bag (lbs)": "Gewicht je Gepäckstück (lbs)",
   "SimBrief default (175 / 50 lbs)": "SimBrief-Standard (175 / 50 lbs)",
   "Every passenger (children too) counts with this weight and has one bag, except on hand-luggage-only jobs – SimBrief calculates the same way.": "Jeder Passagier (auch Kinder) zählt mit diesem Gewicht und hat ein Gepäckstück, außer bei Aufträgen nur mit Handgepäck – so rechnet auch SimBrief.",
-  "SimBrief doesn't take weights from the dispatch link but uses the values of your SimBrief airframe: enter the same values here.": "SimBrief übernimmt keine Gewichte aus dem Planungslink, sondern nimmt die Werte deines SimBrief-Flugzeugs: trag hier dieselben ein.",
   "Applies to new jobs; jobs already offered or accepted keep their weights.": "Gilt für neue Aufträge; bereits angebotene und angenommene Aufträge behalten ihre Gewichte.",
   "Keep fuel on board between flights": "Tankstand zwischen Flügen beibehalten",
   "The remaining fuel stays in the aircraft after parking and is set in the sim when the next job is armed (once per job, before taxiing). You then only pay for the fuel uplifted up to block-off instead of the burn.": "Der Resttreibstoff bleibt nach dem Parken im Flugzeug und wird beim Scharfschalten des nächsten Auftrags im Sim gesetzt (einmal je Auftrag, vor dem Rollen). Bezahlt wird dann nur, was bis zum Block-Off nachgetankt wurde, statt des Verbrauchs.",
-  "For this, once in SimBrief": "Dafür einmalig in SimBrief",
-  "edit the airframe you use under “Airframes” and in the weights set the": "unter „Flugzeuge“ das verwendete Flugzeug bearbeiten und bei den Gewichten das",
-  "bag weight to 0": "Gepäckgewicht (Bag Weight) auf 0",
-  ", otherwise SimBrief counts the bags twice. Applies to new jobs.": " setzen, sonst zählt SimBrief das Gepäck doppelt. Gilt für neue Aufträge.",
   "Installed version:": "Installierte Version:",
   "development build, updates only in the installed app": "Entwicklungsversion, Updates nur in der installierten App",
   "checking for updates …": "suche nach Updates …",
@@ -357,7 +352,8 @@
   "Read value": "Lesen",
   "Kind": "Art",
   "Economic data": "Wirtschaft",
-  "Send detailed load to SimBrief (varying bag weights)": "Genaue Beladung an SimBrief übergeben (unterschiedliche Gepäckgewichte)",
-  "Bags and weight differences go to SimBrief as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.": "Gepäck und Gewichtsunterschiede werden als Fracht übergeben; Gepäck wiegt dann je Passagier unterschiedlich (der Wert oben ist der Durchschnitt). Das Zero Fuel Weight im OFP stimmt so genau mit dem Load-Sheet überein.",
-  "The cabin crew goes to SimBrief as freight; the pilots are expected in the empty weight of your SimBrief airframe.": "Das Kabinenpersonal geht als Fracht an SimBrief; die Piloten sind im Leergewicht deines SimBrief-Airframes enthalten."
+  "SimBrief splits the payload with the weights of your SimBrief airframe; with the same values here, passengers, bags and freight in the OFP match the job as well.": "SimBrief teilt die Zuladung mit den Gewichten deines SimBrief-Airframes auf; mit denselben Werten hier stimmen auch Passagiere, Gepäck und Fracht im OFP mit dem Auftrag überein.",
+  "SimBrief gets the exact zero fuel weight of the load sheet and adjusts the freight in the OFP to match.": "SimBrief bekommt das genaue Zero Fuel Weight des Load-Sheets und passt die Fracht im OFP daran an.",
+  "Varying bag weights per passenger": "Unterschiedliche Gepäckgewichte je Passagier",
+  "Bags weigh differently per passenger (the value above is the average), and some passengers travel without checked bags. Applies to new jobs.": "Gepäck wiegt je Passagier unterschiedlich (der Wert oben ist der Durchschnitt), und manche Passagiere reisen ohne aufgegebenes Gepäck. Gilt für neue Aufträge."
 }

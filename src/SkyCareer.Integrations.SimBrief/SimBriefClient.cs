@@ -38,12 +38,13 @@ public sealed record SimBriefOfp(
 
 /// <summary>
 /// Prefill for SimBrief's dispatch page, from <see cref="SimBriefPayload"/>. The page ignores custom masses
-/// (<c>acdata</c>), so passenger and bag weight come from the airframe and must match the career.
+/// (<c>acdata</c>). With <see cref="ZeroFuelWeightKg"/> (<c>manualzfw</c>) SimBrief keeps the passenger count and bags
+/// and plans exactly this ZFW, adjusting the freight to fit (verified 2026-11-01).
 /// <see cref="Airframe"/> is a SimBrief airframe ID that replaces the plain ICAO type.
 /// </summary>
 public sealed record DispatchRequest(string Origin, string Destination, string AircraftIcao, int Passengers,
     double CargoKg, string? Airline = null, string? FlightNumber = null, string? Callsign = null, string? StaticId = null,
-    string? Airframe = null);
+    string? Airframe = null, double? ZeroFuelWeightKg = null);
 
 /// <summary>
 /// Optional SimBrief integration without an API key: the app opens SimBrief's dispatch page prefilled with
@@ -62,6 +63,7 @@ public sealed class SimBriefClient(HttpClient http)
             ("pax", r.Passengers.ToString(CultureInfo.InvariantCulture)),
             // SimBrief expects cargo in thousands of the user's weight unit; we always send kg via units=KGS.
             ("cargo", r.CargoKg > 0 ? (r.CargoKg / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) : null),
+            ("manualzfw", r.ZeroFuelWeightKg is > 0 and var zfw ? (zfw / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) : null),
             ("units", "KGS"),
             ("airline", r.Airline), ("fltnum", r.FlightNumber), ("callsign", r.Callsign), ("static_id", r.StaticId)
         };

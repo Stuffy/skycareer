@@ -88,6 +88,30 @@ public class MissionTests
         Assert.Contains("dest=EDDM", uri.Query);
         Assert.Contains("pax=150", uri.Query);
         Assert.Contains("cargo=2.5", uri.Query);
+        Assert.DoesNotContain("manualzfw", uri.Query);
+
+        // The load sheet's ZFW in thousands, with a decimal point whatever the culture.
+        var withZfw = SimBriefClient.BuildDispatchUri(new DispatchRequest("EDDF", "EDDM", "A20N", 150, 2500, ZeroFuelWeightKg: 60879));
+        Assert.Contains("manualzfw=60.879", withZfw.Query);
+    }
+
+    [Fact]
+    public void With_a_manual_zfw_only_passengers_bags_and_the_zfw_are_checked()
+    {
+        // Values of a real OFP made with pax=150, cargo=2.5 and manualzfw=60.879 (2026-11-01): SimBrief kept passengers
+        // and bags and planned the ZFW exactly; the freight (891 kg) balanced its heavier OEW and bag weight.
+        var ofp = new SimBriefOfp("EDDF", "EDDM", null, "A20N", "DCT", 150, 4633, 60879, 4000, 1500, 35000, DateTimeOffset.UnixEpoch, "",
+            FreightKg: 891, BagCount: 150, PlannedBagCount: 150, PlannedPassengers: 150, PayloadKg: 16540, MaxZeroFuelWeightKg: 64300,
+            OperatingEmptyKg: 44339, PassengerWeightKg: 79.379, BagWeightKg: 24.948);
+        var expected = new OfpExpectation("EDDF", "EDDM", "A20N", 150, 2800, 17809, 60879, 64300,
+            PassengerWeightKg: 79.38, BagWeightKg: 22.68, ManualZfw: true);
+        Assert.Empty(OfpValidator.Validate(ofp, expected));
+
+        // Without the manual ZFW the same OFP would be full of deviations.
+        Assert.NotEmpty(OfpValidator.Validate(ofp, expected with { ManualZfw = false }));
+        // An OFP generated without it (older link): ZFW off.
+        Assert.Contains(OfpValidator.Validate(ofp with { ZeroFuelWeightKg = 59600 }, expected), p => p.StartsWith("ZFW"));
+        Assert.Contains(OfpValidator.Validate(ofp with { Passengers = 140 }, expected), p => p.Contains("140"));
     }
 
     [Fact]

@@ -221,7 +221,7 @@
   "The passenger stations have {0} seats, the profile {1}.": "Die Passagierstationen haben {0} Sitze, das Profil {1}.",
   "The passenger weight must be between {0:N0} and {1:N0} kg.": "Das Passagiergewicht muss zwischen {0:N0} und {1:N0} kg liegen.",
   "The return flight is accepted together with the outbound flight.": "Der Rückflug wird zusammen mit dem Hinflug angenommen.",
-  "The SimBrief airframe has a bag weight of {0:N0} lbs – set it to 0, SkyCareer sends the baggage as freight (or turn off “Send detailed load to SimBrief”)": "Im SimBrief-Airframe ist ein Gepäckgewicht von {0:N0} lbs eingestellt – auf 0 setzen, SkyCareer sendet das Gepäck als Fracht (oder „Genaue Beladung an SimBrief“ ausschalten)",
+  "The SimBrief airframe has a bag weight of {0:N0} lbs – set it to 0, SkyCareer sends the baggage as freight (or turn off “Varying bag weights per passenger”)": "Im SimBrief-Airframe ist ein Gepäckgewicht von {0:N0} lbs eingestellt – auf 0 setzen, SkyCareer sendet das Gepäck als Fracht (oder „Genaue Beladung an SimBrief“ ausschalten)",
   "These components are not worn.": "Diese Bauteile sind nicht abgenutzt.",
   "This aircraft already has an accepted job.": "Dieses Flugzeug hat bereits einen angenommenen Auftrag.",
   "Time acceleration": "Zeitbeschleunigung",

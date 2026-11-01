@@ -81,14 +81,13 @@ Game time only passes through flights and deliberate waiting (title bar) – bre
 ## Integrations
 
 ### SimBrief
-"Plan in SimBrief" opens the dispatch page with route, passengers and cargo. SimBrief takes passenger and baggage weights
-from the selected airframe; for job and OFP to match, enter the same values under **Settings → Loading** (default: 175 lbs
-per passenger, 50 lbs per bag).
+"Plan in SimBrief" opens the dispatch page with route, passengers, cargo and the exact zero fuel weight of the load
+sheet. SimBrief keeps the passenger count and plans exactly this ZFW, so fuel planning matches the flight whatever empty
+weight your SimBrief airframe has; it adjusts the freight in the OFP to make up the difference. SimBrief splits passengers
+and baggage with the weights of the selected airframe; with the same values under **Settings → Loading** (default: 175 lbs
+per passenger, 50 lbs per bag) the freight in the OFP matches the job as well.
 
-The cabin crew goes to SimBrief as cargo; the pilots are expected in the empty weight of your SimBrief airframe.
-Optionally, **Send detailed load to SimBrief** also sends bags of varying weight and other weight differences as cargo, so
-the ZFW in the OFP matches the load sheet exactly. The SimBrief airframe then needs a **bag weight of 0**, otherwise SimBrief
-counts the baggage twice.
+Optionally, **Varying bag weights per passenger** makes bags weigh differently per passenger in new jobs.
 
 "Load OFP" takes over block fuel and route and reports differences in route, type, passengers, cargo and weights. Custom
 airframes can be linked by entering the SimBrief airframe ID in the aircraft profile.

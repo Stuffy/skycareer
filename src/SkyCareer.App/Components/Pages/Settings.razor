@@ -53,9 +53,9 @@
         </MudStack>
         <MudText Typo="Typo.body2" Class="mt-2">
             @T("Every passenger (children too) counts with this weight and has one bag, except on hand-luggage-only jobs – SimBrief calculates the same way.")
-            @T("SimBrief doesn't take weights from the dispatch link but uses the values of your SimBrief airframe: enter the same values here.")
+            @T("SimBrief splits the payload with the weights of your SimBrief airframe; with the same values here, passengers, bags and freight in the OFP match the job as well.")
             @T("Applies to new jobs; jobs already offered or accepted keep their weights.")
-            @T("The cabin crew goes to SimBrief as freight; the pilots are expected in the empty weight of your SimBrief airframe.")
+            @T("SimBrief gets the exact zero fuel weight of the load sheet and adjusts the freight in the OFP to match.")
         </MudText>
         <MudSwitch T="bool" Value="c.PersistFuel" ValueChanged="SetPersistFuel" Color="Color.Primary" Class="mt-3"
                    Label="@T("Keep fuel on board between flights")" />
@@ -63,11 +63,9 @@
             @T("The remaining fuel stays in the aircraft after parking and is set in the sim when the next job is armed (once per job, before taxiing). You then only pay for the fuel uplifted up to block-off instead of the burn.")
         </MudText>
         <MudSwitch T="bool" Value="c.SimBriefDetailedLoad" ValueChanged="SetDetailedLoad" Color="Color.Primary" Class="mt-3"
-                   Label="@T("Send detailed load to SimBrief (varying bag weights)")" />
+                   Label="@T("Varying bag weights per passenger")" />
         <MudText Typo="Typo.caption" Style="display:block">
-            @T("Bags and weight differences go to SimBrief as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.")
-            <b>@T("For this, once in SimBrief")</b> @T("edit the airframe you use under “Airframes” and in the weights set the")
-            <b>@T("bag weight to 0")</b>@T(", otherwise SimBrief counts the bags twice. Applies to new jobs.")
+            @T("Bags weigh differently per passenger (the value above is the average), and some passengers travel without checked bags. Applies to new jobs.")
         </MudText>
     </MudPaper>
 

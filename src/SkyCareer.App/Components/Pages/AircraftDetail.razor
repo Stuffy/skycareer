@@ -16,15 +16,15 @@
         <MudLink Href="@($"aircraft/edit?id={Uri.EscapeDataString(p.Id)}")" Typo="Typo.h6">@p.Name</MudLink>
         @if (flying)
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning">Im Flug</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning">@T("In flight")</MudChip>
         }
         else if (!f.IsAvailable(_gameTime))
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Error">@(f.UnavailableReason ?? "Wartung") bis @f.UnavailableUntil?.ToString("dd.MM. HH:mm")</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Error">@F("{0} until {1:dd.MM. HH:mm}", f.UnavailableReason ?? T("Maintenance"), f.UnavailableUntil)</MudChip>
         }
         else
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Success">Verfügbar</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Success">@T("Available")</MudChip>
         }
     </MudStack>
 
@@ -42,24 +42,24 @@
 
     <MudPaper Class="pa-4 mb-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
-            <MudText Typo="Typo.h6">Bauteile</MudText>
+            <MudText Typo="Typo.h6">@T("Components")</MudText>
             <MudSpacer />
             @if (!rented && FleetEconomics.RepairCost(p, f) > 0)
             {
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || flying)" OnClick="RepairAll">
-                    Komplett reparieren (@Eur(FleetEconomics.RepairCost(p, f)) · 1 Tag)
+                    @F("Full repair ({0} · 1 day)", Eur(FleetEconomics.RepairCost(p, f)))
                 </MudButton>
             }
         </MudStack>
         @if (parts.IsEmpty)
         {
-            <MudText Typo="Typo.body2">Noch keine MSFS-Abnutzungsdaten – sie entstehen beim ersten Flug mit verbundenem Simulator.</MudText>
+            <MudText Typo="Typo.body2">@T("No MSFS wear data yet – it is recorded on the first flight with the simulator connected.")</MudText>
         }
         else
         {
             @if (rented)
             {
-                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Mietflugzeuge wartet der Vermieter; Reparaturen sind nicht nötig.</MudAlert>
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@T("Rental aircraft are maintained by the lessor; no repairs needed.")</MudAlert>
             }
             <MudExpansionPanels MultiExpansion="true" Elevation="0" Outlined="true">
                 @foreach (var group in GroupsOf(parts))
@@ -78,7 +78,7 @@
                                     @* Own span so the click doesn't also toggle the panel. *@
                                     <span @onclick:stopPropagation="true">
                                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || flying)" OnClick="() => RepairParts(ids, group.Name)">
-                                            Gruppe reparieren (@Eur(groupCost) · @FleetTexts.Downtime(WearComponents.RepairDowntime(group.Name)))
+                                            @F("Repair group ({0} · {1})", Eur(groupCost), FleetTexts.Downtime(WearComponents.RepairDowntime(group.Components[0].Component.GroupKey)))
                                         </MudButton>
                                     </span>
                                 }
@@ -98,7 +98,7 @@
                                                 @if (!rented && level < 0.995 && cost > 0)
                                                 {
                                                     <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(Busy || flying)" OnClick="() => RepairParts([component.Id], component.Name)">
-                                                        Reparieren (@Eur(cost))
+                                                        @F("Repair ({0})", Eur(cost))
                                                     </MudButton>
                                                 }
                                             </td>
@@ -111,10 +111,7 @@
                 }
             </MudExpansionPanels>
             <MudText Typo="Typo.caption" Class="mt-2 d-block">
-                SkyCareer übernimmt nach jedem Flug die Abnutzung, die MSFS währenddessen gemeldet hat. Unter 70 % warnt die Abflugprüfung,
-                abgenutzte Bauteile erhöhen die Wartungsrücklage. Werkstattzeit: Reifen und Bremsen 2 h, Triebwerk 1 Tag, sonst 6 h.
-                MSFS führt eine eigene Abnutzung, die SkyCareer nicht setzen kann: Reparaturen hier wirken nur in SkyCareer, im Simulator
-                über dessen Wartungsmenü reparieren.
+                @T("After each flight SkyCareer takes over the wear MSFS reported during it. Below 70 % the departure check warns, and worn components raise the maintenance reserve. Shop time: tires and brakes 2 h, engine 1 day, otherwise 6 h. MSFS keeps its own wear, which SkyCareer cannot set: repairs here only apply in SkyCareer; repair in the simulator via its maintenance menu.")
             </MudText>
         }
     </MudPaper>
@@ -122,7 +119,7 @@
     <MudGrid Class="mb-4">
         <MudItem xs="12" md="5">
             <MudPaper Class="pa-4" Style="height:100%">
-                <MudText Typo="Typo.h6" Class="mb-2">Wirtschaftlichkeit</MudText>
+                <MudText Typo="Typo.h6" Class="mb-2">@T("Economics")</MudText>
                 @{
                     var operating = d.Ledger.Where(l => FleetTexts.IsOperating(l.Category)
                         && l.Category is not (LedgerCategory.AircraftPurchase or LedgerCategory.AircraftSale)).ToList();
@@ -131,7 +128,7 @@
                 }
                 @if (operating.Count == 0)
                 {
-                    <MudText Typo="Typo.body2">Noch keine Buchungen für dieses Flugzeug.</MudText>
+                    <MudText Typo="Typo.body2">@T("No ledger entries for this aircraft yet.")</MudText>
                 }
                 else
                 {
@@ -141,27 +138,27 @@
                             {
                                 <tr><td>@FleetTexts.Category(g.Key)</td><td style="text-align:right" class="@(g.Sum(l => l.Amount) < 0 ? "bad" : "ok")">@Eur(g.Sum(l => l.Amount))</td></tr>
                             }
-                            <tr><td>Erlöse / Kosten</td><td style="text-align:right">@Eur(revenue) / @Eur(costs)</td></tr>
-                            <tr><td><b>Ergebnis</b></td><td style="text-align:right" class="@(revenue - costs < 0 ? "bad" : "ok")"><b>@Eur(revenue - costs)</b></td></tr>
+                            <tr><td>@T("Revenue / costs")</td><td style="text-align:right">@Eur(revenue) / @Eur(costs)</td></tr>
+                            <tr><td><b>@T("Result")</b></td><td style="text-align:right" class="@(revenue - costs < 0 ? "bad" : "ok")"><b>@Eur(revenue - costs)</b></td></tr>
                             @if (d.Flights.Sum(x => x.BlockHours) is var hours and > 0)
                             {
-                                <tr><td>Ergebnis je Blockstunde</td><td style="text-align:right">@Eur((revenue - costs) / (decimal)hours)</td></tr>
+                                <tr><td>@T("Result per block hour")</td><td style="text-align:right">@Eur((revenue - costs) / (decimal)hours)</td></tr>
                             }
                         </tbody>
                     </MudSimpleTable>
                     @if (d.Ledger.Any(l => l.Category is LedgerCategory.AircraftPurchase or LedgerCategory.AircraftSale))
                     {
-                        <MudText Typo="Typo.caption">Ohne Kauf/Verkauf des Flugzeugs.</MudText>
+                        <MudText Typo="Typo.caption">@T("Excluding purchase/sale of the aircraft.")</MudText>
                     }
                 }
             </MudPaper>
         </MudItem>
         <MudItem xs="12" md="7">
             <MudPaper Class="pa-4" Style="height:100%">
-                <MudText Typo="Typo.h6" Class="mb-2">Aufträge &amp; Aktionen</MudText>
+                <MudText Typo="Typo.h6" Class="mb-2">@T("Jobs & actions")</MudText>
                 @if (d.OpenJobs.Count == 0)
                 {
-                    <MudText Typo="Typo.body2" Class="mb-3">Kein angenommener Auftrag.</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">@T("No accepted job.")</MudText>
                 }
                 else
                 {
@@ -171,11 +168,11 @@
                             {
                                 <tr>
                                     <td>@j.Origin → @j.Destination</td>
-                                    <td>Deadline @j.Deadline.ToString("dd.MM. HH:mm")</td>
+                                    <td>@F("Deadline {0:dd.MM. HH:mm}", j.Deadline)</td>
                                     <td>@Eur(j.Payout)</td>
                                     <td>
                                         <MudLink Href="@(j.Status == ContractStatus.InProgress ? "live" : "")">
-                                            @(j.Status == ContractStatus.InProgress ? "Im Flug – Live-Flug" : "Angenommen – Aufträge")
+                                            @(j.Status == ContractStatus.InProgress ? T("In flight – Live flight") : T("Accepted – Jobs"))
                                         </MudLink>
                                     </td>
                                 </tr>
@@ -184,7 +181,7 @@
                     </MudSimpleTable>
                 }
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" Href="@($"fleet?relocate={f.Id}")">Standort ändern</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" Href="@($"fleet?relocate={f.Id}")">@T("Change location")</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="DisposeAircraft">@FleetTexts.DisposeAction(f.Ownership)</MudButton>
                 </MudStack>
             </MudPaper>
@@ -192,21 +189,21 @@
     </MudGrid>
 
     <MudPaper Class="pa-4 mb-4">
-        <MudText Typo="Typo.h6" Class="mb-2">Flüge (@d.Flights.Count)</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@F("Flights ({0})", d.Flights.Count)</MudText>
         @if (d.Flights.Count == 0)
         {
-            <MudText Typo="Typo.body2">Noch keine Flüge mit diesem Flugzeug.</MudText>
+            <MudText Typo="Typo.body2">@T("No flights with this aircraft yet.")</MudText>
         }
         else
         {
             <MudSimpleTable Dense="true" Hover="true">
-                <thead><tr><th>Ankunft</th><th>Strecke</th><th>Block</th><th>Landung</th><th>Score</th><th>Status</th><th style="text-align:right">Ergebnis</th></tr></thead>
+                <thead><tr><th>@T("Arrival")</th><th>@T("Route")</th><th>@T("Block")</th><th>@T("Landing")</th><th>@T("Score")</th><th>@T("Status")</th><th style="text-align:right">@T("Result")</th></tr></thead>
                 <tbody>
                     @foreach (var fl in d.Flights)
                     {
-                        <tr style="cursor:pointer" title="Im Flugbuch öffnen" @onclick="@(() => Nav.NavigateTo($"logbook?flight={fl.Id}"))">
+                        <tr style="cursor:pointer" title="@T("Open in logbook")" @onclick="@(() => Nav.NavigateTo($"logbook?flight={fl.Id}"))">
                             <td>@fl.ArrivedGameTime.ToString("dd.MM.yy HH:mm")</td>
-                            <td>@fl.Origin → @fl.Destination@(fl.ArrivedAt != fl.Destination ? $" (gelandet {fl.ArrivedAt})" : "")</td>
+                            <td>@fl.Origin → @fl.Destination@(fl.ArrivedAt != fl.Destination ? F(" (landed at {0})", fl.ArrivedAt) : "")</td>
                             <td>@fl.BlockHours.ToString("N1") h</td>
                             <td>@fl.TouchdownFpm.ToString("N0") fpm</td>
                             <td>@fl.Score</td>
@@ -221,7 +218,7 @@
 }
 else if (_missing)
 {
-    <MudAlert Severity="Severity.Warning">Dieses Flugzeug gehört nicht (mehr) zur Flotte. <MudLink Href="fleet">Zur Flotte</MudLink></MudAlert>
+    <MudAlert Severity="Severity.Warning">@T("This aircraft is no longer part of the fleet.") <MudLink Href="fleet">@T("Go to fleet")</MudLink></MudAlert>
 }
 
 @code {
@@ -256,17 +253,17 @@ else if (_missing)
 
     private IEnumerable<(string Label, string Value, bool Bad)> Overview(FleetAircraft f, AircraftProfile p)
     {
-        yield return ("Status", FleetTexts.Ownership(f.Ownership), false);
-        yield return ("Standort", f.Location, false);
-        yield return ("Stunden / Zyklen", $"{f.AirframeHours:N1} h / {f.Cycles}", false);
-        yield return ("Tank", FleetTexts.Fuel(f, p), false);
-        yield return ("Zustand", $"{f.Condition:N0} %", f.Condition < 70);
-        yield return ("Schlechtestes Bauteil", f.Components.Worst is { } w ? $"{w.Component.Name} {w.Level:P0}" : "–", f.Components.WorstLevel < WearComponents.WarningLevel);
-        yield return ("Nächster Check", f.Ownership == Ownership.Rented ? "inkl." : $"in {Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck):N0} h", false);
-        yield return (f.Ownership == Ownership.Owned ? "Marktwert" : "Rate", FleetTexts.Value(f, p, _gameTime), false);
-        if (f.Ownership == Ownership.Owned) yield return ("Verkaufserlös", Eur(FleetEconomics.SaleValue(p, f, _gameTime)), false);
-        if (f.Ownership != Ownership.Rented) yield return ("Fixkosten/Monat", Eur(FleetEconomics.MonthlyFixedCost(p, f)), false);
-        yield return ("Wartungsrücklage/FH", Eur(CostModel.Maintenance(_economy!, p, 1, f.EffectiveCondition)), f.EffectiveCondition < 70);
+        yield return (T("Status"), FleetTexts.Ownership(f.Ownership), false);
+        yield return (T("Location"), f.Location, false);
+        yield return (T("Hours / cycles"), $"{f.AirframeHours:N1} h / {f.Cycles}", false);
+        yield return (T("Fuel on board"), FleetTexts.Fuel(f, p), false);
+        yield return (T("Condition"), $"{f.Condition:N0} %", f.Condition < 70);
+        yield return (T("Worst component"), f.Components.Worst is { } w ? $"{w.Component.Name} {w.Level:P0}" : "–", f.Components.WorstLevel < WearComponents.WarningLevel);
+        yield return (T("Next check"), f.Ownership == Ownership.Rented ? T("incl.") : F("in {0:N0} h", Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck)), false);
+        yield return (f.Ownership == Ownership.Owned ? T("Market value") : T("Rate"), FleetTexts.Value(f, p, _gameTime), false);
+        if (f.Ownership == Ownership.Owned) yield return (T("Sale proceeds"), Eur(FleetEconomics.SaleValue(p, f, _gameTime)), false);
+        if (f.Ownership != Ownership.Rented) yield return (T("Fixed costs/month"), Eur(FleetEconomics.MonthlyFixedCost(p, f)), false);
+        yield return (T("Maintenance reserve/FH"), Eur(CostModel.Maintenance(_economy!, p, 1, f.EffectiveCondition)), f.EffectiveCondition < 70);
     }
 
     private static IEnumerable<PartGroup> GroupsOf(AircraftWear parts) =>
@@ -279,16 +276,16 @@ else if (_missing)
         level < WearComponents.WarningLevel ? Color.Error : level < 0.9 ? Color.Warning : Color.Success;
 
     private Task RepairParts(IReadOnlyCollection<int> ids, string what) =>
-        Run(() => Career.RepairComponentsAsync(Id, ids), $"{what} wird repariert.");
+        Run(() => Career.RepairComponentsAsync(Id, ids), F("{0} is being repaired.", what));
 
-    private Task RepairAll() => Run(() => Career.RepairAsync(Id), $"{_details!.Aircraft.Registration} wird repariert (1 Tag).");
+    private Task RepairAll() => Run(() => Career.RepairAsync(Id), F("{0} is being repaired (1 day).", _details!.Aircraft.Registration));
 
     private async Task DisposeAircraft()
     {
         var f = _details!.Aircraft;
-        if (await Dialogs.ShowMessageBoxAsync("Bestätigen", FleetTexts.DisposeQuestion(f, _profile!, _gameTime), yesText: "Ja", cancelText: "Abbrechen") == true)
+        if (await Dialogs.ShowMessageBoxAsync(T("Confirm"), FleetTexts.DisposeQuestion(f, _profile!, _gameTime), yesText: T("Yes"), cancelText: T("Cancel")) == true)
         {
-            await Run(() => Career.DisposeAircraftAsync(f.Id), "Erledigt.");
+            await Run(() => Career.DisposeAircraftAsync(f.Id), T("Done."));
             Nav.NavigateTo("fleet");
         }
     }

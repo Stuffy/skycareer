@@ -28,7 +28,7 @@ public class ProfileToolsTests
         Assert.Contains(errors, e => e.Contains("ID"));
         Assert.Contains(errors, e => e.Contains("MZFW"));
         Assert.Contains(errors, e => e.Contains("MLW"));
-        Assert.Contains(errors, e => e.Contains("Reisegeschwindigkeit"));
+        Assert.Contains(errors, e => e.Contains("Cruise speed"));
         Assert.False(AircraftProfileValidator.IsValid(p));
     }
 
@@ -49,7 +49,7 @@ public class ProfileToolsTests
         Assert.Equal(2, jet.Pilots);
         Assert.Equal(170, jet.CrewMass.Kg, 3);
         Assert.Equal(245, (jet with { CabinCrewCount = 1 }).CrewMass.Kg, 3);   // 2 × 85 kg pilots + 75 kg cabin crew
-        Assert.Contains(AircraftProfileValidator.Validate(jet), i => i.Level == IssueLevel.Warning && i.Message.Contains("zwei Piloten"));
+        Assert.Contains(AircraftProfileValidator.Validate(jet), i => i.Level == IssueLevel.Warning && i.Message.Contains("two pilots"));
 
         Assert.Equal(2, (Profile() with { PassengerSeats = 10 }).Pilots);
         Assert.Equal(2, Profile(mtow: 6000).Pilots);

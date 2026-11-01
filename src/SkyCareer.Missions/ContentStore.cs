@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SkyCareer.Domain.Aircraft;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Missions;
 
@@ -64,7 +65,7 @@ public sealed class ContentStore
 
     public void DeleteUserAircraft(string id)
     {
-        if (!IsUserProfile(id)) throw new InvalidOperationException("Nur eigene Profile können gelöscht werden.");
+        if (!IsUserProfile(id)) throw new InvalidOperationException(L.T("Only your own profiles can be deleted."));
         File.Delete(Current.AircraftFiles[id]);
         Reload();
     }

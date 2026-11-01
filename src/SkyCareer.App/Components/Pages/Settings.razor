@@ -7,85 +7,81 @@
 @inject AppSettings AppSettings
 @inject Diagnostics Diag
 
-<MudText Typo="Typo.h5" Class="mb-4">Einstellungen</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">@T("Settings")</MudText>
 
 @if (_career is { } c)
 {
     <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
-        <MudText Typo="Typo.h6" Class="mb-2">Karriere</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Career")</MudText>
         <MudSimpleTable Dense="true">
             <tbody>
-                <tr><td>Airline</td><td>@c.AirlineName</td></tr>
-                <tr><td>Pilot</td><td>@c.Name</td></tr>
-                <tr><td>Heimatbasis</td><td>@c.HomeBase</td></tr>
-                <tr><td>Schwierigkeit</td><td>@c.Difficulty</td></tr>
-                <tr><td>Angelegt</td><td>@c.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td></tr>
+                <tr><td>@T("Airline")</td><td>@c.AirlineName</td></tr>
+                <tr><td>@T("Pilot")</td><td>@c.Name</td></tr>
+                <tr><td>@T("Home base")</td><td>@c.HomeBase</td></tr>
+                <tr><td>@T("Difficulty")</td><td>@(c.Difficulty switch { Difficulty.Easy => T("Easy"), Difficulty.Hard => T("Hard"), _ => T("Normal") })</td></tr>
+                <tr><td>@T("Created")</td><td>@c.CreatedAtUtc.ToLocalTime().ToString("d")</td></tr>
             </tbody>
         </MudSimpleTable>
     </MudPaper>
 
     <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
-        <MudText Typo="Typo.h6" Class="mb-2">Integrationen</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Integrations")</MudText>
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-            <MudTextField @bind-Value="_simBriefUser" Label="SimBrief-Benutzername oder Pilot-ID" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveSimBrief">Speichern</MudButton>
+            <MudTextField @bind-Value="_simBriefUser" Label="@T("SimBrief username or pilot ID")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveSimBrief">@T("Save")</MudButton>
         </MudStack>
         <MudSwitch T="bool" Value="c.GsxSyncEnabled" ValueChanged="SetGsxSync" Color="Color.Primary" Class="mt-3"
-                   Label="Beladung mit GSX synchronisieren (wenn GSX Pro läuft)" />
+                   Label="@T("Sync loading with GSX (when GSX Pro is running)")" />
         <MudSwitch T="bool" Value="c.GsxCostsEnabled" ValueChanged="SetGsxCosts" Color="Color.Primary" Class="mt-1"
-                   Label="GSX-Belege als Kosten verwenden" />
+                   Label="@T("Use GSX receipts as costs")" />
         <MudText Typo="Typo.caption" Style="display:block">
-            Abfertigung, Busse, Catering und Betankung werden mit den Beträgen aus den GSX-Rechnungen gebucht
-            (umgerechnet in Euro); die Modellkosten dafür entfallen bei der Abrechnung. Ohne GSX getankter Treibstoff ist
-            dann kostenlos. Es zählen nur Belege ab dem Einschalten.
+            @T("Handling, buses, catering and refuelling are booked with the amounts from the GSX bills (converted to euros); the model costs for them are dropped at settlement. Fuel uplifted without GSX is then free. Only receipts from the moment this is switched on count.")
         </MudText>
     </MudPaper>
 
     <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
-        <MudText Typo="Typo.h6" Class="mb-2">Beladung</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Loading")</MudText>
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-            <MudNumericField T="double" @bind-Value="_paxWeightLb" Label="Gewicht je Passagier (lbs)" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudNumericField T="double" @bind-Value="_paxWeightLb" Label="@T("Weight per passenger (lbs)")" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Min="@(Math.Round(CareerService.MinPassengerWeightKg * LbPerKg))" Max="@(Math.Round(CareerService.MaxPassengerWeightKg * LbPerKg))"
                              HelperText="@($"= {_paxWeightLb / LbPerKg:N1} kg")" Style="max-width:200px" />
-            <MudNumericField T="double" @bind-Value="_bagWeightLb" Label="@(c.SimBriefDetailedLoad ? "Ø Gewicht je Gepäckstück (lbs)" : "Gewicht je Gepäckstück (lbs)")" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudNumericField T="double" @bind-Value="_bagWeightLb" Label="@(c.SimBriefDetailedLoad ? T("Avg. weight per bag (lbs)") : T("Weight per bag (lbs)"))" Variant="Variant.Outlined" Margin="Margin.Dense"
                              Min="0" Max="@(Math.Round(CareerService.MaxBagWeightKg * LbPerKg))"
                              HelperText="@($"= {_bagWeightLb / LbPerKg:N1} kg")" Style="max-width:200px" />
-            <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveWeights">Speichern</MudButton>
-            <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="ResetWeights">SimBrief-Standard (175 / 50 lbs)</MudButton>
+            <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SaveWeights">@T("Save")</MudButton>
+            <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="ResetWeights">@T("SimBrief default (175 / 50 lbs)")</MudButton>
         </MudStack>
         <MudText Typo="Typo.body2" Class="mt-2">
-            Jeder Passagier (auch Kinder) zählt mit diesem Gewicht und hat ein Gepäckstück, außer bei Aufträgen nur mit Handgepäck – so rechnet auch SimBrief.
-            SimBrief übernimmt keine Gewichte aus dem Planungslink, sondern nimmt die Werte deines SimBrief-Flugzeugs: trag hier dieselben ein.
-            Gilt für neue Aufträge; bereits angebotene und angenommene Aufträge behalten ihre Gewichte.
+            @T("Every passenger (children too) counts with this weight and has one bag, except on hand-luggage-only jobs – SimBrief calculates the same way.")
+            @T("SimBrief doesn't take weights from the dispatch link but uses the values of your SimBrief airframe: enter the same values here.")
+            @T("Applies to new jobs; jobs already offered or accepted keep their weights.")
         </MudText>
         <MudSwitch T="bool" Value="c.PersistFuel" ValueChanged="SetPersistFuel" Color="Color.Primary" Class="mt-3"
-                   Label="Tankstand zwischen Flügen beibehalten" />
+                   Label="@T("Keep fuel on board between flights")" />
         <MudText Typo="Typo.caption" Style="display:block">
-            Der Resttreibstoff bleibt nach dem Parken im Flugzeug und wird beim Scharfschalten des nächsten Auftrags im Sim gesetzt
-            (einmal je Auftrag, vor dem Rollen). Bezahlt wird dann nur, was bis zum Block-Off nachgetankt wurde, statt des Verbrauchs.
+            @T("The remaining fuel stays in the aircraft after parking and is set in the sim when the next job is armed (once per job, before taxiing). You then only pay for the fuel uplifted up to block-off instead of the burn.")
         </MudText>
         <MudSwitch T="bool" Value="c.SimBriefDetailedLoad" ValueChanged="SetDetailedLoad" Color="Color.Primary" Class="mt-3"
-                   Label="Genaue Beladung an SimBrief übergeben (Crew und unterschiedliche Gepäckgewichte)" />
+                   Label="@T("Send detailed load to SimBrief (crew and varying bag weights)")" />
         <MudText Typo="Typo.caption" Style="display:block">
-            Die Crew wird als Passagiere übergeben, Gepäck und Gewichtsunterschiede als Fracht; Gepäck wiegt dann je Passagier
-            unterschiedlich (der Wert oben ist der Durchschnitt). Das Zero Fuel Weight im OFP stimmt so genau mit dem Load-Sheet überein.
-            <b>Dafür einmalig in SimBrief</b> unter „Flugzeuge“ das verwendete Flugzeug bearbeiten und bei den Gewichten das
-            <b>Gepäckgewicht (Bag Weight) auf 0</b> setzen, sonst zählt SimBrief das Gepäck doppelt. Gilt für neue Aufträge.
+            @T("The crew is sent as passengers, bags and weight differences as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.")
+            <b>@T("For this, once in SimBrief")</b> @T("edit the airframe you use under “Airframes” and in the weights set the")
+            <b>@T("bag weight to 0")</b>@T(", otherwise SimBrief counts the bags twice. Applies to new jobs.")
         </MudText>
     </MudPaper>
 
     <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
         <MudText Typo="Typo.h6" Class="mb-2">Updates</MudText>
         <MudText Typo="Typo.body2" Class="mb-2">
-            Installierte Version: <b>@Updates.CurrentVersion</b> –
+            @T("Installed version:") <b>@Updates.CurrentVersion</b> –
             @(Updates.Status switch
             {
-                UpdateStatus.Disabled => "Entwicklungsversion, Updates nur in der installierten App",
-                UpdateStatus.Checking => "suche nach Updates …",
-                UpdateStatus.Downloading => $"lade Version {Updates.AvailableVersion} ({Updates.Progress} %)",
-                UpdateStatus.Ready => $"Version {Updates.AvailableVersion} ist bereit und wird beim Neustart installiert",
-                UpdateStatus.Error => $"Update-Prüfung fehlgeschlagen: {Updates.Error}",
-                _ => Updates.LastCheckUtc is { } t ? $"aktuell (geprüft {t.ToLocalTime():HH:mm})" : "aktuell"
+                UpdateStatus.Disabled => T("development build, updates only in the installed app"),
+                UpdateStatus.Checking => T("checking for updates …"),
+                UpdateStatus.Downloading => F("downloading version {0} ({1} %)", Updates.AvailableVersion, Updates.Progress),
+                UpdateStatus.Ready => F("version {0} is ready and will be installed on restart", Updates.AvailableVersion),
+                UpdateStatus.Error => F("update check failed: {0}", Updates.Error),
+                _ => Updates.LastCheckUtc is { } t ? F("up to date (checked {0:HH:mm})", t.ToLocalTime()) : T("up to date")
             })
         </MudText>
         @if (Updates.Status == UpdateStatus.Downloading)
@@ -94,41 +90,44 @@
         }
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Outlined" Disabled="@(Updates.Status is UpdateStatus.Disabled or UpdateStatus.Checking or UpdateStatus.Downloading or UpdateStatus.Ready)"
-                       OnClick="CheckUpdates">Nach Updates suchen</MudButton>
+                       OnClick="CheckUpdates">@T("Check for updates")</MudButton>
             @if (Updates.Status == UpdateStatus.Ready)
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!Updates.CanRestartNow)" OnClick="RestartForUpdate">Neu starten und installieren</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!Updates.CanRestartNow)" OnClick="RestartForUpdate">@T("Restart and install")</MudButton>
             }
             @if (!string.IsNullOrEmpty(Updates.RepoUrl))
             {
-                <MudButton Variant="Variant.Text" Href="@($"{Updates.RepoUrl}/releases")" Target="_blank">Alle Versionen</MudButton>
+                <MudButton Variant="Variant.Text" Href="@($"{Updates.RepoUrl}/releases")" Target="_blank">@T("All versions")</MudButton>
             }
         </MudStack>
     </MudPaper>
 
     <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
-        <MudText Typo="Typo.h6" Class="mb-2">Erweitert</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Language")</MudText>
+        <LanguageSelect />
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Advanced")</MudText>
         <MudSwitch T="bool" Value="AppSettings.DebugMode" ValueChanged="AppSettings.SetDebugMode" Color="Color.Warning"
-                   Label="Debug-Modus aktivieren" />
+                   Label="@T("Enable debug mode")" />
         <MudText Typo="Typo.body2" Class="mt-1">
-            Zeigt das Menü „Debug“ mit Entwickler- und Cheat-Werkzeugen (Kontostand, Reputation, Flotte, Aufträge) sowie Replay und
-            kostenloses Versetzen. Änderungen am Kontostand werden im Kassenbuch als Korrektur vermerkt.
+            @T("Shows the “Debug” menu with developer and cheat tools (balance, reputation, fleet, jobs) as well as replay and free relocation. Changes to the balance are recorded in the ledger as adjustments.")
         </MudText>
-        <MudText Typo="Typo.subtitle2" Class="mt-4">Fehler melden</MudText>
+        <MudText Typo="Typo.subtitle2" Class="mt-4">@T("Report a problem")</MudText>
         <MudText Typo="Typo.body2" Class="mb-2">
-            Die App schreibt ein Fehlerprotokoll. „Diagnose kopieren“ legt Version, Simulator-Status und die letzten Protokollzeilen
-            in die Zwischenablage – einfach in die Fehlermeldung einfügen.
+            @T("The app writes an error log. “Copy diagnostics” puts the version, simulator status and the latest log lines on the clipboard – just paste them into your bug report.")
         </MudText>
         <MudStack Row="true" Spacing="2">
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" Disabled="Busy" OnClick="CopyDiagnostics">Diagnose kopieren</MudButton>
-            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="Diagnostics.OpenLogFolder">Log-Ordner öffnen</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" Disabled="Busy" OnClick="CopyDiagnostics">@T("Copy diagnostics")</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="Diagnostics.OpenLogFolder">@T("Open log folder")</MudButton>
         </MudStack>
     </MudPaper>
 
     <MudPaper Class="pa-4" Style="max-width:720px">
-        <MudText Typo="Typo.h6" Class="mb-2">Flughafendaten</MudText>
-        <MudText Typo="Typo.body2" Class="mb-2">@_airportCount.ToString("N0") Flughäfen aus OurAirports, Städte von GeoNames (CC BY 4.0). Aktualisieren lädt die aktuellen Daten (ca. 18 MB) neu.</MudText>
-        <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="ImportAirports">Flughafendaten aktualisieren</MudButton>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Airport data")</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">@F("{0:N0} airports from OurAirports, cities from GeoNames (CC BY 4.0). Updating downloads the current data again (approx. 18 MB).", _airportCount)</MudText>
+        <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="ImportAirports">@T("Update airport data")</MudButton>
         @if (_importing)
         {
             <MudProgressLinear Indeterminate="true" Class="mt-2" />
@@ -157,7 +156,7 @@
 
     private Task CheckUpdates() => Updates.CheckAndDownloadAsync();
 
-    private Task CopyDiagnostics() => Run(Diag.CopyReportAsync, "Diagnose in die Zwischenablage kopiert.");
+    private Task CopyDiagnostics() => Run(Diag.CopyReportAsync, T("Diagnostics copied to the clipboard."));
 
     private Task RestartForUpdate() => Run(() =>
     {
@@ -178,15 +177,15 @@
         _airportCount = await Career.AirportCountAsync();
     }
 
-    private Task SaveSimBrief() => Run(() => Career.UpdateSimBriefUserAsync(_simBriefUser), "Gespeichert.");
+    private Task SaveSimBrief() => Run(() => Career.UpdateSimBriefUserAsync(_simBriefUser), T("Saved."));
 
-    private Task SaveWeights() => Run(() => Career.UpdateLoadWeightsAsync(_paxWeightLb / LbPerKg, _bagWeightLb / LbPerKg), "Gespeichert.");
+    private Task SaveWeights() => Run(() => Career.UpdateLoadWeightsAsync(_paxWeightLb / LbPerKg, _bagWeightLb / LbPerKg), T("Saved."));
 
     private Task ResetWeights()
     {
         _paxWeightLb = 175;
         _bagWeightLb = 50;
-        return Run(() => Career.UpdateLoadWeightsAsync(PassengerMassTable.SimBriefAdultKg, PassengerMassTable.SimBriefBagKg), "Gespeichert.");
+        return Run(() => Career.UpdateLoadWeightsAsync(PassengerMassTable.SimBriefAdultKg, PassengerMassTable.SimBriefBagKg), T("Saved."));
     }
 
     private Task SetGsxSync(bool enabled) => Run(async () =>
@@ -207,7 +206,7 @@
         try
         {
             int n = await AirportDownloader.DownloadAndImportAsync(Http, Career);
-            Snackbar.Add($"{n:N0} Flughäfen importiert.", Severity.Success);
+            Snackbar.Add(F("{0:N0} airports imported.", n), Severity.Success);
         }
         finally
         {

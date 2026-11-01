@@ -1,7 +1,8 @@
 {
   "id": "air_taxi",
-  "name": "Air Taxi",
-  "description": "Kurzer Bedarfsflug für wenige Passagiere, auch zu kleinen Plätzen.",
+  "name": "Air taxi",
+  "description": "Short on-demand flight for a few passengers, also to small airfields.",
+  "texts": { "de": { "name": "Air Taxi", "description": "Kurzer Bedarfsflug für wenige Passagiere, auch zu kleinen Plätzen." } },
   "category": "charter",
   "requirements": { "requiredTags": ["pax"], "forbiddenTags": ["airliner"] },
   "passengers": { "min": 1, "max": 6, "childShare": 0.05, "baggage": "domestic", "loadFactor": 0.65, "loadFactorSpread": 0.25 },

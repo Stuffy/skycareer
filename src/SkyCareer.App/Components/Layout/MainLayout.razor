@@ -21,30 +21,30 @@ else
             <MudText Typo="Typo.h6" Class="mr-6">SkyCareer</MudText>
             <CareerStatus />
             <MudSpacer />
-            <MudTooltip Text="Karriere wechseln">
-                <MudIconButton Icon="@Icons.Material.Filled.SwitchAccount" Color="Color.Inherit" OnClick="SwitchCareer" aria-label="Karriere wechseln" />
+            <MudTooltip Text="@T("Switch career")">
+                <MudIconButton Icon="@Icons.Material.Filled.SwitchAccount" Color="Color.Inherit" OnClick="SwitchCareer" aria-label="@T("Switch career")" />
             </MudTooltip>
         </MudAppBar>
         <MudDrawer Open="true" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Persistent">
             <MudNavMenu>
-                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Assignment">Aufträge</MudNavLink>
-                <MudNavLink Href="fleet" Icon="@Icons.Material.Filled.AirplanemodeActive">Flotte</MudNavLink>
-                <MudNavLink Href="finance" Icon="@Icons.Material.Filled.AccountBalance">Finanzen</MudNavLink>
-                <MudNavLink Href="logbook" Icon="@Icons.Material.Filled.MenuBook">Flugbuch</MudNavLink>
-                <MudNavLink Href="live" Icon="@Icons.Material.Filled.FlightTakeoff">Live-Flug</MudNavLink>
+                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Assignment">@T("Jobs")</MudNavLink>
+                <MudNavLink Href="fleet" Icon="@Icons.Material.Filled.AirplanemodeActive">@T("Fleet")</MudNavLink>
+                <MudNavLink Href="finance" Icon="@Icons.Material.Filled.AccountBalance">@T("Finances")</MudNavLink>
+                <MudNavLink Href="logbook" Icon="@Icons.Material.Filled.MenuBook">@T("Logbook")</MudNavLink>
+                <MudNavLink Href="live" Icon="@Icons.Material.Filled.FlightTakeoff">@T("Live Flight")</MudNavLink>
                 <MudDivider Class="my-2" />
-                <MudNavGroup Title="Inhalte" Icon="@Icons.Material.Filled.LibraryBooks">
-                    <MudNavLink Href="aircraft" Icon="@Icons.Material.Filled.Tune">Flugzeugprofile</MudNavLink>
-                    <MudNavLink Href="missions" Icon="@Icons.Material.Filled.Category">Missionstypen</MudNavLink>
+                <MudNavGroup Title="@T("Content")" Icon="@Icons.Material.Filled.LibraryBooks">
+                    <MudNavLink Href="aircraft" Icon="@Icons.Material.Filled.Tune">@T("Aircraft Profiles")</MudNavLink>
+                    <MudNavLink Href="missions" Icon="@Icons.Material.Filled.Category">@T("Mission Types")</MudNavLink>
                 </MudNavGroup>
                 @if (Settings.DebugMode)
                 {
                     <MudNavGroup Title="Debug" Icon="@Icons.Material.Filled.BugReport" Expanded="true">
-                        <MudNavLink Href="debug" Icon="@Icons.Material.Filled.Build">Debug-Werkzeuge</MudNavLink>
-                        <MudNavLink Href="spike" Icon="@Icons.Material.Filled.Scale">Beladungs-Spike</MudNavLink>
+                        <MudNavLink Href="debug" Icon="@Icons.Material.Filled.Build">@T("Debug Tools")</MudNavLink>
+                        <MudNavLink Href="spike" Icon="@Icons.Material.Filled.Scale">@T("Loading Spike")</MudNavLink>
                     </MudNavGroup>
                 }
-                <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">Einstellungen</MudNavLink>
+                <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">@T("Settings")</MudNavLink>
             </MudNavMenu>
         </MudDrawer>
         @* No padding class on MudMainContent itself: its padding-top reserves room for the app bar,
@@ -59,11 +59,11 @@ else
                     <ErrorContent Context="ex">
                         @{ LogPageError(ex); }
                         <MudAlert Severity="Severity.Error" Class="mb-3">
-                            <MudText><b>Hier ist ein Fehler aufgetreten:</b> @ex.Message</MudText>
-                            <MudText Typo="Typo.body2" Class="mt-1">Details stehen im Fehlerprotokoll. Über „Einstellungen → Erweitert → Diagnose kopieren“ kannst du den Fehler melden.</MudText>
+                            <MudText><b>@T("An error occurred here:")</b> @ex.Message</MudText>
+                            <MudText Typo="Typo.body2" Class="mt-1">@T("Details are in the error log. You can report the error via “Settings → Advanced → Copy diagnostics”.")</MudText>
                             <MudStack Row="true" Spacing="2" Class="mt-2">
-                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="RecoverFromError">Weiter</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Diagnostics.OpenLogFolder">Log-Ordner öffnen</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="RecoverFromError">@T("Continue")</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Diagnostics.OpenLogFolder">@T("Open log folder")</MudButton>
                             </MudStack>
                         </MudAlert>
                     </ErrorContent>
@@ -82,7 +82,7 @@ else
     {
         if (ReferenceEquals(ex, _loggedError)) return;
         _loggedError = ex;
-        AppLog.Error("UI", $"Fehler auf Seite {Nav.Uri}", ex);
+        AppLog.Error("UI", $"Error on page {Nav.Uri}", ex);
     }
 
     private void RecoverFromError()

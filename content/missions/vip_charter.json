@@ -1,7 +1,8 @@
 {
   "id": "vip_charter",
-  "name": "VIP-Charter",
-  "description": "Anspruchsvolle Gäste – sanfte Landung und Pünktlichkeit zählen doppelt.",
+  "name": "VIP charter",
+  "description": "Demanding guests – a smooth landing and punctuality count double.",
+  "texts": { "de": { "name": "VIP-Charter", "description": "Anspruchsvolle Gäste – sanfte Landung und Pünktlichkeit zählen doppelt." } },
   "category": "charter",
   "requirements": { "requiredTags": ["pax"], "anyOfTags": ["business", "jet"], "forbiddenTags": ["airliner"] },
   "passengers": { "min": 1, "max": 8, "childShare": 0, "baggage": "leisure", "loadFactor": 0.75, "loadFactorSpread": 0.2 },

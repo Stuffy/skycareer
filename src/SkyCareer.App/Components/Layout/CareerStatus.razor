@@ -5,19 +5,19 @@
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
         <MudText Typo="Typo.subtitle1"><b>@c.AirlineName</b></MudText>
-        <MudTooltip Text="Kontostand">
+        <MudTooltip Text="@T("Balance")">
             <MudText Typo="Typo.body2" Class="@(c.Cash < 0 ? "bad" : "")"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" Style="vertical-align:middle" /> @Eur(c.Cash)</MudText>
         </MudTooltip>
-        <MudTooltip Text="Reputation (0–100)">
+        <MudTooltip Text="@T("Reputation (0–100)")">
             <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" Style="vertical-align:middle" /> @c.Reputation</MudText>
         </MudTooltip>
-        <MudTooltip Text="Spielzeit (UTC) – vergeht nur durch Flüge und Warten">
-            <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Style="vertical-align:middle" /> @c.GameTime.ToString("dd.MM.yyyy HH:mm")</MudText>
+        <MudTooltip Text="@T("Game time (UTC) – only advances through flights and waiting")">
+            <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Style="vertical-align:middle" /> @c.GameTime.ToString("g")</MudText>
         </MudTooltip>
-        <MudMenu Icon="@Icons.Material.Filled.MoreTime" Color="Color.Inherit" Dense="true" AriaLabel="Zeit vergehen lassen" Disabled="Busy">
-            <MudMenuItem OnClick="() => Wait(TimeSpan.FromHours(1))">1 Stunde warten</MudMenuItem>
-            <MudMenuItem OnClick="() => Wait(TimeSpan.FromHours(6))">6 Stunden warten</MudMenuItem>
-            <MudMenuItem OnClick="() => Wait(TimeSpan.FromDays(1))">1 Tag warten</MudMenuItem>
+        <MudMenu Icon="@Icons.Material.Filled.MoreTime" Color="Color.Inherit" Dense="true" AriaLabel="@T("Pass time")" Disabled="Busy">
+            <MudMenuItem OnClick="() => Wait(TimeSpan.FromHours(1))">@T("Wait 1 hour")</MudMenuItem>
+            <MudMenuItem OnClick="() => Wait(TimeSpan.FromHours(6))">@T("Wait 6 hours")</MudMenuItem>
+            <MudMenuItem OnClick="() => Wait(TimeSpan.FromDays(1))">@T("Wait 1 day")</MudMenuItem>
         </MudMenu>
     </MudStack>
 }

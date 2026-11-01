@@ -8,6 +8,7 @@ using SkyCareer.Application;
 using SkyCareer.Application.Logging;
 using SkyCareer.Data;
 using SkyCareer.Integrations.SimBrief;
+using SkyCareer.Localization;
 using SkyCareer.Missions;
 using SkyCareer.Missions.Generation;
 using SkyCareer.Sim;
@@ -25,22 +26,26 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // The language applies to all threads, so it is set before anything else runs.
+        var settings = new AppSettings();
+        L.SetLanguage(settings.Language);
+
         var log = new FileLogger(LogDirectory);
         AppLog.Initialize(log);
-        AppLog.Info("App", $"SkyCareer {typeof(App).Assembly.GetName().Version?.ToString(3)} gestartet – {Environment.OSVersion}, " +
-                           $"DB {SkyCareerDb.DefaultPath}, SimConnect {(FlightDataSourceFactory.SimConnectAvailable ? "ja" : "nein")}");
+        AppLog.Info("App", $"SkyCareer {typeof(App).Assembly.GetName().Version?.ToString(3)} started – {Environment.OSVersion}, " +
+                           $"DB {SkyCareerDb.DefaultPath}, SimConnect {(FlightDataSourceFactory.SimConnectAvailable ? "yes" : "no")}, language {L.Language}");
         DispatcherUnhandledException += (_, args) =>
         {
-            AppLog.Error("App", "Unbehandelter Fehler (UI)", args.Exception);
-            MessageBox.Show($"Es ist ein unerwarteter Fehler aufgetreten:\n\n{args.Exception.Message}\n\nDetails stehen im Fehlerprotokoll " +
-                            $"({LogDirectory}). Die App läuft weiter.", "SkyCareer", MessageBoxButton.OK, MessageBoxImage.Warning);
+            AppLog.Error("App", "Unhandled error (UI)", args.Exception);
+            MessageBox.Show(L.F("An unexpected error occurred:\n\n{0}\n\nDetails are in the error log ({1}). The app keeps running.",
+                args.Exception.Message, LogDirectory), "SkyCareer", MessageBoxButton.OK, MessageBoxImage.Warning);
             args.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-            AppLog.Error("App", $"Unbehandelter Fehler (beendet: {args.IsTerminating})", args.ExceptionObject as Exception);
+            AppLog.Error("App", $"Unhandled error (terminating: {args.IsTerminating})", args.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            AppLog.Error("App", "Unbeobachteter Fehler in Hintergrundaufgabe", args.Exception);
+            AppLog.Error("App", "Unobserved error in background task", args.Exception);
             args.SetObserved();
         };
 
@@ -67,7 +72,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<GsxReceiptWatcher>();
         services.AddSingleton<DepartureCoordinator>();
         services.AddSingleton<UpdateService>();
-        services.AddSingleton<AppSettings>();
+        services.AddSingleton(settings);
         services.AddSingleton<Diagnostics>();
         services.AddSingleton<IAirportIlsLookup, SimIlsLookup>();
         services.AddSingleton<MarketFilter>();

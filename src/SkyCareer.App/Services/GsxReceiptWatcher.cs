@@ -3,6 +3,7 @@ using SkyCareer.Application;
 using SkyCareer.Application.Logging;
 using SkyCareer.Data;
 using SkyCareer.Integrations.Gsx;
+using SkyCareer.Localization;
 
 namespace SkyCareer.App.Services;
 
@@ -51,7 +52,7 @@ public sealed class GsxReceiptWatcher : IAsyncDisposable
             }
             catch (Exception ex) when (ex is CareerException or InvalidOperationException or IOException)
             {
-                if (ex.Message != _lastError) AppLog.Warn("GSX-Belege", ex.Message, ex is CareerException ? null : ex);
+                if (ex.Message != _lastError) AppLog.Warn("GSX receipts", ex.Message, ex is CareerException ? null : ex);
                 _lastError = ex.Message;
             }
         }
@@ -68,13 +69,13 @@ public sealed class GsxReceiptWatcher : IAsyncDisposable
         if (receipts.Count == 0) return;
         var booked = await _career.BookGsxReceiptsAsync(receipts, _monitor.ContractId, StoreDirectory).ConfigureAwait(false);
         foreach (var r in booked)
-            _monitor.Log($"GSX-Beleg gebucht: {r.Title} {r.Icao} {r.AmountEur:N2} €");
+            _monitor.Log(L.F("GSX receipt booked: {0} {1} {2:N2} €", r.Title, r.Icao, r.AmountEur));
 
         var bookedIds = booked.Select(b => b.ReceiptId).ToHashSet();
         var known = (await _career.GetGsxReceiptsAsync().ConfigureAwait(false)).Select(r => r.ReceiptId).ToHashSet();
         foreach (var r in receipts.Where(r => !bookedIds.Contains(r.ReceiptId) && !known.Contains(r.ReceiptId)))
             if (_reportedUnmatched.Add(r.ReceiptId))
-                AppLog.Info("GSX-Belege", $"{r.ReceiptId} ({r.Icao}) passt zu keinem Auftrag oder Flugzeug – wird später erneut versucht");
+                AppLog.Info("GSX receipts", $"{r.ReceiptId} ({r.Icao}) matches no job or aircraft – will retry later");
     }
 
     public ValueTask DisposeAsync()

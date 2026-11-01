@@ -7,18 +7,18 @@
 {
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="Dismiss">
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudText Typo="Typo.body2">Update <b>@Updates.AvailableVersion</b> ist bereit.</MudText>
+            <MudText Typo="Typo.body2">@T("Update") <b>@Updates.AvailableVersion</b> @T("is ready.")</MudText>
             @if (Updates.CanRestartNow)
             {
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Restart">Neu starten</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Restart">@T("Restart")</MudButton>
             }
             else
             {
-                <MudText Typo="Typo.body2">Wird nach dem Flug installiert (oder beim Beenden der App).</MudText>
+                <MudText Typo="Typo.body2">@T("Will be installed after the flight (or when the app closes).")</MudText>
             }
             @if (Updates.ReleaseUrl is { } url)
             {
-                <MudLink Href="@url" Target="_blank" Typo="Typo.body2">Was ist neu?</MudLink>
+                <MudLink Href="@url" Target="_blank" Typo="Typo.body2">@T("What's new?")</MudLink>
             }
         </MudStack>
     </MudAlert>

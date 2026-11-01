@@ -1,4 +1,5 @@
 using SkyCareer.Application.Logging;
+using SkyCareer.Localization;
 using System.Reflection;
 using SkyCareer.Sim.Tracking;
 using Velopack;
@@ -44,7 +45,7 @@ public sealed class UpdateService : IDisposable
         {
             // A broken install must not keep the app from starting.
             Error = ex.Message;
-            AppLog.Warn("Updates", "Updater nicht verfügbar", ex);
+            AppLog.Warn("Updates", "Updater not available", ex);
         }
     }
 
@@ -107,7 +108,7 @@ public sealed class UpdateService : IDisposable
                 Changed?.Invoke();
             }, _stop.Token).ConfigureAwait(false);
             _pending = info;
-            AppLog.Info("Updates", $"Version {AvailableVersion} geladen");
+            AppLog.Info("Updates", $"Version {AvailableVersion} downloaded");
             Set(UpdateStatus.Ready);
         }
         catch (OperationCanceledException)
@@ -116,7 +117,7 @@ public sealed class UpdateService : IDisposable
         catch (Exception ex)
         {
             Error = ex.Message;
-            AppLog.Warn("Updates", "Update-Prüfung fehlgeschlagen", ex);
+            AppLog.Warn("Updates", "Update check failed", ex);
             Set(UpdateStatus.Error);
         }
         finally
@@ -129,7 +130,7 @@ public sealed class UpdateService : IDisposable
     public void RestartAndApply()
     {
         if (_manager is null || _pending is null) return;
-        if (!CanRestartNow) throw new InvalidOperationException("Das Update wird nach dem Flug installiert.");
+        if (!CanRestartNow) throw new InvalidOperationException(L.T("The update will be installed after the flight."));
         _manager.ApplyUpdatesAndRestart(_pending.TargetFullRelease);
     }
 

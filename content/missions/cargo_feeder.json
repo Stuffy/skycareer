@@ -1,7 +1,8 @@
 {
   "id": "cargo_feeder",
-  "name": "Fracht-Zubringer",
-  "description": "Expressfracht und Post zwischen Regionalflughäfen.",
+  "name": "Cargo feeder",
+  "description": "Express freight and mail between regional airports.",
+  "texts": { "de": { "name": "Fracht-Zubringer", "description": "Expressfracht und Post zwischen Regionalflughäfen." } },
   "category": "cargo",
   "requirements": { "requiredTags": ["cargo"], "minCargoKg": 300 },
   "cargo": { "minKg": 300, "maxKg": 1200, "kinds": ["express", "mail", "spare_parts", "perishables"] },

@@ -1,98 +1,111 @@
 # Changelog
 
-Alle nennenswerten Änderungen an SkyCareer. Versionen folgen [Semantic Versioning](https://semver.org/lang/de/).
+All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
+
+## Unreleased
+
+### Added
+- **English and German:** the whole app is now available in English and German. It follows the Windows display language
+  (German Windows → German, otherwise English) and can be switched under *Settings → Language* or on the career
+  selection screen. Mission types have names and descriptions in both languages.
+
+### Changed
+- README and changelog are now in English. Ledger entries and flight notes keep the language they were created in, so
+  older entries stay German.
+- Log files are written in English.
 
 ## 0.1.5 – 2026-10-31
 
-### Behoben
-- Flugzeuge, die keine Parkbremse an den Simulator melden (z. B. Fenix A320/A321), wurden am Ziel nie als geparkt erkannt
-  und nicht abgerechnet. Jetzt gilt ein Flugzeug auch nach 30 Sekunden Stillstand mit abgestellten Triebwerken als geparkt;
-  mit gesetzter Parkbremse wie bisher nach 5 Sekunden.
+### Fixed
+- Aircraft that don't report the parking brake to the simulator (e.g. Fenix A320/A321) were never detected as parked at
+  the destination and never settled. An aircraft now also counts as parked after 30 seconds stationary with the engines
+  shut down; with the parking brake set, still after 5 seconds.
 
 ## 0.1.4 – 2026-10-31
 
-### Neu
-- **Hin- und Rückflüge:** Linienflüge, Charter, VIP-Charter und Lufttaxi kommen teils als Paket aus Hin- und Rückflug
-  (Chip „Hin & Rück“ in der Angebotsliste). Beide Strecken werden zusammen angenommen, der Rückflug startet automatisch,
-  sobald das Flugzeug am Ziel steht. Wer beide fliegt, bekommt einen Bonus (10–15 % auf beide Vergütungen). Wer den
-  Hinflug storniert, storniert beide. Die Karte des Rückflugs bleibt eingeklappt, bis er an der Reihe ist.
+### Added
+- **Round trips:** scheduled flights, charter, VIP charter and air taxi sometimes come as an outbound and return package
+  ("Round trip" chip in the offer list). Both legs are accepted together, and the return leg starts automatically once the
+  aircraft is at the destination. Flying both earns a bonus (10–15 % on both payouts). Cancelling the outbound cancels
+  both. The return leg's card stays collapsed until it is due.
 
-### Geändert
-- **Gut gebuchte Flüge:** Bei Linien- und Charterflügen sind die meisten Plätze belegt (im Mittel 85–90 %), bei VIP-Charter
-  und Lufttaxi etwas weniger; ganz leere oder immer volle Flüge gibt es nicht mehr. Die Liste zeigt die Auslastung.
-- **Vergütung nach Auslastung:** Ein Teil der Vergütung hängt davon ab, wie voll die Kabine ist, dazu kommt bei Linie und
-  Charter ein Betrag pro Passagier und Strecke. Halbvolle Flüge zahlen spürbar weniger.
-- **Klarere Vorbereitung:** Die Schritte unter einem Auftrag sind nummeriert und in Reihenfolge (In SimBrief planen →
-  OFP laden → Im Sim beladen → Beladung prüfen); erledigte Schritte bekommen einen Haken, der nächste ist hervorgehoben.
+### Changed
+- **Well-booked flights:** on scheduled and charter flights most seats are taken (85–90 % on average), slightly fewer on
+  VIP charter and air taxi; there are no more empty or always-full flights. The list shows the load factor.
+- **Pay by load factor:** part of the pay depends on how full the cabin is; scheduled and charter flights also pay an
+  amount per passenger and distance. Half-empty flights pay noticeably less.
+- **Clearer preparation:** the steps below a job are numbered and in order (plan in SimBrief → load OFP → load in sim →
+  verify load); completed steps get a check mark and the next one is highlighted.
 
 ## 0.1.3 – 2026-10-30
 
-### Neu
-- **Tankstand bleibt im Flugzeug** (*Einstellungen → Beladung*, standardmäßig an): Der Resttreibstoff wird nach dem Flug
-  gespeichert, in der Flotte angezeigt und beim Scharfschalten des nächsten Auftrags im Simulator gesetzt. Bezahlt wird
-  dann nur der nachgetankte Treibstoff statt des verbrauchten.
-- **Flugzeugprofile aus SimBrief-Typen:** Profile lassen sich komplett aus der SimBrief-Typenliste anlegen (auch ohne
-  laufenden Simulator) oder beim Anlegen aus dem Sim mit den genauen Gewichtsgrenzen und Leistungsdaten von SimBrief ergänzen.
-- **Abnutzung aus MSFS 2024:** Die Abnutzung, die der Simulator während eines Flugs meldet, senkt den Zustand des
-  Flugzeugs und seiner Bauteile (Fahrwerk, Reifen, Bremsen, Triebwerk, Steuerflächen …). Die Flotte zeigt die Bauteile,
-  Bauteile unter 70 % erscheinen gelb in der Abflugprüfung und erhöhen Wartungsrücklage und Reparaturkosten. Eine Reparatur
-  in SkyCareer setzt die Abnutzung im Simulator nicht zurück (das lässt MSFS nicht zu).
-- **Detailseite für Flugzeuge** (Klick auf das Kennzeichen in der Flotte): Werte, Bauteile mit Reparatur einzelner
-  Bauteile oder ganzer Baugruppen (Reifen und Bremsen 2 h Werkstatt, Triebwerk 1 Tag, sonst 6 h), Wirtschaftlichkeit nach
-  Kostenarten, alle Flüge des Flugzeugs (mit Sprung ins Flugbuch) und offene Aufträge.
-- **Debug:** Testseite für die Abnutzungs- und Schmutzwerte von MSFS 2024 (lesen und testweise schreiben).
-- **Abrechnung nach dem GSX-Deboarding:** Wird GSX genutzt, wartet die Abrechnung nach dem Parken, bis GSX die Passagiere
-  ausgeladen hat; die GSX-Belege sind dann Teil der Abrechnung. Startet kein Deboarding, wird nach 20 Minuten abgerechnet,
-  ebenso sofort beim Anlassen eines Triebwerks oder über „Jetzt abrechnen“ im Live-Flug.
+### Added
+- **Fuel stays in the aircraft** (*Settings → Loading*, on by default): the remaining fuel is stored after the flight,
+  shown in the fleet and set in the simulator when the next job is armed. You then only pay for the fuel uplifted instead
+  of the fuel burnt.
+- **Aircraft profiles from SimBrief types:** profiles can be created completely from SimBrief's type list (even without the
+  simulator running), or completed with SimBrief's exact weight limits and performance data when created from the sim.
+- **Wear from MSFS 2024:** the wear the simulator reports during a flight lowers the condition of the aircraft and its
+  components (landing gear, tires, brakes, engine, flight controls …). The fleet shows the components; components below
+  70 % appear yellow in the departure check and raise the maintenance reserve and repair costs. A repair in SkyCareer does
+  not reset the wear in the simulator (MSFS doesn't allow that).
+- **Aircraft detail page** (click the registration in the fleet): values, components with repairs of single components or
+  whole groups (tires and brakes 2 h in the workshop, engine 1 day, otherwise 6 h), economics by cost type, all flights of
+  the aircraft (with a link to the logbook) and open jobs.
+- **Debug:** test page for the MSFS 2024 wear and dirt values (read and test-write).
+- **Settlement after GSX deboarding:** with GSX in use, the settlement waits after shutdown until GSX has deboarded the
+  passengers; the GSX receipts are then part of the settlement. If no deboarding starts, the flight is settled after
+  20 minutes, immediately when an engine is started, or via "Settle now" on the live flight page.
 
-### Geändert
-- **Regelverstöße annullieren keinen Flug mehr.** Stattdessen kostet jede Art einen Teil der Vergütung (Slew, Positionssprung,
-  Flugzeugwechsel 20 %, Tanken im Flug 15 %, Ladungsänderung 10 %, zusammen höchstens 20 %), einen Rufpunkt und Score.
-  Zeitbeschleunigung wird nur noch vermerkt und kostet nichts mehr. Der Live-Flug zeigt die Verstöße mit dem erwarteten Abzug.
+### Changed
+- **Rule violations no longer void a flight.** Instead each kind costs part of the pay (slew, position jump, aircraft
+  change 20 %, in-flight refuelling 15 %, payload change 10 %, at most 20 % in total), one reputation point and score.
+  Time acceleration is only noted and costs nothing. The live flight page shows the violations with the expected deduction.
 
-### Behoben
-- Nach einem App-Neustart im Flug hat die GSX-Synchronisierung die Kabine geleert, was als Ladungsänderung gewertet und der
-  Flug annulliert wurde. Im Flug wird jetzt nie mehr Zuladung geschrieben; nach dem Neustart folgt GSX nur noch dem Deboarding.
-- War die App länger geschlossen, werden Gewichtsänderungen und eine Landung in dieser Zeit nicht mehr als Verstoß bzw.
-  falsche Landerate gewertet, sondern in der Abrechnung vermerkt. Ausladen beim Rollen zum Stand ist kein Verstoß mehr.
-- Ein verspäteter GSX-Deboarding-Beleg wird nicht mehr dem nächsten Auftrag ab demselben Flughafen zugeordnet.
-- Wiederaufgenommene Flüge ohne Flugaufzeichnung berechnen den Treibstoff wieder richtig.
-- Abnutzung: Fehlt der Startwert (Neustart, Lesefehler), wird er im Flug nachgeholt; die Abrechnung vermerkt das.
+### Fixed
+- After an app restart in flight, the GSX sync emptied the cabin, which counted as a payload change and voided the flight.
+  Payload is now never written in flight; after a restart GSX only follows deboarding.
+- If the app was closed for a while, weight changes and a landing during that time no longer count as a violation or a
+  wrong landing rate but are noted in the settlement. Unloading while taxiing to the stand is no longer a violation.
+- A late GSX deboarding receipt is no longer assigned to the next job from the same airport.
+- Flights resumed without a flight recording calculate fuel correctly again.
+- Wear: if the start value is missing (restart, read error), it is taken later in flight; the settlement notes this.
 
 ## 0.1.2 – 2026-10-29
 
-### Neu
-- **Genaue Beladung an SimBrief** (optional, *Einstellungen → Beladung*): übergibt die Crew als Passagiere und Gepäck
-  sowie Gewichtsunterschiede als Fracht, sodass das ZFW im OFP genau dem Load-Sheet entspricht. Gepäck wiegt dann je
-  Passagier unterschiedlich. Voraussetzung: im SimBrief-Flugzeug das Gepäckgewicht (Bag Weight) auf 0 stellen.
-  Ohne die Option bleibt alles wie bisher, mit den Standardgewichten von SimBrief.
+### Added
+- **Send detailed load to SimBrief** (optional, *Settings → Loading*): sends the crew as passengers and baggage plus weight
+  differences as cargo, so the ZFW in the OFP matches the load sheet exactly. Bags then weigh differently per passenger.
+  Requires a bag weight of 0 in the SimBrief airframe. Without the option everything stays as before, with SimBrief's
+  standard weights.
 
-### Behoben
-- Nach einem Flug blieben Angebote vom alten Flughafen im Auftragsmarkt stehen und ließen sich annehmen.
-  Sie werden jetzt entfernt, auch in bestehenden Spielständen.
+### Fixed
+- After a flight, offers from the previous airport stayed on the job market and could be accepted. They are now removed,
+  also in existing saves.
 
 ## 0.1.1 – 2026-10-29
 
-### Neu
-- **GSX-Rechnungen als Kosten:** Mit der Option *GSX-Belege als Kosten verwenden* (Einstellungen → Integrationen)
-  bucht SkyCareer die Rechnungen, die GSX Pro für Abfertigung, Busse, Catering und Betankung ausstellt.
-  - Die Beträge werden in Euro umgerechnet, mit den Wechselkursen, die GSX selbst verwendet.
-  - Die Modellkosten für Treibstoff, Abfertigung und Catering entfallen dann bei der Abrechnung.
-  - Treibstoff, der ohne GSX getankt wird, ist kostenlos.
-  - Gezählt werden nur Belege ab dem Einschalten.
-- **Rechnungen ansehen:** GSX-Buchungen tragen in *Finanzen* ein Beleg-Symbol. Im *Flugbuch* lassen sich die Belege eines Flugs aufklappen. Die Rechnung öffnet sich im Browser und lässt sich dort drucken oder als PDF speichern.
-- **Debug-Modus – Flugphase setzen:** Auf der Seite *Live-Flug* lässt sich die Flugphase von Hand setzen und auf Wunsch
-  einfrieren, um Abläufe ohne echten Flug zu testen. Manuelle Phasenwechsel werden in der Abrechnung vermerkt.
+### Added
+- **GSX bills as costs:** with *Use GSX receipts as costs* (Settings → Integrations), SkyCareer books the bills GSX Pro
+  issues for handling, buses, catering and fuel.
+  - Amounts are converted to euros with the exchange rates GSX itself uses.
+  - The model costs for fuel, handling and catering are then dropped at settlement.
+  - Fuel uplifted without GSX is free.
+  - Only receipts from the moment the option is switched on are counted.
+- **View bills:** GSX bookings show a receipt icon in *Finances*. In the *Logbook* the receipts of a flight can be expanded.
+  The bill opens in the browser, where it can be printed or saved as PDF.
+- **Debug mode – set flight phase:** on the *Live flight* page the flight phase can be set by hand and optionally frozen to
+  test flows without a real flight. Manual phase changes are noted in the settlement.
 
-### Geändert
-- README überarbeitet.
+### Changed
+- README revised.
 
 ## 0.1.0 – 2026-10-28
 
-Erste öffentliche Testversion.
+First public test version.
 
-- Karriere mit Flotte, Auftragsmarkt, Finanzen, Flugbuch und flugbasierter Spielzeit.
-- Automatische Flugverfolgung über SimConnect: Abflug-Check, Start beim Abheben, Abrechnung nach dem Parken.
-- Integrationen: SimBrief (Planung und OFP-Abgleich), GSX Pro (synchrones Boarding), BeyondATC (Flugplan-Export).
-- Fehlerprotokoll, „Diagnose kopieren“ und Fortsetzen eines Flugs nach einem Neustart der App.
-- Automatische Updates über GitHub Releases.
+- Career with fleet, job market, finances, logbook and flight-based game time.
+- Automatic flight tracking via SimConnect: departure check, start at liftoff, settlement after parking.
+- Integrations: SimBrief (planning and OFP check), GSX Pro (boarding in sync), BeyondATC (flight plan export).
+- Error log, "Copy diagnostics" and resuming a flight after an app restart.
+- Automatic updates via GitHub Releases.

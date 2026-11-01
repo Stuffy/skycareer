@@ -1,0 +1,25 @@
+@inject AppSettings Settings
+@inject NavigationManager Nav
+
+@* Language choice (Settings and the career selection). Reloads the UI so every text is rendered again. *@
+<MudSelect T="string" Value="@(Settings.Language ?? System)" ValueChanged="Change" Label="@T("Language")" Dense="true"
+           HelperText="@T("Number and date formats switch completely after a restart.")"
+           Variant="Variant.Outlined" Style="max-width:260px">
+    <MudSelectItem T="string" Value="@System">@F("System (Windows: {0})", NameOf(L.SystemLanguage))</MudSelectItem>
+    @foreach (var (lang, name) in L.Languages)
+    {
+        <MudSelectItem T="string" Value="@lang">@name</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    private const string System = "system";
+
+    private static string NameOf(string code) => L.Languages.First(l => l.Code == code).Name;
+
+    private void Change(string value)
+    {
+        Settings.SetLanguage(value == System ? null : value);
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+    }
+}

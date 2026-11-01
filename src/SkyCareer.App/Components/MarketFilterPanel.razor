@@ -1,19 +1,19 @@
-@* Job search: the criteria filter the list and steer "Aufträge suchen". *@
+@* Job search: the criteria filter the list and steer "Search jobs". *@
 @inject CareerService Career
 
 <MudPaper Class="pa-4 mb-4">
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
         <MudIconButton Icon="@(Filter.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small"
-                       OnClick="() => Filter.Expanded = !Filter.Expanded" aria-label="Filter ein-/ausklappen" />
-        <MudText Typo="Typo.h6">Auftragssuche</MudText>
+                       OnClick="() => Filter.Expanded = !Filter.Expanded" aria-label="@T("Expand/collapse filter")" />
+        <MudText Typo="Typo.h6">@T("Job search")</MudText>
         @if (Filter.ActiveCount > 0)
         {
-            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@Filter.ActiveCount Filter aktiv</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@F("{0} filters active", Filter.ActiveCount)</MudChip>
         }
         <MudSpacer />
-        <MudButton Variant="Variant.Text" Disabled="@(Busy || Filter.ActiveCount == 0)" OnClick="Reset">Filter zurücksetzen</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="@(Busy || Filter.ActiveCount == 0)" OnClick="Reset">@T("Reset filters")</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" Disabled="@(Busy || !HasFleet)" OnClick="OnSearch">
-            Aufträge suchen
+            @T("Search jobs")
         </MudButton>
     </MudStack>
 
@@ -21,7 +21,7 @@
     {
         <MudGrid Class="mt-1" Spacing="2">
             <MudItem xs="12" md="4">
-                <MudSelect T="Guid?" @bind-Value="Filter.AircraftId" @bind-Value:after="Changed" Label="Flugzeug" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                <MudSelect T="Guid?" @bind-Value="Filter.AircraftId" @bind-Value:after="Changed" Label="@T("Aircraft")" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
                            ToStringFunc="AircraftLabel">
                     @foreach (var f in Fleet)
                     {
@@ -31,7 +31,7 @@
             </MudItem>
             <MudItem xs="12" md="4">
                 <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="Filter.MissionTypeIds" @bind-SelectedValues:after="Changed"
-                           Label="Missionstypen (leer = alle)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Label="@T("Mission types (empty = all)")" Variant="Variant.Outlined" Margin="Margin.Dense"
                            ToStringFunc="@(id => id is null ? "" : TypeName(id))">
                     @foreach (var t in MissionTypes)
                     {
@@ -39,17 +39,17 @@
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.DistanceMinNm" @bind-Value:after="Changed" Label="Distanz min (nm)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.DistanceMaxNm" @bind-Value:after="Changed" Label="Distanz max (nm)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.DistanceMinNm" @bind-Value:after="Changed" Label="@T("Distance min (nm)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.DistanceMaxNm" @bind-Value:after="Changed" Label="@T("Distance max (nm)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
 
-            <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMin" @bind-Value:after="Changed" Label="Passagiere min" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMax" @bind-Value:after="Changed" Label="Passagiere max" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.CargoMinKg" @bind-Value:after="Changed" Label="Fracht min (kg)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField T="decimal?" @bind-Value="Filter.PayoutMin" @bind-Value:after="Changed" Label="Vergütung min (€)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.MinRunwayM" @bind-Value:after="Changed" Label="Zielpiste min (m)" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMin" @bind-Value:after="Changed" Label="@T("Passengers min")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMax" @bind-Value:after="Changed" Label="@T("Passengers max")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.CargoMinKg" @bind-Value:after="Changed" Label="@T("Cargo min (kg)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="decimal?" @bind-Value="Filter.PayoutMin" @bind-Value:after="Changed" Label="@T("Payout min (€)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.MinRunwayM" @bind-Value:after="Changed" Label="@T("Destination runway min (m)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
             <MudItem xs="6" md="2">
                 <MudSelect T="AirportSize" MultiSelection="true" @bind-SelectedValues="Filter.Sizes" @bind-SelectedValues:after="Changed"
-                           Label="Zielgröße (leer = alle)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Label="@T("Destination size (empty = all)")" Variant="Variant.Outlined" Margin="Margin.Dense"
                            ToStringFunc="SizeText">
                     @foreach (var s in Enum.GetValues<AirportSize>())
                     {
@@ -60,11 +60,11 @@
 
             <MudItem xs="12">
                 <MudStack Row="true" Spacing="4" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
-                    <MudCheckBox T="bool" @bind-Value="Filter.RequirePaved" @bind-Value:after="Changed" Label="Befestigte Piste" Dense="true" />
-                    <MudCheckBox T="bool" @bind-Value="Filter.RequireLighted" @bind-Value:after="Changed" Label="Befeuerte Piste" Dense="true" />
-                    <MudCheckBox T="bool" @bind-Value="Filter.ScheduledServiceOnly" @bind-Value:after="Changed" Label="Nur mit Linienverkehr" Dense="true" />
-                    <MudTooltip Text="@(IlsAvailable ? "ILS-Daten kommen aus dem Sim; unbekannte Ziele werden bei der Suche abgefragt." : "Nur bekannte ILS-Flughäfen – für neue Abfragen MSFS starten.")">
-                        <MudCheckBox T="bool" @bind-Value="Filter.RequireIls" @bind-Value:after="Changed" Label="@(IlsAvailable ? "ILS am Ziel" : "ILS am Ziel (Sim nicht verbunden)")" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.RequirePaved" @bind-Value:after="Changed" Label="@T("Paved runway")" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.RequireLighted" @bind-Value:after="Changed" Label="@T("Lighted runway")" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.ScheduledServiceOnly" @bind-Value:after="Changed" Label="@T("Scheduled service only")" Dense="true" />
+                    <MudTooltip Text="@(IlsAvailable ? T("ILS data comes from the sim; unknown destinations are queried during the search.") : T("Only known ILS airports – start MSFS for new queries."))">
+                        <MudCheckBox T="bool" @bind-Value="Filter.RequireIls" @bind-Value:after="Changed" Label="@(IlsAvailable ? T("ILS at destination") : T("ILS at destination (sim not connected)"))" Dense="true" />
                     </MudTooltip>
                 </MudStack>
             </MudItem>
@@ -72,8 +72,8 @@
         @if (AirportDataOutdated)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
-                Die Flughafendaten stammen aus einer älteren Version: Es fehlen Angaben wie Befeuerung, Linienverkehr, die zugehörige Stadt (für Großstadt- und Hauptstadtziele) oder die Kennzeichnung von Militärflugplätzen.
-                Unter „Einstellungen“ → „Flughafendaten aktualisieren“ neu importieren.
+                @T("The airport data comes from an older version: details such as lighting, scheduled service, the served city (for major city and capital destinations) or the flagging of military airfields are missing.")
+                @T("Re-import it under “Settings” → “Update airport data”.")
             </MudAlert>
         }
     }
@@ -110,11 +110,11 @@
 
     public static string SizeText(AirportSize s) => s switch
     {
-        AirportSize.Large => "Groß",
-        AirportSize.Medium => "Mittel",
-        AirportSize.Small => "Klein",
-        AirportSize.Heliport => "Hubschrauberlandeplatz",
-        AirportSize.Seaplane => "Wasserflugplatz",
+        AirportSize.Large => T("Large"),
+        AirportSize.Medium => T("Medium"),
+        AirportSize.Small => T("Small"),
+        AirportSize.Heliport => T("Heliport"),
+        AirportSize.Seaplane => T("Seaplane base"),
         _ => s.ToString()
     };
 }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Integrations.Gsx;
 
@@ -144,7 +145,7 @@ public static partial class GsxReceiptReader
     {
         string t = (title ?? "").Trim();
         if (t.EndsWith(" RECEIPT", StringComparison.OrdinalIgnoreCase)) t = t[..^" RECEIPT".Length];
-        return t.Length == 0 ? "Beleg" : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(t.ToLowerInvariant());
+        return t.Length == 0 ? L.T("Receipt") : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(t.ToLowerInvariant());
     }
 
     private static string? Str(JsonElement e, string name) =>

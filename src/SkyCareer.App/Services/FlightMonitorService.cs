@@ -1,6 +1,7 @@
 using SkyCareer.Application;
 using SkyCareer.Application.Logging;
 using SkyCareer.Data;
+using SkyCareer.Localization;
 using SkyCareer.Sim;
 using SkyCareer.Sim.Replay;
 using SkyCareer.Sim.Tracking;
@@ -131,7 +132,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            AppLog.Warn("Flug", "Flugaufzeichnung konnte nicht angelegt werden – nach einem Neustart wird der Flug geschätzt fortgesetzt", ex);
+            AppLog.Warn("Flight", "Could not create the flight journal – after a restart the flight will be resumed with estimated values", ex);
             _journal = null;
         }
     }
@@ -160,7 +161,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         }
         catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or OperationCanceledException)
         {
-            AppLog.Warn("Abnutzung", $"MSFS-Abnutzung konnte nicht gelesen werden: {ex.Message}", ex);
+            AppLog.Warn("Wear", $"Could not read MSFS wear: {ex.Message}", ex);
             return null;
         }
     }
@@ -182,13 +183,13 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         FlightPhase? from;
         lock (_sessionLock)
         {
-            if (Session is null) throw new InvalidOperationException("Es läuft kein Flug.");
+            if (Session is null) throw new InvalidOperationException(L.T("No flight is in progress."));
             from = Session.Phases.Phase;
             Session.ForcePhase(phase, Latest ?? new Telemetry { Timestamp = DateTimeOffset.Now }, freeze);
         }
         Log(from == phase
-            ? $"Debug: Phase {phase} {(freeze ? "eingefroren" : "freigegeben")}"
-            : $"Debug: Phase manuell {from} → {phase}{(freeze ? " (eingefroren)" : "")}");
+            ? (freeze ? L.F("Debug: phase {0} frozen", phase) : L.F("Debug: phase {0} released", phase))
+            : L.F("Debug: phase set manually {0} → {1}", from, phase) + (freeze ? " " + L.T("(frozen)") : ""));
         Changed?.Invoke();
     }
 
@@ -236,7 +237,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
             catch (IOException ex)
             {
                 // Losing the journal only matters after a crash; keep tracking.
-                AppLog.Warn("Flug", "Flugaufzeichnung konnte nicht geschrieben werden", ex);
+                AppLog.Warn("Flight", "Could not write the flight journal", ex);
                 CloseJournal(delete: false);
             }
         }
@@ -255,7 +256,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
     public void Log(string message)
     {
         lock (EventLog) EventLog.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}");
-        AppLog.Info("Flug", message);
+        AppLog.Info("Flight", message);
     }
 
     public async ValueTask DisposeAsync()

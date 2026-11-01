@@ -2,7 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-SkyCareer is a standalone Windows career add-on for Microsoft Flight Simulator 2024 (C# / .NET 10, WPF host with Blazor Hybrid UI and MudBlazor 9). UI text and user-facing messages are German; code, identifiers and comments are English.
+SkyCareer is a standalone Windows career add-on for Microsoft Flight Simulator 2024 (C# / .NET 10, WPF host with Blazor Hybrid UI and MudBlazor 9). The UI is English (default) and German; code, identifiers, comments, logs, README, CHANGELOG and release notes are English (see Localization below).
+Always use aviation related terminology where appropriate.
 
 ## Commands
 
@@ -17,6 +18,14 @@ dotnet ef migrations add <Name> --project src/SkyCareer.Data -o Migrations
 
 - A running `SkyCareer.App.exe` locks `src/SkyCareer.App/bin/...`; close it first, or build the app elsewhere with `dotnet build src/SkyCareer.App -o <tempdir>`.
 - The app migrates the database on startup. The DB lives at `%LOCALAPPDATA%\SkyCareer\skycareer.db` (override with the `SKYCAREER_DB` env var, e.g. to test the UI against a throwaway DB without touching the user's careers), user content in `Documents\SkyCareer\content`, exported flight plans in `Documents\SkyCareer\Flugplaene`.
+
+## Localization
+
+- `src/SkyCareer.Localization` (lowest layer, referenced via Domain): `L.T("English text")`, `L.F("English {0}", x)` (in Razor `@T(...)`/`@F(...)` via `@using static SkyCareer.Localization.L` in `_Imports.razor`), `L.Eur(amount)`. The English source text is the key; German lives in embedded `de/*.json` dictionaries (one per area: `core`, `engine` = libraries, `flight` = market/flight/fleet pages, `app` = other pages and services), merged at load. A missing translation falls back to English.
+- Every user-visible text goes through `T`/`F` with a **literal** key, and needs a German entry with the same placeholders: `TranslationCoverageTests` scans `src/**/*.cs|razor` for the literals and fails on missing/orphaned entries or placeholder mismatches. Data (names, ICAO codes) is not translated.
+- Mission types: English `name`/`description` in `content/missions/*.json` plus `"texts": { "de": { "name", "description" } }`; show `MissionType.DisplayName`/`DisplayDescription`.
+- `AppSettings.Language` (null = Windows display language via `L.SystemLanguage`) is applied by `L.SetLanguage` at startup before anything else; it sets the default thread cultures, so number/date formats and background threads (settlement, automation) follow. `LanguageSelect.razor` (Settings, career selection) switches and reloads the UI. Stored texts (ledger descriptions, flight notes, unavailability reasons) keep the language they were created in.
+- `AppLog` file logs are English and not translated. Test projects run in English (module initializer).
 
 ## SimConnect is optional at build time
 

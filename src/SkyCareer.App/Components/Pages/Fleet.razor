@@ -6,18 +6,18 @@
 @inject IJSRuntime JS
 @using Microsoft.AspNetCore.Components.Web
 
-<MudText Typo="Typo.h5" Class="mb-4">Flotte</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">@T("Fleet")</MudText>
 
 <MudPaper Class="pa-4 mb-4">
-    <MudText Typo="Typo.h6" Class="mb-2">Eigene Flugzeuge</MudText>
+    <MudText Typo="Typo.h6" Class="mb-2">@T("Own aircraft")</MudText>
     @if (_fleet.Count == 0)
     {
-        <MudText Typo="Typo.body2">Noch keine Flugzeuge. Unten kaufen, leasen oder mieten – neue Flugzeuge stehen an der Heimatbasis.</MudText>
+        <MudText Typo="Typo.body2">@T("No aircraft yet. Buy, lease or rent one below – new aircraft are delivered to the home base.")</MudText>
     }
     else
     {
         <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th>Kennzeichen</th><th>Typ</th><th>Status</th><th>Standort</th><th>Stunden / Zyklen</th><th>Tank</th><th>Zustand</th><th>Nächster Check</th><th>Wert / Rate</th><th></th></tr></thead>
+            <thead><tr><th>@T("Registration")</th><th>@T("Type")</th><th>@T("Status")</th><th>@T("Location")</th><th>@T("Hours / cycles")</th><th>@T("Fuel on board")</th><th>@T("Condition")</th><th>@T("Next check")</th><th>@T("Value / rate")</th><th></th></tr></thead>
             <tbody>
                 @foreach (var f in _fleet)
                 {
@@ -29,7 +29,7 @@
                         <td>@p.Name</td>
                         <td>
                             @FleetTexts.Ownership(f.Ownership)
-                            @if (!f.IsAvailable(_gameTime)) { <br /><span class="bad">@(f.UnavailableReason ?? "Wartung") bis @f.UnavailableUntil?.ToString("dd.MM. HH:mm")</span> }
+                            @if (!f.IsAvailable(_gameTime)) { <br /><span class="bad">@F("{0} until {1:dd.MM. HH:mm}", f.UnavailableReason ?? T("Maintenance"), f.UnavailableUntil)</span> }
                         </td>
                         <td>@f.Location</td>
                         <td>@f.AirframeHours.ToString("N1") h / @f.Cycles</td>
@@ -38,19 +38,19 @@
                             @f.Condition.ToString("N0") %
                             @if (!parts.IsEmpty)
                             {
-                                <MudTooltip Text="@(warnings.Count == 0 ? "Bauteile anzeigen" : "Abgenutzt: " + string.Join(", ", warnings.Select(w => $"{w.Group} {w.Level:P0}")))">
+                                <MudTooltip Text="@(warnings.Count == 0 ? T("Show components") : T("Worn: ") + string.Join(", ", warnings.Select(w => $"{w.Group} {w.Level:P0}")))">
                                     <MudIconButton Size="Size.Small" Icon="@(warnings.Count == 0 ? Icons.Material.Outlined.Build : Icons.Material.Filled.Warning)"
                                                    Color="@(warnings.Count == 0 ? Color.Default : Color.Warning)" Href="@($"fleet/{f.Id}")" />
                                 </MudTooltip>
                             }
                         </td>
-                        <td>@(f.Ownership == Ownership.Rented ? "inkl." : $"in {Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck):N0} h")</td>
+                        <td>@(f.Ownership == Ownership.Rented ? T("incl.") : F("in {0:N0} h", Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck)))</td>
                         <td>@FleetTexts.Value(f, p, _gameTime)</td>
                         <td style="white-space:nowrap">
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => StartRelocation(f)">Standort ändern</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => StartRelocation(f)">@T("Change location")</MudButton>
                             @if (f.EffectiveCondition < 99.5 && f.Ownership != Ownership.Rented)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Repair(f)">Reparieren (@Eur(FleetEconomics.RepairCost(p, f)))</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Repair(f)">@F("Repair ({0})", Eur(FleetEconomics.RepairCost(p, f)))</MudButton>
                             }
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => DisposeAircraft(f)">@FleetTexts.DisposeAction(f.Ownership)</MudButton>
                         </td>
@@ -64,26 +64,25 @@
 @if (_relocating is { } moving)
 {
     <MudPaper Class="pa-4 mb-4" id="relocation">
-        <MudText Typo="Typo.h6">Standort ändern: @moving.Registration (@Career.ProfileName(moving.ProfileId)), derzeit in @moving.Location</MudText>
+        <MudText Typo="Typo.h6">@F("Change location: {0} ({1}), currently at {2}", moving.Registration, Career.ProfileName(moving.ProfileId), moving.Location)</MudText>
         <MudText Typo="Typo.body2" Class="mb-3">
-            Überführung: Eine angeheuerte Crew fliegt das Flugzeug leer zum Ziel. Treibstoff, Gebühren, Crew und Miete bzw. Wartungsrücklage
-            werden gebucht, und das Flugzeug ist für die Blockzeit nicht verfügbar. Offene Angebote ab dem alten Standort entfallen.
+            @T("Ferry flight: a hired crew flies the aircraft empty to the destination. Fuel, fees, crew and rent or maintenance reserve are booked, and the aircraft is unavailable for the block time. Open offers from the old location are dropped.")
             @if (Settings.DebugMode)
             {
-                <span> „Ohne Kosten versetzen“ (Debug) verschiebt das Flugzeug ohne Buchung.</span>
+                <span> @T("“Move without cost” (debug) moves the aircraft without any booking.")</span>
             }
         </MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudTextField T="string" @bind-Value="_target" Label="Zielflughafen (ICAO)" Variant="Variant.Outlined" Margin="Margin.Dense"
+            <MudTextField T="string" @bind-Value="_target" Label="@T("Destination airport (ICAO)")" Variant="Variant.Outlined" Margin="Margin.Dense"
                           Immediate="true" OnKeyUp="TargetKeyUp" Style="max-width:220px" />
-            <MudButton Variant="Variant.Outlined" Disabled="@(Busy || string.IsNullOrWhiteSpace(_target))" OnClick="Estimate">Kosten berechnen</MudButton>
+            <MudButton Variant="Variant.Outlined" Disabled="@(Busy || string.IsNullOrWhiteSpace(_target))" OnClick="Estimate">@T("Calculate costs")</MudButton>
             <MudSpacer />
-            <MudButton Variant="Variant.Text" OnClick="CancelRelocation">Abbrechen</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="CancelRelocation">@T("Cancel")</MudButton>
         </MudStack>
         @if (_estimate is { } est && _estimateFor is { } dest)
         {
             <MudText Typo="Typo.subtitle1" Class="mt-3">
-                @moving.Location → @dest.Ident @dest.Name · @est.DistanceNm.ToString("N0") nm · Blockzeit @est.BlockHours.ToString("0.0") h
+                @moving.Location → @dest.Ident @dest.Name · @est.DistanceNm.ToString("N0") nm · @F("Block time {0:0.0} h", est.BlockHours)
             </MudText>
             <MudSimpleTable Dense="true" Class="mt-1" Style="max-width:640px">
                 <tbody>
@@ -91,16 +90,16 @@
                     {
                         <tr><td>@line.Description</td><td style="text-align:right">@Eur(line.Amount)</td></tr>
                     }
-                    <tr><td><b>Summe</b></td><td style="text-align:right"><b>@Eur(est.Total)</b></td></tr>
+                    <tr><td><b>@T("Total")</b></td><td style="text-align:right"><b>@Eur(est.Total)</b></td></tr>
                 </tbody>
             </MudSimpleTable>
             <MudStack Row="true" Spacing="2" Class="mt-3">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _cash < est.Total)" OnClick="() => Relocate(true)">
-                    Überführen (@Eur(est.Total))
+                    @F("Ferry ({0})", Eur(est.Total))
                 </MudButton>
                 @if (Settings.DebugMode)
                 {
-                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Relocate(false)">Ohne Kosten versetzen</MudButton>
+                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Relocate(false)">@T("Move without cost")</MudButton>
                 }
             </MudStack>
         }
@@ -108,13 +107,13 @@
 }
 
 <MudPaper Class="pa-4">
-    <MudText Typo="Typo.h6">Flugzeugmarkt</MudText>
+    <MudText Typo="Typo.h6">@T("Aircraft market")</MudText>
     <MudText Typo="Typo.body2" Class="mb-2">
-        Kauf: einmaliger Preis, danach Versicherung und Wartung. Leasing: @CareerService.LeaseTermMonths Monate, Rate + Versicherung monatlich, vorzeitige Rückgabe kostet 3 Raten.
-        Miete: nur Kosten pro Blockstunde (inkl. Wartung und Versicherung), jederzeit rückgabefähig.
+        @F("Purchase: one-off price, then insurance and maintenance. Lease: {0} months, rate + insurance monthly, early return costs 3 rates.", CareerService.LeaseTermMonths)
+        @T("Rent: only costs per block hour (incl. maintenance and insurance), can be returned at any time.")
     </MudText>
     <MudSimpleTable Dense="true" Hover="true">
-        <thead><tr><th>Typ</th><th>Sitze / Fracht</th><th>Reichweite</th><th>Missionen</th><th>Kaufpreis</th><th>Leasing / Monat</th><th>Miete / h</th><th></th></tr></thead>
+        <thead><tr><th>@T("Type")</th><th>@T("Seats / cargo")</th><th>@T("Range")</th><th>@T("Missions")</th><th>@T("Purchase price")</th><th>@T("Lease / month")</th><th>@T("Rent / h")</th><th></th></tr></thead>
         <tbody>
             @foreach (var p in Career.Content.Aircraft)
             {
@@ -122,14 +121,14 @@
                     <td><b>@p.Name</b><br /><MudText Typo="Typo.caption">@string.Join(", ", p.Tags)</MudText></td>
                     <td>@p.PassengerSeats / @p.MaxCargoKg.ToString("N0") kg</td>
                     <td>@RequirementEvaluator.EstimatedRangeNm(p).ToString("N0") nm</td>
-                    <td>@string.Join(", ", RequirementEvaluator.AvailableFor(Career.Content.MissionTypes, p).Select(m => m.Name))</td>
+                    <td>@string.Join(", ", RequirementEvaluator.AvailableFor(Career.Content.MissionTypes, p).Select(m => m.DisplayName))</td>
                     <td>@Eur(p.Economics.PurchasePriceNew)</td>
                     <td>@Eur(p.Economics.LeasePerMonth)</td>
                     <td>@Eur(p.Economics.RentPerBlockHour)</td>
                     <td style="white-space:nowrap">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || _cash < p.Economics.PurchasePriceNew)" OnClick="() => Acquire(p, Ownership.Owned)">Kaufen</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Acquire(p, Ownership.Leased)">Leasen</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Acquire(p, Ownership.Rented)">Mieten</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || _cash < p.Economics.PurchasePriceNew)" OnClick="() => Acquire(p, Ownership.Owned)">@T("Buy")</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Acquire(p, Ownership.Leased)">@T("Lease")</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Acquire(p, Ownership.Rented)">@T("Rent")</MudButton>
                     </td>
                 </tr>
             }
@@ -170,7 +169,7 @@
     private Task Acquire(AircraftProfile p, Ownership ownership) => Run(async () =>
     {
         var a = await Career.AcquireAircraftAsync(p.Id, ownership);
-        Snackbar.Add($"{a.Registration} ({p.Name}) steht in {a.Location} bereit.", Severity.Success);
+        Snackbar.Add(F("{0} ({1}) is ready at {2}.", a.Registration, p.Name, a.Location), Severity.Success);
     });
 
     private FleetAircraft? _relocating;
@@ -207,17 +206,17 @@
         string to = _target.Trim().ToUpperInvariant();
         var done = await Career.RelocateAircraftAsync(f.Id, to, ferry);
         Snackbar.Add(done is null
-            ? $"{f.Registration} steht jetzt in {to}."
-            : $"{f.Registration} wird nach {to} überführt ({Eur(done.Total)}, verfügbar in {done.BlockHours:0.0} h).", Severity.Success);
+            ? F("{0} is now at {1}.", f.Registration, to)
+            : F("{0} is being ferried to {1} ({2}, available in {3:0.0} h).", f.Registration, to, Eur(done.Total), done.BlockHours), Severity.Success);
         _relocating = null;
     });
 
-    private Task Repair(FleetAircraft f) => Run(() => Career.RepairAsync(f.Id), $"{f.Registration} wird repariert (1 Tag).");
+    private Task Repair(FleetAircraft f) => Run(() => Career.RepairAsync(f.Id), F("{0} is being repaired (1 day).", f.Registration));
 
     private async Task DisposeAircraft(FleetAircraft f)
     {
-        if (await Dialogs.ShowMessageBoxAsync("Bestätigen", FleetTexts.DisposeQuestion(f, Career.Profile(f.ProfileId), _gameTime), yesText: "Ja", cancelText: "Abbrechen") == true)
-            await Run(() => Career.DisposeAircraftAsync(f.Id), "Erledigt.");
+        if (await Dialogs.ShowMessageBoxAsync(T("Confirm"), FleetTexts.DisposeQuestion(f, Career.Profile(f.ProfileId), _gameTime), yesText: T("Yes"), cancelText: T("Cancel")) == true)
+            await Run(() => Career.DisposeAircraftAsync(f.Id), T("Done."));
     }
 
 }

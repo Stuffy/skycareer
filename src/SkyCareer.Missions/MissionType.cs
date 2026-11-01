@@ -128,6 +128,9 @@ public sealed record PayRule
     public decimal OnTimeBonus { get; init; }
 }
 
+/// <summary>Translated texts of a mission type.</summary>
+public sealed record MissionTypeText(string? Name = null, string? Description = null);
+
 /// <summary>Scoring weights; a VIP flight cares far more about a smooth landing than a cargo run.</summary>
 public sealed record ScoringRule
 {
@@ -146,8 +149,16 @@ public sealed record ScoringRule
 public sealed record MissionType
 {
     public required string Id { get; init; }
+    /// <summary>English name (the default language); translations sit in <see cref="Texts"/>.</summary>
     public required string Name { get; init; }
     public string Description { get; init; } = "";
+    /// <summary>Translated name and description per language code, e.g. "de".</summary>
+    public IReadOnlyDictionary<string, MissionTypeText> Texts { get; init; } = new Dictionary<string, MissionTypeText>();
+
+    /// <summary>Name in the current UI language (falls back to <see cref="Name"/>).</summary>
+    public string DisplayName => Texts.TryGetValue(Localization.L.Language, out var t) && !string.IsNullOrEmpty(t.Name) ? t.Name : Name;
+    public string DisplayDescription =>
+        Texts.TryGetValue(Localization.L.Language, out var t) && !string.IsNullOrEmpty(t.Description) ? t.Description : Description;
     public string Category { get; init; } = "general";
     /// <summary>Name of the generator that builds concrete offers; "standard" covers airport-to-airport work.</summary>
     public string Generator { get; init; } = "standard";

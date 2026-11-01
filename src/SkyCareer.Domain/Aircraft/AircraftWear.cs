@@ -1,9 +1,20 @@
 using System.Globalization;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Domain.Aircraft;
 
-/// <summary>One MSFS 2024 wear-and-tear component (SimVar <c>WEAR AND TEAR LEVEL:{Id}</c>).</summary>
-public sealed record WearComponent(int Id, string Name, string Group);
+/// <summary>
+/// One MSFS 2024 wear-and-tear component (SimVar <c>WEAR AND TEAR LEVEL:{Id}</c>). <see cref="GroupKey"/> is the stable
+/// group id (one of the <see cref="WearComponents"/> constants); <see cref="Name"/> and <see cref="Group"/> are display texts.
+/// </summary>
+public sealed record WearComponent(int Id, string GroupKey)
+{
+    /// <summary>Localized component name.</summary>
+    public string Name => WearComponents.ComponentName(Id);
+
+    /// <summary>Localized group name.</summary>
+    public string Group => WearComponents.GroupName(GroupKey);
+}
 
 /// <summary>
 /// The wear-and-tear components of MSFS 2024 (ids from the SDK's <c>Helpers.xml</c>) and how SkyCareer uses them.
@@ -20,31 +31,62 @@ public static class WearComponents
     /// </summary>
     public const double SimWearFactor = 1.0;
 
-    public const string LandingGear = "Fahrwerk", Tires = "Reifen", Brakes = "Bremsen", Engine = "Triebwerk",
-        Controls = "Steuerflächen", Hydraulics = "Hydraulik", Electrics = "Elektrik", Fuel = "Kraftstoffsystem",
-        Autopilot = "Autopilot", General = "Allgemein";
+    /// <summary>Stable group ids (not shown as such; see <see cref="GroupName"/>).</summary>
+    public const string LandingGear = "Landing gear", Tires = "Tires", Brakes = "Brakes", Engine = "Engine",
+        Controls = "Flight controls", Hydraulics = "Hydraulics", Electrics = "Electrical", Fuel = "Fuel system",
+        Autopilot = "Autopilot", General = "General";
 
     public static IReadOnlyList<WearComponent> All { get; } =
     [
-        new(0, "Kraftstofftank", Fuel), new(1, "Kraftstoffpumpe", Fuel), new(2, "Kraftstoffventil", Fuel),
-        new(3, "Kraftstoffverteiler", Fuel), new(4, "Kraftstoffleitung", Fuel),
-        new(5, "Klappen links", Controls), new(6, "Klappen rechts", Controls), new(7, "Klappenseil links", Controls),
-        new(8, "Klappenseil rechts", Controls), new(9, "Querruder links", Controls), new(10, "Querruder rechts", Controls),
-        new(11, "Querruderseil links", Controls), new(12, "Querruderseil rechts", Controls), new(13, "Höhenruder", Controls),
-        new(14, "Höhenruderseil", Controls), new(15, "Höhenruder links", Controls), new(16, "Höhenruder rechts", Controls),
-        new(17, "Höhenruderseil links", Controls), new(18, "Höhenruderseil rechts", Controls), new(19, "Seitenruder", Controls),
-        new(20, "Seitenruderseil", Controls),
-        new(21, "Hydraulikbehälter", Hydraulics), new(22, "Hydraulikpumpe", Hydraulics), new(23, "Hydraulikventil", Hydraulics),
-        new(24, "Hydraulikaktuator", Hydraulics), new(25, "Hydraulik-PTU", Hydraulics), new(26, "Hydraulikspeicher", Hydraulics),
-        new(27, "Hydraulikleitung", Hydraulics),
-        new(28, "Generator", Electrics), new(29, "Batterie", Electrics), new(30, "IDG", Electrics), new(31, "RAT", Electrics),
-        new(32, "Stromschiene", Electrics), new(33, "Stromkreis", Electrics), new(34, "Gleichrichter", Electrics),
-        new(35, "Fahrwerk", LandingGear), new(36, "Bremsen", Brakes), new(37, "Reifen", Tires), new(38, "Reifendruck", Tires),
-        new(39, "Kolbentriebwerk", Engine), new(40, "Turbine", Engine), new(41, "Öltank", Engine), new(42, "Ölmenge", Engine),
-        new(43, "Autopilot Querachse", Autopilot), new(44, "Autopilot Längsachse", Autopilot), new(45, "Autopilot Gierachse", Autopilot),
-        new(46, "Allgemein", General),
-        new(47, "Spornradfahrwerk", LandingGear), new(48, "Spornradreifen", Tires), new(49, "Spornradreifendruck", Tires)
+        new(0, Fuel), new(1, Fuel), new(2, Fuel), new(3, Fuel), new(4, Fuel),
+        new(5, Controls), new(6, Controls), new(7, Controls), new(8, Controls), new(9, Controls), new(10, Controls),
+        new(11, Controls), new(12, Controls), new(13, Controls), new(14, Controls), new(15, Controls), new(16, Controls),
+        new(17, Controls), new(18, Controls), new(19, Controls), new(20, Controls),
+        new(21, Hydraulics), new(22, Hydraulics), new(23, Hydraulics), new(24, Hydraulics), new(25, Hydraulics), new(26, Hydraulics),
+        new(27, Hydraulics),
+        new(28, Electrics), new(29, Electrics), new(30, Electrics), new(31, Electrics), new(32, Electrics), new(33, Electrics), new(34, Electrics),
+        new(35, LandingGear), new(36, Brakes), new(37, Tires), new(38, Tires),
+        new(39, Engine), new(40, Engine), new(41, Engine), new(42, Engine),
+        new(43, Autopilot), new(44, Autopilot), new(45, Autopilot),
+        new(46, General),
+        new(47, LandingGear), new(48, Tires), new(49, Tires)
     ];
+
+    /// <summary>Localized name of a group id.</summary>
+    public static string GroupName(string group) => group switch
+    {
+        LandingGear => L.T("Landing gear"),
+        Tires => L.T("Tires"),
+        Brakes => L.T("Brakes"),
+        Engine => L.T("Engine"),
+        Controls => L.T("Flight controls"),
+        Hydraulics => L.T("Hydraulics"),
+        Electrics => L.T("Electrical"),
+        Fuel => L.T("Fuel system"),
+        Autopilot => L.T("Autopilot"),
+        General => L.T("General"),
+        _ => group
+    };
+
+    /// <summary>Localized name of a component id.</summary>
+    public static string ComponentName(int id) => id switch
+    {
+        0 => L.T("Fuel tank"), 1 => L.T("Fuel pump"), 2 => L.T("Fuel valve"), 3 => L.T("Fuel manifold"), 4 => L.T("Fuel line"),
+        5 => L.T("Left flaps"), 6 => L.T("Right flaps"), 7 => L.T("Left flap cable"), 8 => L.T("Right flap cable"),
+        9 => L.T("Left aileron"), 10 => L.T("Right aileron"), 11 => L.T("Left aileron cable"), 12 => L.T("Right aileron cable"),
+        13 => L.T("Elevator"), 14 => L.T("Elevator cable"), 15 => L.T("Left elevator"), 16 => L.T("Right elevator"),
+        17 => L.T("Left elevator cable"), 18 => L.T("Right elevator cable"), 19 => L.T("Rudder"), 20 => L.T("Rudder cable"),
+        21 => L.T("Hydraulic reservoir"), 22 => L.T("Hydraulic pump"), 23 => L.T("Hydraulic valve"), 24 => L.T("Hydraulic actuator"),
+        25 => L.T("Hydraulic PTU"), 26 => L.T("Hydraulic accumulator"), 27 => L.T("Hydraulic line"),
+        28 => L.T("Alternator"), 29 => L.T("Battery"), 30 => L.T("IDG"), 31 => L.T("RAT"), 32 => L.T("Electrical bus"),
+        33 => L.T("Circuit"), 34 => L.T("Rectifier"),
+        35 => L.T("Landing gear"), 36 => L.T("Brakes"), 37 => L.T("Tires"), 38 => L.T("Tire pressure"),
+        39 => L.T("Piston engine"), 40 => L.T("Turbine"), 41 => L.T("Oil tank"), 42 => L.T("Oil quantity"),
+        43 => L.T("Autopilot roll axis"), 44 => L.T("Autopilot pitch axis"), 45 => L.T("Autopilot yaw axis"),
+        46 => L.T("General"),
+        47 => L.T("Tailwheel gear"), 48 => L.T("Tailwheel tire"), 49 => L.T("Tailwheel tire pressure"),
+        _ => id.ToString(CultureInfo.InvariantCulture)
+    };
 
     /// <summary>Share of the new price that replacing a fully worn group costs (tires are cheap, engines are not).</summary>
     public static double RepairShare(string group) => group switch
@@ -63,7 +105,7 @@ public static class WearComponents
     /// components, so single, group and full repairs add up to the same amount.
     /// </summary>
     public static double ComponentRepairShare(int id) =>
-        Find(id) is { } c ? RepairShare(c.Group) / All.Count(x => x.Group == c.Group) : 0;
+        Find(id) is { } c ? RepairShare(c.GroupKey) / All.Count(x => x.GroupKey == c.GroupKey) : 0;
 
     /// <summary>How long the aircraft is in the workshop for a repair in this group.</summary>
     public static TimeSpan RepairDowntime(string group) => group switch
@@ -103,10 +145,10 @@ public sealed record AircraftWear(IReadOnlyDictionary<int, double> Levels)
 
     public double WorstLevel => Levels.Count == 0 ? 1 : Math.Min(1, Levels.Values.Min());
 
-    /// <summary>The worst component per group, worst group first.</summary>
+    /// <summary>The worst component per group (localized group name), worst group first.</summary>
     public IReadOnlyList<(string Group, double Level)> Groups() =>
-        Levels.GroupBy(kv => WearComponents.All[kv.Key].Group)
-              .Select(g => (g.Key, g.Min(kv => kv.Value)))
+        Levels.GroupBy(kv => WearComponents.All[kv.Key].GroupKey)
+              .Select(g => (WearComponents.GroupName(g.Key), g.Min(kv => kv.Value)))
               .OrderBy(g => g.Item2)
               .ToList();
 
@@ -123,10 +165,10 @@ public sealed record AircraftWear(IReadOnlyDictionary<int, double> Levels)
         new(start.Levels.Where(kv => end.Levels.ContainsKey(kv.Key))
                         .ToDictionary(kv => kv.Key, kv => Math.Max(0, kv.Value - end.Levels[kv.Key])));
 
-    /// <summary>For a <see cref="Delta"/>: the largest loss per group, largest first.</summary>
+    /// <summary>For a <see cref="Delta"/>: the largest loss per group (localized group name), largest first.</summary>
     public IReadOnlyList<(string Group, double Loss)> GroupLosses() =>
-        Levels.GroupBy(kv => WearComponents.All[kv.Key].Group)
-              .Select(g => (g.Key, g.Max(kv => kv.Value)))
+        Levels.GroupBy(kv => WearComponents.All[kv.Key].GroupKey)
+              .Select(g => (WearComponents.GroupName(g.Key), g.Max(kv => kv.Value)))
               .OrderByDescending(g => g.Item2)
               .ToList();
 

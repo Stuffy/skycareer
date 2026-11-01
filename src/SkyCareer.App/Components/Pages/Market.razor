@@ -16,19 +16,19 @@
 @using SkyCareer.Integrations.Gsx
 @using SkyCareer.Integrations.BeyondAtc
 
-<MudText Typo="Typo.h5" Class="mb-4">Aufträge</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">@T("Jobs")</MudText>
 
 @if ((_settlement ?? Departure.Automation.LastSettlement) is { } s)
 {
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudStack Row="true" AlignItems="AlignItems.Center">
-            <MudText Typo="Typo.h6">Abrechnung: @OutcomeText(s.Outcome) – Score @s.Score.Total</MudText>
+            <MudText Typo="Typo.h6">@F("Settlement: {0} – score {1}", OutcomeText(s.Outcome), s.Score.Total)</MudText>
             <MudSpacer />
-            <MudButton Variant="Variant.Text" OnClick="CloseSettlement">Schließen</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="CloseSettlement">@T("Close")</MudButton>
         </MudStack>
         <MudText Typo="Typo.body2" Class="mb-2">
-            Landung @s.Score.Landing · Ruhe @s.Score.Smoothness · Pünktlichkeit @s.Score.Punctuality @(s.Score.SafetyPenalty > 0 ? $"· Sicherheitsabzug −{s.Score.SafetyPenalty}" : "")
-            · Reputation @(s.ReputationChange >= 0 ? "+" : "")@s.ReputationChange · Standort jetzt @s.FinalLocation
+            @F("Landing {0} · smoothness {1} · punctuality {2}", s.Score.Landing, s.Score.Smoothness, s.Score.Punctuality) @(s.Score.SafetyPenalty > 0 ? F("· safety deduction −{0}", s.Score.SafetyPenalty) : "")
+            · @F("Reputation {0}{1} · now at {2}", s.ReputationChange >= 0 ? "+" : "", s.ReputationChange, s.FinalLocation)
         </MudText>
         @foreach (var n in s.Notes)
         {
@@ -40,7 +40,7 @@
                 {
                     <tr><td>@l.Description</td><td style="text-align:right" class="@(l.Amount < 0 ? "bad" : "ok")">@Eur(l.Amount)</td></tr>
                 }
-                <tr><td><b>Ergebnis</b></td><td style="text-align:right"><b>@Eur(s.Profit)</b></td></tr>
+                <tr><td><b>@T("Result")</b></td><td style="text-align:right"><b>@Eur(s.Profit)</b></td></tr>
             </tbody>
         </MudSimpleTable>
     </MudPaper>
@@ -59,12 +59,12 @@
 
     <MudPaper Class="@(collapsed ? "pa-3 mb-4" : "pa-4 mb-4")" Elevation="3">
         <MudStack Row="true" AlignItems="AlignItems.Center">
-            <MudText Typo="Typo.h6">@type.Name: @c.Origin → @c.Destination</MudText>
+            <MudText Typo="Typo.h6">@type.DisplayName: @c.Origin → @c.Destination</MudText>
             <MudChip T="string" Size="Size.Small" Color="@(c.Status == ContractStatus.InProgress ? Color.Warning : tracking ? Color.Success : Color.Info)">@StatusText(c, tracking)</MudChip>
             @if (c.PackageLeg is { } leg)
             {
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt">
-                    @(leg == 1 ? "Hinflug 1/2" : "Rückflug 2/2")
+                    @(leg == 1 ? T("Outbound 1/2") : T("Return flight 2/2"))
                 </MudChip>
             }
             <MudSpacer />
@@ -72,43 +72,43 @@
             @if (collapsible)
             {
                 <MudIconButton Size="Size.Small" Icon="@(collapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)"
-                               title="@(collapsed ? "Details anzeigen" : "Einklappen")" OnClick="() => ToggleExpanded(c.Id)" />
+                               title="@(collapsed ? T("Show details") : T("Collapse"))" OnClick="() => ToggleExpanded(c.Id)" />
             }
         </MudStack>
         @if (collapsed)
         {
             <MudText Typo="Typo.body2">
-                @c.DistanceNm.ToString("N0") nm · Deadline @c.Deadline.ToString("dd.MM. HH:mm") UTC · @PaxText(c) · startet nach dem Hinflug in @c.Origin
+                @c.DistanceNm.ToString("N0") nm · @F("Deadline {0:dd.MM. HH:mm} UTC", c.Deadline) · @PaxText(c) · @F("starts after the outbound flight at {0}", c.Origin)
             </MudText>
         }
         else
         {
         <MudText Typo="Typo.body2" Class="mb-2">
-            @aircraft?.Registration (@profile?.Name) · @c.DistanceNm.ToString("N0") nm · Deadline @c.Deadline.ToString("dd.MM. HH:mm") UTC
-            · @PaxText(c) @(c.CargoKg > 0 ? $"· Fracht {c.CargoKg:N0} kg ({c.CargoKind})" : "")
+            @aircraft?.Registration (@profile?.Name) · @c.DistanceNm.ToString("N0") nm · @F("Deadline {0:dd.MM. HH:mm} UTC", c.Deadline)
+            · @PaxText(c) @(c.CargoKg > 0 ? F("· Cargo {0:N0} kg ({1})", c.CargoKg, c.CargoKind) : "")
         </MudText>
 
         @if (sheet is not null)
         {
             <MudText Typo="Typo.body2" Class="mb-2">
-                Load-Sheet: Pax @sheet.PassengerMass.Kg.ToString("N0") kg · Gepäck @sheet.BaggageMass.Kg.ToString("N0") kg · Fracht @sheet.CargoMass.Kg.ToString("N0") kg
+                @F("Load sheet: pax {0:N0} kg · baggage {1:N0} kg · cargo {2:N0} kg", sheet.PassengerMass.Kg, sheet.BaggageMass.Kg, sheet.CargoMass.Kg)
                 · ZFW @sheet.ZeroFuelWeight.Kg.ToString("N0") kg · Block Fuel <b>@sheet.Fuel.Block.Kg.ToString("N0") kg</b>@(c.OfpBlockFuelKg is not null ? " (SimBrief)" : "")
                 · TOW @sheet.TakeoffWeight.Kg.ToString("N0") / @sheet.Aircraft.MaxTakeoffKg.ToString("N0") kg
                 @if (_persistFuel && aircraft?.FuelKg is { } inTank)
                 {
-                    <br />@($"Im Tank {inTank:N0} kg → nachtanken {Math.Max(0, sheet.Fuel.Block.Kg - inTank):N0} kg")
-                    @(c.FuelRestoredAtUtc is null && c.Status == ContractStatus.Accepted ? " (wird beim Scharfschalten im Sim gesetzt)" : "")
+                    <br />@F("In tanks {0:N0} kg → uplift {1:N0} kg", inTank, Math.Max(0, sheet.Fuel.Block.Kg - inTank))
+                    @(c.FuelRestoredAtUtc is null && c.Status == ContractStatus.Accepted ? T(" (set in the sim when the job is armed)") : "")
                 }
             </MudText>
         }
         @if (c.OfpRoute is not null)
         {
-            <MudText Typo="Typo.caption" Class="mono mb-2 d-block">Route: @c.OfpRoute</MudText>
+            <MudText Typo="Typo.caption" Class="mono mb-2 d-block">@T("Route:") @c.OfpRoute</MudText>
         }
         @if (_loadCheck.TryGetValue(c.Id, out var check))
         {
             <MudAlert Severity="@(check.Count == 0 ? Severity.Success : Severity.Error)" Dense="true" Class="mb-2">
-                @(check.Count == 0 ? "Beladung im Sim stimmt mit dem Load-Sheet überein." : string.Join(" · ", check.Select(d => $"{d.Item}: Soll {d.Expected.Kg:N0} kg, Ist {d.Actual.Kg:N0} kg")))
+                @(check.Count == 0 ? T("Sim loading matches the load sheet.") : string.Join(" · ", check.Select(d => F("{0}: planned {1:N0} kg, actual {2:N0} kg", d.Item, d.Expected.Kg, d.Actual.Kg))))
             </MudAlert>
         }
         @if (c.Status == ContractStatus.Accepted && readiness is not null && (!tracking || Monitor.Phase is FlightPhase.Preflight or FlightPhase.TaxiOut or FlightPhase.TakeoffRoll))
@@ -116,11 +116,11 @@
             <MudPaper Outlined="true" Class="pa-3 mb-2">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
                     <span class="@MissionTexts.LightClass(readiness.Overall) sc-light-big"></span>
-                    <MudText Typo="Typo.subtitle1"><b>Abflug-Check: @MissionTexts.LightText(readiness.Overall)</b></MudText>
+                    <MudText Typo="Typo.subtitle1"><b>@F("Departure check: {0}", MissionTexts.LightText(readiness.Overall))</b></MudText>
                     <MudSpacer />
                     <MudText Typo="Typo.caption">
-                        @(tracking ? "Wird verfolgt – Änderungen bis zum Abheben möglich, der Auftrag startet beim Abheben."
-                                   : $"Startet automatisch, sobald das Flugzeug am Boden in {c.Origin} steht.")
+                        @(tracking ? T("Tracked – changes are possible until liftoff, the job starts at liftoff.")
+                                   : F("Starts automatically as soon as the aircraft is on the ground at {0}.", c.Origin))
                     </MudText>
                 </MudStack>
                 <table class="sc-checks">
@@ -134,31 +134,31 @@
                 </table>
                 @if (readiness.Blocking.Any())
                 {
-                    <MudText Typo="Typo.caption" Class="bad d-block mt-1">Rot bei Standort oder Flugzeugtyp: Beim Abheben wird der Auftrag nicht gestartet.</MudText>
+                    <MudText Typo="Typo.caption" Class="bad d-block mt-1">@T("Red for position or aircraft type: the job will not start at liftoff.")</MudText>
                 }
                 else if (readiness.Penalised.Any())
                 {
-                    <MudText Typo="Typo.caption" Class="d-block mt-1">Was beim Abheben noch rot ist, kostet je 10 % der Vergütung (höchstens 30 %).</MudText>
+                    <MudText Typo="Typo.caption" Class="d-block mt-1">@T("Anything still red at liftoff costs 10 % of the payout each (at most 30 %).")</MudText>
                 }
             </MudPaper>
         }
         @if (Departure.Automation.NotStarted.TryGetValue(c.Id, out var notStarted) && !tracking)
         {
-            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">Beim letzten Abheben nicht gestartet: @notStarted</MudAlert>
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@F("Not started at the last liftoff: {0}", notStarted)</MudAlert>
         }
         @if (tracking && c.Status == ContractStatus.InProgress)
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
-                Flugphase: <b>@MissionTexts.Phase(Monitor.Phase)</b> – wird nach dem Parken am Ziel automatisch abgerechnet. Details unter „Live-Flug“.
+                @T("Flight phase:") <b>@MissionTexts.Phase(Monitor.Phase)</b> @T("– settled automatically after parking at the destination. Details under “Live flight”.")
                 @if (Monitor.DepartureIssues.Count > 0)
                 {
-                    <br /><span>Abweichungen beim Abheben: @string.Join("; ", Monitor.DepartureIssues)</span>
+                    <br /><span>@F("Deviations at liftoff: {0}", string.Join("; ", Monitor.DepartureIssues))</span>
                 }
             </MudAlert>
         }
         else if (c.Status == ContractStatus.InProgress)
         {
-            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">Dieser Flug wird gerade nicht verfolgt (z. B. nach einem Neustart der App).</MudAlert>
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@T("This flight is currently not being tracked (e.g. after an app restart).")</MudAlert>
         }
         @if (tracking && Departure.Automation.LastError is { } autoError)
         {
@@ -170,23 +170,23 @@
             <MudPaper Outlined="true" Class="pa-2 mb-2">
                 @if (Gsx.State is not { } g)
                 {
-                    <MudText Typo="Typo.body2">GSX: wird abgefragt …</MudText>
+                    <MudText Typo="Typo.body2">@T("GSX: querying …")</MudText>
                 }
                 else if (!g.Detected)
                 {
-                    <MudText Typo="Typo.body2">GSX: nicht erkannt (nicht installiert oder Couatl läuft nicht).</MudText>
+                    <MudText Typo="Typo.body2">@T("GSX: not detected (not installed or Couatl not running).")</MudText>
                 }
                 else
                 {
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Wrap="Wrap.Wrap">
                         <MudText Typo="Typo.body2"><b>GSX</b></MudText>
-                        <MudText Typo="Typo.body2">Boarding: @GsxText(g.Boarding) @(g.PassengersBoardingTotal > 0 ? $"({g.PassengersBoarded}/{g.PassengersBoardingTotal} Pax, Fracht {g.CargoBoardingPercent:N0} %)" : "")</MudText>
-                        <MudText Typo="Typo.body2">Betankung: @GsxText(g.Refueling)</MudText>
+                        <MudText Typo="Typo.body2">Boarding: @GsxText(g.Boarding) @(g.PassengersBoardingTotal > 0 ? F("({0}/{1} pax, cargo {2:N0} %)", g.PassengersBoarded, g.PassengersBoardingTotal, g.CargoBoardingPercent) : "")</MudText>
+                        <MudText Typo="Typo.body2">@T("Refuelling:") @GsxText(g.Refueling)</MudText>
                         <MudText Typo="Typo.body2">Pushback: @GsxText(g.Departure)</MudText>
                         <MudText Typo="Typo.body2">Deboarding: @GsxText(g.Deboarding) @(g.PassengersDeboardingTotal > 0 ? $"({g.PassengersDeboarded}/{g.PassengersDeboardingTotal})" : "")</MudText>
                         <MudSpacer />
                         <MudSwitch T="bool" Value="Gsx.SyncEnabled" ValueChanged="SetGsxSync" Color="Color.Primary"
-                                   Disabled="@(sheet?.Aircraft.Loading != LoadingMethod.SimConnectStations)" Label="Beladung mit GSX synchronisieren" />
+                                   Disabled="@(sheet?.Aircraft.Loading != LoadingMethod.SimConnectStations)" Label="@T("Sync loading with GSX")" />
                     </MudStack>
                     @if (Gsx.Mismatch is { } mismatch)
                     {
@@ -207,7 +207,7 @@
         @if (c.Status == ContractStatus.Accepted && PreparationSteps(c, type, profile, sheet) is { Count: > 0 } steps)
         {
             var next = steps.FirstOrDefault(s => !s.Done);
-            <MudText Typo="Typo.subtitle2" Class="mt-1">Vorbereitung</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mt-1">@T("Preparation")</MudText>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
                 @for (int i = 0; i < steps.Count; i++)
                 {
@@ -222,30 +222,30 @@
                                title="@step.Hint">@($"{number}. {step.Label}")</MudButton>
                 }
             </MudStack>
-            <MudText Typo="Typo.caption" Class="d-block mb-2">Danach im Simulator abheben – der Auftrag startet automatisch.</MudText>
+            <MudText Typo="Typo.caption" Class="d-block mb-2">@T("Then take off in the simulator – the job starts automatically.")</MudText>
         }
 
         <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
             @if (c.Status == ContractStatus.Accepted)
             {
                 <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="Busy" OnClick="() => ExportPlan(c, type)" StartIcon="@Icons.Material.Filled.Map"
-                           title="MSFS-Flugplan für BeyondATC (Import ‚.PLN‘) und das EFB im Sim">Flugplan (.pln)</MudButton>
+                           title="@T("MSFS flight plan for BeyondATC (import ‘.PLN’) and the EFB in the sim")">@T("Flight plan (.pln)")</MudButton>
             }
             @if (c.Status == ContractStatus.Accepted && Monitor.HasSession && !tracking && Monitor.Phase is FlightPhase.Preflight or FlightPhase.TaxiOut)
             {
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="() => ChooseJob(c)">Stattdessen diesen Auftrag fliegen</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="() => ChooseJob(c)">@T("Fly this job instead")</MudButton>
             }
             @if (c.Status == ContractStatus.InProgress)
             {
                 @if (!tracking)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ResumeTracking(c)">Tracking neu starten</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ResumeTracking(c)">@T("Restart tracking")</MudButton>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || !tracking)" OnClick="() => Complete(c)"
-                           title="Für Abbruch oder Ausweichlandung; nach dem Parken am Ziel wird automatisch abgerechnet.">Flug vorzeitig abrechnen</MudButton>
+                           title="@T("For an abort or diversion; after parking at the destination the flight is settled automatically.")">@T("Settle flight early")</MudButton>
             }
             <MudSpacer />
-            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => Cancel(c)">Stornieren</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => Cancel(c)">@T("Cancel job")</MudButton>
         </MudStack>
         }
     </MudPaper>
@@ -268,49 +268,49 @@
             {
                 <MudText Typo="Typo.caption"><span style="color:@color">━━</span> @MissionTexts.Category(category)</MudText>
             }
-            <MudText Typo="Typo.caption"><span style="color:#4caf50">●</span> Flugzeug verfügbar · <span style="color:#f44336">●</span> in Wartung · <span style="color:#ff9800">●</span> Live-Position</MudText>
+            <MudText Typo="Typo.caption"><span style="color:#4caf50">●</span> @T("Aircraft available") · <span style="color:#f44336">●</span> @T("in maintenance") · <span style="color:#ff9800">●</span> @T("Live position")</MudText>
             <MudSpacer />
-            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _map!.FitAsync()">Ansicht anpassen</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _map!.FitAsync()">@T("Fit view")</MudButton>
         </MudStack>
     </MudPaper>
 }
 
 <MudPaper Class="pa-4">
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Spacing="2">
-        <MudText Typo="Typo.h6">Angebote</MudText>
+        <MudText Typo="Typo.h6">@T("Offers")</MudText>
         @if (_offers.Count > 0)
         {
-            <MudText Typo="Typo.body2">@VisibleOffers.Count() von @_offers.Count</MudText>
+            <MudText Typo="Typo.body2">@F("{0} of {1}", VisibleOffers.Count(), _offers.Count)</MudText>
         }
         <MudSpacer />
-        <MudText Typo="Typo.caption">Zum Sortieren auf eine Spaltenüberschrift klicken.</MudText>
+        <MudText Typo="Typo.caption">@T("Click a column header to sort.")</MudText>
     </MudStack>
     @if (_fleet.Count == 0)
     {
-        <MudText Typo="Typo.body2">Ohne Flugzeug keine Aufträge – unter „Flotte“ eines beschaffen.</MudText>
+        <MudText Typo="Typo.body2">@T("No aircraft, no jobs – get one under “Fleet”.")</MudText>
     }
     else if (_offers.Count == 0)
     {
-        <MudText Typo="Typo.body2">Keine Angebote. „Aufträge suchen“ erzeugt neue Aufträge an den Standorten deiner Flugzeuge.</MudText>
+        <MudText Typo="Typo.body2">@T("No offers. “Search jobs” creates new jobs at your aircraft's locations.")</MudText>
     }
     else if (!VisibleOffers.Any())
     {
-        <MudText Typo="Typo.body2">Kein Angebot passt zu den Filtern. „Aufträge suchen“ erzeugt passende neue Aufträge.</MudText>
+        <MudText Typo="Typo.body2">@T("No offer matches the filters. “Search jobs” creates matching new jobs.")</MudText>
     }
     else
     {
         <MudSimpleTable Dense="true" Hover="true">
             <thead>
                 <tr>
-                    @SortHeader(OfferColumn.Aircraft, "Flugzeug")
-                    @SortHeader(OfferColumn.Mission, "Auftrag")
-                    @SortHeader(OfferColumn.Distance, "Strecke")
-                    @SortHeader(OfferColumn.Runway, "Ziel")
-                    @SortHeader(OfferColumn.Load, "Ladung")
-                    @SortHeader(OfferColumn.BlockFuel, "Block Fuel")
-                    @SortHeader(OfferColumn.Deadline, "Deadline")
-                    @SortHeader(OfferColumn.Expires, "Gültig bis")
-                    @SortHeader(OfferColumn.Payout, "Vergütung")
+                    @SortHeader(OfferColumn.Aircraft, T("Aircraft"))
+                    @SortHeader(OfferColumn.Mission, T("Job"))
+                    @SortHeader(OfferColumn.Distance, T("Route"))
+                    @SortHeader(OfferColumn.Runway, T("Destination"))
+                    @SortHeader(OfferColumn.Load, T("Load"))
+                    @SortHeader(OfferColumn.BlockFuel, T("Block fuel"))
+                    @SortHeader(OfferColumn.Deadline, T("Deadline"))
+                    @SortHeader(OfferColumn.Expires, T("Valid until"))
+                    @SortHeader(OfferColumn.Payout, T("Payout"))
                     <th></th>
                 </tr>
             </thead>
@@ -321,17 +321,17 @@
                     <tr @onclick="() => SelectOffer(o.Id)" style="cursor:pointer; @(o.Id == _selected ? "background:rgba(255,255,255,0.08)" : "")" id="@($"offer-{o.Id:N}")">
                         @{ var plane = _fleet.FirstOrDefault(f => f.Id == o.AircraftId); var back = ReturnOf(o); }
                         <td>@plane?.Registration<br /><MudText Typo="Typo.caption">@(plane is null ? "" : Career.ProfileName(plane.ProfileId))</MudText></td>
-                        <td><span style="color:@ColorFor(t)">●</span> @t.Name<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief</MudText></td>
+                        <td><span style="color:@ColorFor(t)">●</span> @t.DisplayName<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief</MudText></td>
                         <td>
                             @o.Origin → @o.Destination
                             @if (back is not null)
                             {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt" Class="ml-1">Hin &amp; Rück</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt" Class="ml-1">@T("Round trip")</MudChip>
                             }
                             <br /><MudText Typo="Typo.caption">@o.DistanceNm.ToString("N0") nm@(CityOf(o.Destination) is { Length: > 0 } city ? $" · {city}" : "")</MudText>
                             @if (back is not null)
                             {
-                                <br /><MudText Typo="Typo.caption">zurück: @back.TotalPassengers Pax · @Eur(back.Payout) · bis @back.Deadline.ToString("dd.MM. HH:mm")</MudText>
+                                <br /><MudText Typo="Typo.caption">@F("return: {0} pax · {1} · by {2:dd.MM. HH:mm}", back.TotalPassengers, Eur(back.Payout), back.Deadline)</MudText>
                             }
                         </td>
                         <td>@DestinationInfo(o.Destination)</td>
@@ -343,10 +343,10 @@
                             <b>@Eur(OfferValue(o))</b>
                             @if (back is not null)
                             {
-                                <br /><MudText Typo="Typo.caption">inkl. Rückflug und @Eur(PackageBonus(o, back)) Bonus</MudText>
+                                <br /><MudText Typo="Typo.caption">@F("incl. return flight and {0} bonus", Eur(PackageBonus(o, back)))</MudText>
                             }
                         </td>
-                        <td @onclick:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Accept(o)">@(back is null ? "Annehmen" : "Beide annehmen")</MudButton></td>
+                        <td @onclick:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Accept(o)">@(back is null ? T("Accept") : T("Accept both"))</MudButton></td>
                     </tr>
                 }
             </tbody>
@@ -396,15 +396,15 @@
     private string StatusText(MissionContract c, bool tracking) => c.Status switch
     {
         ContractStatus.InProgress when tracking && Departure.Automation.Waiting is { } waiting => waiting,
-        ContractStatus.InProgress => $"Im Flug – {MissionTexts.Phase(tracking ? Monitor.Phase : null)}",
-        _ when tracking => $"Bereit – {MissionTexts.Phase(Monitor.Phase)}",
-        _ => $"Angenommen – wartet auf Flugzeug in {c.Origin}"
+        ContractStatus.InProgress => F("In flight – {0}", MissionTexts.Phase(tracking ? Monitor.Phase : null)),
+        _ when tracking => F("Ready – {0}", MissionTexts.Phase(Monitor.Phase)),
+        _ => F("Accepted – waiting for aircraft at {0}", c.Origin)
     };
 
     private void ChooseJob(MissionContract c)
     {
         if (!Departure.Automation.Choose(c.Id))
-            Snackbar.Add("Wechsel nur am Boden vor dem Losrollen möglich.", Severity.Warning);
+            Snackbar.Add(T("Switching is only possible on the ground before taxiing."), Severity.Warning);
     }
 
     /// <summary>GSX follows the job in flight, otherwise the first accepted one; stops when no job is open.</summary>
@@ -433,24 +433,24 @@
     private Task ExportPlan(MissionContract c, MissionType type) => Run(async () =>
     {
         if (!_airports.TryGetValue(c.Origin, out var from) || !_airports.TryGetValue(c.Destination, out var to))
-            throw new CareerException("Flughafendaten für den Auftrag fehlen.");
+            throw new CareerException(T("Airport data for the job is missing."));
         var rules = type.FlightRules == FlightRulesRequirement.Vfr ? PlanRules.Vfr : PlanRules.Ifr;
-        var plan = PlnExporter.Build(from, to, rules, title: $"{type.Name} {c.Origin}-{c.Destination}");
+        var plan = PlnExporter.Build(from, to, rules, title: $"{type.DisplayName} {c.Origin}-{c.Destination}");
         var path = await PlnExporter.SaveAsync(plan, PlnExporter.DefaultDirectory, $"{c.Origin}-{c.Destination}");
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
         Snackbar.Add(rules == PlanRules.Ifr
-            ? "Flugplan gespeichert (Direktroute). Für IFR mit BeyondATC besser den SimBrief-OFP nutzen."
-            : "Flugplan gespeichert – in BeyondATC unter VFR › Datei-Import oder im EFB laden.", Severity.Success);
+            ? T("Flight plan saved (direct route). For IFR with BeyondATC, better use the SimBrief OFP.")
+            : T("Flight plan saved – load it in BeyondATC under VFR › file import or in the EFB."), Severity.Success);
     });
 
     private static string GsxText(GsxServiceState s) => s switch
     {
-        GsxServiceState.Callable => "bereit",
-        GsxServiceState.NotAvailable => "n. v.",
-        GsxServiceState.Bypassed => "übersprungen",
-        GsxServiceState.Requested => "angefordert",
-        GsxServiceState.Performing => "läuft",
-        GsxServiceState.Completed => "fertig",
+        GsxServiceState.Callable => T("ready"),
+        GsxServiceState.NotAvailable => T("n/a"),
+        GsxServiceState.Bypassed => T("skipped"),
+        GsxServiceState.Requested => T("requested"),
+        GsxServiceState.Performing => T("in progress"),
+        GsxServiceState.Completed => T("completed"),
         _ => "–"
     };
 
@@ -515,7 +515,7 @@
             Func<MissionContract, IComparable> key = Filter.SortColumn switch
             {
                 OfferColumn.Aircraft => o => _fleet.FirstOrDefault(f => f.Id == o.AircraftId)?.Registration ?? "",
-                OfferColumn.Mission => o => Career.MissionType(o.MissionTypeId).Name,
+                OfferColumn.Mission => o => Career.MissionType(o.MissionTypeId).DisplayName,
                 OfferColumn.Distance => o => o.DistanceNm,
                 OfferColumn.Runway => o => _airports.GetValueOrDefault(o.Destination)?.LongestRunwayM ?? 0,
                 OfferColumn.Load => o => o.TotalPassengers * 100_000.0 + o.CargoKg,
@@ -554,13 +554,13 @@
             builder.AddContent(0, "–");
             return;
         }
-        string surface = a.HasPavedRunway ? "befestigt" : a.Surfaces.Contains(RunwaySurface.Water) ? "Wasser" : "unbefestigt";
-        string ils = a.HasIls switch { true => "ILS ✓", false => "kein ILS", null => "ILS ?" };
+        string surface = a.HasPavedRunway ? T("paved") : a.Surfaces.Contains(RunwaySurface.Water) ? T("water") : T("unpaved");
+        string ils = a.HasIls switch { true => "ILS ✓", false => T("no ILS"), null => "ILS ?" };
         builder.AddContent(1, $"{a.LongestRunwayM:N0} m {surface}");
         builder.AddMarkupContent(2, "<br />");
         builder.OpenElement(3, "span");
         builder.AddAttribute(4, "class", "mud-typography-caption");
-        builder.AddContent(5, $"{(a.HasLightedRunway ? "befeuert · " : "")}{ils}{(a.ScheduledService ? " · Linie" : "")}{(a.IsMilitary ? " · Militär" : "")}");
+        builder.AddContent(5, $"{(a.HasLightedRunway ? T("lighted · ") : "")}{ils}{(a.ScheduledService ? T(" · scheduled") : "")}{(a.IsMilitary ? T(" · military") : "")}");
         builder.CloseElement();
     };
 
@@ -584,18 +584,18 @@
     {
         if (!_airports.TryGetValue(c.Origin, out var from) || !_airports.TryGetValue(c.Destination, out var to)) return null;
         var type = Career.MissionType(c.MissionTypeId);
-        string label = $"{type.Name}: {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm · {Eur(c.Payout)}{(c.PackageId is not null ? " (Hin & Rück)" : "")}{(accepted ? " (angenommen)" : "")}";
+        string label = $"{type.DisplayName}: {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm · {Eur(c.Payout)}{(c.PackageId is not null ? T(" (round trip)") : "")}{(accepted ? T(" (accepted)") : "")}";
         string registration = _fleet.FirstOrDefault(f => f.Id == c.AircraftId) is { } plane
             ? $"{plane.Registration} ({Career.ProfileName(plane.ProfileId)})" : "";
         var details = new List<string>
         {
             $"{registration} · {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm",
-            $"{PaxText(c)}{(c.CargoKg > 0 ? $" · Fracht {c.CargoKg:N0} kg {c.CargoKind}" : "")} · Block Fuel {c.PlannedBlockFuelKg:N0} kg",
-            $"Deadline {c.Deadline:dd.MM. HH:mm}{(accepted ? "" : $" · gültig bis {c.ExpiresAt:dd.MM. HH:mm}")}"
+            $"{PaxText(c)}{(c.CargoKg > 0 ? F(" · Cargo {0:N0} kg {1}", c.CargoKg, c.CargoKind) : "")} · {F("Block fuel {0:N0} kg", c.PlannedBlockFuelKg)}",
+            $"{F("Deadline {0:dd.MM. HH:mm}", c.Deadline)}{(accepted ? "" : F(" · valid until {0:dd.MM. HH:mm}", c.ExpiresAt))}"
         };
         return new MissionMap.Route(c.Id, [from.Position.Latitude, from.Position.Longitude], [to.Position.Latitude, to.Position.Longitude],
             label, ColorFor(type), accepted, c.Id == _selected, to.Ident,
-            MissionTexts.City(to) is { Length: > 0 } city ? $"{to.Name} ({city})" : to.Name, type.Name, details, Eur(c.Payout));
+            MissionTexts.City(to) is { Length: > 0 } city ? $"{to.Name} ({city})" : to.Name, type.DisplayName, details, Eur(c.Payout));
     }
 
     /// <summary>Return legs opened by the user; a waiting return leg is shown collapsed.</summary>
@@ -631,20 +631,20 @@
         bool loadOk = _loadCheck.TryGetValue(c.Id, out var check) && check.Count == 0;
         if (type.SimBrief != SimBriefUsage.None && profile is not null)
         {
-            steps.Add(new("In SimBrief planen", ofp, false, () => { OpenSimBrief(c, profile); return Task.CompletedTask; },
-                "Öffnet SimBrief mit Strecke, Flugzeug und Beladung des Auftrags"));
-            steps.Add(new("OFP laden", ofp, false, () => ImportOfp(c, profile), "Übernimmt den zuletzt in SimBrief erzeugten OFP (Treibstoff, Route)"));
+            steps.Add(new(T("Plan in SimBrief"), ofp, false, () => { OpenSimBrief(c, profile); return Task.CompletedTask; },
+                T("Opens SimBrief with the job's route, aircraft and load")));
+            steps.Add(new(T("Load OFP"), ofp, false, () => ImportOfp(c, profile), T("Imports the OFP last generated in SimBrief (fuel, route)")));
         }
         if (sheet is not null && sheet.Aircraft.Loading == LoadingMethod.SimConnectStations)
-            steps.Add(new("Im Sim beladen", loadOk, Monitor.Loader is null, () => LoadIntoSim(c, sheet),
-                Monitor.Loader is null ? "Nur mit Verbindung zu MSFS" : "Setzt Zuladung und Treibstoff laut Load-Sheet"));
+            steps.Add(new(T("Load in sim"), loadOk, Monitor.Loader is null, () => LoadIntoSim(c, sheet),
+                Monitor.Loader is null ? T("Only when connected to MSFS") : T("Sets payload and fuel according to the load sheet")));
         if (sheet is not null)
-            steps.Add(new("Beladung prüfen", loadOk, Monitor.Inspector is null, () => VerifyLoad(c, sheet),
-                Monitor.Inspector is null ? "Nur mit Verbindung zu MSFS" : "Vergleicht Zuladung und Treibstoff im Sim mit dem Load-Sheet"));
+            steps.Add(new(T("Verify load"), loadOk, Monitor.Inspector is null, () => VerifyLoad(c, sheet),
+                Monitor.Inspector is null ? T("Only when connected to MSFS") : T("Compares payload and fuel in the sim with the load sheet")));
         return steps;
     }
 
-    /// <summary>"In Liste zeigen" from a map popup: highlight the row and scroll to it.</summary>
+    /// <summary>"Show in list" from a map popup: highlight the row and scroll to it.</summary>
     private async Task ShowOffer(Guid id)
     {
         _selected = id;
@@ -653,7 +653,7 @@
         if (_map is not null) await _map.ScrollToAsync($"offer-{id:N}");
     }
 
-    /// <summary>"Annehmen" from a map popup.</summary>
+    /// <summary>"Accept" from a map popup.</summary>
     private Task AcceptFromMap(Guid id) =>
         _offers.FirstOrDefault(o => o.Id == id) is { } offer ? Accept(offer) : Task.CompletedTask;
 
@@ -682,18 +682,18 @@
     {
         var search = Filter.ToSearch();
         _searchStatus = search.RequireIls && IlsLookup.Available
-            ? "Suche läuft – unbekannte Zielflughäfen werden im Simulator auf ILS geprüft …"
-            : "Suche läuft …";
+            ? T("Searching – unknown destination airports are checked for ILS in the simulator …")
+            : T("Searching …");
         StateHasChanged();
         try
         {
             var r = await Career.SearchMarketAsync(search, Filter.AircraftId);
             Snackbar.Add(r.Created == 0
-                    ? "Keine passenden Aufträge gefunden – Filter lockern (z. B. Distanz oder Pistenlänge)."
-                    : $"{r.Created} neue Aufträge" + (r.IlsChecked > 0 ? $" ({r.IlsChecked} Flughäfen auf ILS geprüft)" : "") + ".",
+                    ? T("No matching jobs found – relax the filters (e.g. distance or runway length).")
+                    : F("{0} new jobs", r.Created) + (r.IlsChecked > 0 ? F(" ({0} airports checked for ILS)", r.IlsChecked) : "") + ".",
                 r.Created == 0 ? Severity.Warning : Severity.Success);
             if (r.IlsUnavailable)
-                Snackbar.Add("MSFS ist nicht verbunden: Es wurden nur Flughäfen verwendet, deren ILS bereits bekannt ist.", Severity.Info);
+                Snackbar.Add(T("MSFS is not connected: only airports with known ILS data were used."), Severity.Info);
             if (_map is not null) await _map.FitAsync();
         }
         finally
@@ -702,22 +702,22 @@
         }
     });
 
-    private Task Accept(MissionContract o) => Run(() => Career.AcceptAsync(o.Id), ReturnOf(o) is null ? "Auftrag angenommen." : "Hin- und Rückflug angenommen.");
+    private Task Accept(MissionContract o) => Run(() => Career.AcceptAsync(o.Id), ReturnOf(o) is null ? T("Job accepted.") : T("Outbound and return flight accepted."));
 
     private async Task Cancel(MissionContract c)
     {
         var back = ReturnOf(c) is { Status: ContractStatus.Accepted } r ? r : null;
         decimal penalty = Math.Round(c.Payout * CareerService.CancellationPenalty, 0) + (back is null ? 0 : Math.Round(back.Payout * CareerService.CancellationPenalty, 0));
-        string question = back is not null ? $"Hin- und Rückflug stornieren? Vertragsstrafe {Eur(penalty)}."
-            : c.IsReturnLeg ? $"Rückflug stornieren? Vertragsstrafe {Eur(penalty)}, der Paket-Bonus entfällt."
-            : $"Auftrag stornieren? Vertragsstrafe {Eur(penalty)}.";
-        if (await Dialogs.ShowMessageBoxAsync("Stornieren", question, yesText: "Stornieren", cancelText: "Zurück") != true)
+        string question = back is not null ? F("Cancel outbound and return flight? Cancellation penalty {0}.", Eur(penalty))
+            : c.IsReturnLeg ? F("Cancel the return flight? Cancellation penalty {0}, the package bonus is lost.", Eur(penalty))
+            : F("Cancel the job? Cancellation penalty {0}.", Eur(penalty));
+        if (await Dialogs.ShowMessageBoxAsync(T("Cancel job"), question, yesText: T("Cancel job"), cancelText: T("Back")) != true)
             return;
         await Run(async () =>
         {
             await Career.CancelAsync(c.Id);
             if (Monitor.ContractId == c.Id) Monitor.EndFlight();
-        }, "Auftrag storniert.");
+        }, T("Job cancelled."));
     }
 
     // Normally automatic after a restart; continues from the flight journal when there is one.
@@ -725,7 +725,7 @@
     {
         var startedAt = c.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : DateTimeOffset.UtcNow;
         if (!Monitor.ResumeFlight(c.Id, startedAt, c.FuelAtBlockOffKg))
-            Snackbar.Add("Keine Flugdaten: erst mit MSFS verbinden.", Severity.Warning);
+            Snackbar.Add(T("No flight data: connect to MSFS first."), Severity.Warning);
     }
 
     private void OpenSimBrief(MissionContract c, AircraftProfile p)
@@ -739,7 +739,7 @@
     private Task ImportOfp(MissionContract c, AircraftProfile p) => Run(async () =>
     {
         var career = await Career.GetCareerAsync();
-        if (career.SimBriefUser is null) throw new CareerException("Bitte zuerst unter „Einstellungen“ den SimBrief-Benutzernamen eintragen.");
+        if (career.SimBriefUser is null) throw new CareerException(T("Please enter your SimBrief username under “Settings” first."));
         var ofp = await SimBrief.FetchLatestAsync(career.SimBriefUser);
         var sheet = Career.BuildLoadSheet(c, p);
         bool detailed = career.SimBriefDetailedLoad;
@@ -749,10 +749,10 @@
             (detailed ? sheet.SimPayload : sheet.Payload).Kg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg,
             career.BagWeightKg, BagsAsFreight: detailed));
         if (!ofp.Origin.Equals(c.Origin, StringComparison.OrdinalIgnoreCase) || !ofp.Destination.Equals(c.Destination, StringComparison.OrdinalIgnoreCase))
-            throw new CareerException($"Der letzte OFP passt nicht zum Auftrag: {string.Join("; ", problems)}");
+            throw new CareerException(F("The latest OFP doesn't match the job: {0}", string.Join("; ", problems)));
         foreach (var problem in problems) Snackbar.Add(problem, Severity.Warning);
         await Career.SetOfpAsync(c.Id, ofp.BlockFuelKg, ofp.TripFuelKg, ofp.Route);
-        Snackbar.Add($"OFP übernommen: Block Fuel {ofp.BlockFuelKg:N0} kg.", Severity.Success);
+        Snackbar.Add(F("OFP imported: block fuel {0:N0} kg.", ofp.BlockFuelKg), Severity.Success);
     });
 
     private Task LoadIntoSim(MissionContract c, LoadSheet sheet) => Run(async () =>
@@ -774,13 +774,13 @@
     private async Task Complete(MissionContract c)
     {
         if (Monitor.Phase != FlightPhase.Arrived &&
-            await Dialogs.ShowMessageBoxAsync("Flug abrechnen", $"Der Flug ist noch nicht abgeschlossen ({MissionTexts.Phase(Monitor.Phase)}). Jetzt abrechnen? Ist das Flugzeug nicht am Ziel, gibt es keine Vergütung.",
-                yesText: "Abrechnen", cancelText: "Weiterfliegen") != true)
+            await Dialogs.ShowMessageBoxAsync(T("Settle flight"), F("The flight is not finished yet ({0}). Settle now? If the aircraft is not at the destination, there is no payout.", MissionTexts.Phase(Monitor.Phase)),
+                yesText: T("Settle"), cancelText: T("Keep flying")) != true)
             return;
 
         await Run(async () =>
         {
-            var summary = Monitor.Summarize() ?? throw new CareerException("Keine Flugdaten vorhanden.");
+            var summary = Monitor.Summarize() ?? throw new CareerException(T("No flight data available."));
             var track = await Monitor.SaveTrackAsync($"{c.Origin}-{c.Destination}-{c.Id:N}");
             _settlement = await Career.CompleteFlightAsync(c.Id, FlightResultMapper.Map(summary, Monitor.DepartureIssues), track);
             Monitor.EndFlight();
@@ -788,23 +788,23 @@
     }
 
     private string PaxText(MissionContract c) => c.TotalPassengers == 0 ? "–"
-        : $"{c.TotalPassengers} Pax{OccupancyText(c)}{(c.Children + c.Infants > 0 ? $" ({c.Children} Kinder, {c.Infants} Babys)" : "")}";
+        : $"{F("{0} pax", c.TotalPassengers)}{OccupancyText(c)}{(c.Children + c.Infants > 0 ? F(" ({0} children, {1} infants)", c.Children, c.Infants) : "")}";
 
-    /// <summary>" · 79 % belegt" when the mission fills seats of a known aircraft.</summary>
+    /// <summary>" · 79 % occupied" when the mission fills seats of a known aircraft.</summary>
     private string OccupancyText(MissionContract c)
     {
         if (_fleet.FirstOrDefault(f => f.Id == c.AircraftId) is not { } plane) return "";
         int capacity = SkyCareer.Missions.Generation.StandardMissionGenerator.Capacity(Career.MissionType(c.MissionTypeId), Career.Profile(plane.ProfileId));
-        return capacity > 0 ? $" · {(c.Adults + c.Children) / (double)capacity:P0} belegt" : "";
+        return capacity > 0 ? F(" · {0:P0} occupied", (c.Adults + c.Children) / (double)capacity) : "";
     }
 
     private static string OutcomeText(FlightOutcome o) => o switch
     {
-        FlightOutcome.Completed => "Erfolgreich",
-        FlightOutcome.Late => "Verspätet",
-        FlightOutcome.Diverted => "Nicht am Ziel",
-        FlightOutcome.Crashed => "Unfall",
-        FlightOutcome.Failed => "Annulliert",
+        FlightOutcome.Completed => T("Successful"),
+        FlightOutcome.Late => T("Late"),
+        FlightOutcome.Diverted => T("Not at destination"),
+        FlightOutcome.Crashed => T("Crashed"),
+        FlightOutcome.Failed => T("Cancelled"),
         _ => o.ToString()
     };
 

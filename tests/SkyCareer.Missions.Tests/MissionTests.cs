@@ -141,15 +141,15 @@ public class MissionTests
         Assert.Equal(9, ofp.PlannedBagCount);
 
         var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, 1000, 11300, 16375));
-        Assert.Contains(problems, p => p.Contains("3 von 9 Gepäckstücken"));
+        Assert.Contains(problems, p => p.Contains("3 of 9 bags"));
         // Detailed load: SimBrief must not add bags at all.
         var detailed = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, 1000, 11300, 16375, BagsAsFreight: true));
-        Assert.Contains(detailed, p => p.Contains("Gepäckgewicht von 50 lbs") && p.Contains("auf 0 setzen"));
-        Assert.DoesNotContain(detailed, p => p.Contains("Gepäckstücken"));
-        Assert.Contains(problems, p => p.StartsWith("Zuladung"));
+        Assert.Contains(detailed, p => p.Contains("bag weight of 50 lbs") && p.Contains("set it to 0"));
+        Assert.DoesNotContain(detailed, p => p.Contains("bags due to the weight limit"));
+        Assert.Contains(problems, p => p.StartsWith("Payload"));
         Assert.Contains(problems, p => p.StartsWith("ZFW"));
-        Assert.Contains(problems, p => p.StartsWith("MZFW im Flugzeugprofil"));
-        Assert.DoesNotContain(problems, p => p.StartsWith("Fracht"));
+        Assert.Contains(problems, p => p.StartsWith("MZFW in the aircraft profile"));
+        Assert.DoesNotContain(problems, p => p.StartsWith("Freight"));
     }
 
     [Fact]
@@ -177,12 +177,12 @@ public class MissionTests
             }
             """);
         var problems = OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38, BagWeightKg: 22.68));
-        Assert.DoesNotContain(problems, p => p.Contains("je Passagier"));
-        Assert.Contains(problems, p => p.Contains("55 lbs je Gepäckstück") && p.Contains("50 lbs"));
+        Assert.DoesNotContain(problems, p => p.Contains("per passenger"));
+        Assert.Contains(problems, p => p.Contains("55 lbs per bag") && p.Contains("50 lbs"));
         Assert.Contains(OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 79.38, BagsAsFreight: true)),
-            p => p.Contains("Gepäckgewicht von 55 lbs"));
+            p => p.Contains("bag weight of 55 lbs"));
         Assert.Contains(OfpValidator.Validate(ofp, new OfpExpectation("EGGW", "EDDB", "C750", 9, 0, PassengerWeightKg: 90)),
-            p => p.Contains("je Passagier"));
+            p => p.Contains("per passenger"));
     }
 
     [Fact]

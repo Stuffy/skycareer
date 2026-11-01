@@ -1,3 +1,5 @@
+using SkyCareer.Localization;
+
 namespace SkyCareer.Integrations.SimBrief;
 
 /// <summary>
@@ -11,8 +13,8 @@ public sealed record OfpExpectation(string Origin, string Destination, string Ai
     double PassengerWeightKg = 0, double BagWeightKg = 0, bool BagsAsFreight = false);
 
 /// <summary>
-/// Checks that an imported OFP belongs to the accepted mission and plans the same load. Messages are shown in the
-/// (German) UI as-is.
+/// Checks that an imported OFP belongs to the accepted mission and plans the same load. Messages are localized
+/// display texts.
 /// </summary>
 public static class OfpValidator
 {
@@ -20,47 +22,47 @@ public static class OfpValidator
     {
         var problems = new List<string>();
         if (!ofp.Origin.Equals(e.Origin, StringComparison.OrdinalIgnoreCase))
-            problems.Add($"Abflug im OFP {ofp.Origin}, Auftrag {e.Origin}");
+            problems.Add(L.F("Departure in OFP {0}, job {1}", ofp.Origin, e.Origin));
         if (!ofp.Destination.Equals(e.Destination, StringComparison.OrdinalIgnoreCase))
-            problems.Add($"Ziel im OFP {ofp.Destination}, Auftrag {e.Destination}");
+            problems.Add(L.F("Destination in OFP {0}, job {1}", ofp.Destination, e.Destination));
         if (!ofp.AircraftIcao.Equals(e.AircraftIcao, StringComparison.OrdinalIgnoreCase))
-            problems.Add($"Flugzeugtyp im OFP {ofp.AircraftIcao}, Profil {e.AircraftIcao}");
+            problems.Add(L.F("Aircraft type in OFP {0}, profile {1}", ofp.AircraftIcao, e.AircraftIcao));
 
         if (ofp.Passengers != e.Passengers)
             problems.Add(ofp.PlannedPassengers > ofp.Passengers
-                ? $"SimBrief hat nur {ofp.Passengers} von {ofp.PlannedPassengers} Passagieren eingeplant (Gewichtslimit), Auftrag: {e.Passengers}"
-                : $"OFP mit {ofp.Passengers} Passagieren, Auftrag mit {e.Passengers}");
+                ? L.F("SimBrief only planned {0} of {1} passengers (weight limit), job: {2}", ofp.Passengers, ofp.PlannedPassengers, e.Passengers)
+                : L.F("OFP with {0} passengers, job with {1}", ofp.Passengers, e.Passengers));
         const double LbPerKg = 2.20462262;
         if (e.PassengerWeightKg > 0 && ofp.PassengerWeightKg > 0 && Math.Abs(ofp.PassengerWeightKg - e.PassengerWeightKg) > 0.5)
-            problems.Add($"SimBrief rechnet mit {ofp.PassengerWeightKg * LbPerKg:N0} lbs je Passagier, die Karriere mit {e.PassengerWeightKg * LbPerKg:N0} lbs " +
-                         "– unter „Einstellungen → Beladung“ angleichen (gilt für neue Aufträge)");
+            problems.Add(L.F("SimBrief uses {0:N0} lbs per passenger, the career {1:N0} lbs – align them under “Settings → Loading” (applies to new jobs)",
+                ofp.PassengerWeightKg * LbPerKg, e.PassengerWeightKg * LbPerKg));
         if (e.BagsAsFreight)
         {
             // SkyCareer sends the bags as freight; SimBrief's own bags would count them twice.
             if (ofp.BagWeightKg > 0.5 && ofp.BagCount > 0)
-                problems.Add($"Im SimBrief-Airframe ist ein Gepäckgewicht von {ofp.BagWeightKg * LbPerKg:N0} lbs eingestellt – auf 0 setzen, " +
-                             "SkyCareer sendet das Gepäck als Fracht (oder „Genaue Beladung an SimBrief“ ausschalten)");
+                problems.Add(L.F("The SimBrief airframe has a bag weight of {0:N0} lbs – set it to 0, SkyCareer sends the baggage as freight (or turn off “Send detailed load to SimBrief”)",
+                    ofp.BagWeightKg * LbPerKg));
         }
         else
         {
             if (e.BagWeightKg > 0 && ofp.BagWeightKg > 0 && Math.Abs(ofp.BagWeightKg - e.BagWeightKg) > 0.5)
-                problems.Add($"SimBrief rechnet mit {ofp.BagWeightKg * LbPerKg:N0} lbs je Gepäckstück, die Karriere mit {e.BagWeightKg * LbPerKg:N0} lbs " +
-                             "– unter „Einstellungen → Beladung“ angleichen (gilt für neue Aufträge)");
+                problems.Add(L.F("SimBrief uses {0:N0} lbs per bag, the career {1:N0} lbs – align them under “Settings → Loading” (applies to new jobs)",
+                    ofp.BagWeightKg * LbPerKg, e.BagWeightKg * LbPerKg));
             if (ofp.PlannedBagCount > ofp.BagCount)
-                problems.Add($"SimBrief hat {ofp.PlannedBagCount - ofp.BagCount} von {ofp.PlannedBagCount} Gepäckstücken wegen des Gewichtslimits weggelassen " +
-                             $"(MZFW im SimBrief-Airframe {ofp.MaxZeroFuelWeightKg:N0} kg)");
+                problems.Add(L.F("SimBrief dropped {0} of {1} bags due to the weight limit (MZFW in the SimBrief airframe {2:N0} kg)",
+                    ofp.PlannedBagCount - ofp.BagCount, ofp.PlannedBagCount, ofp.MaxZeroFuelWeightKg));
         }
         if (Math.Abs(ofp.FreightKg - e.FreightKg) > Math.Max(50, e.FreightKg * 0.05))
-            problems.Add($"Fracht im OFP {ofp.FreightKg:N0} kg, Auftrag {e.FreightKg:N0} kg");
+            problems.Add(L.F("Freight in OFP {0:N0} kg, job {1:N0} kg", ofp.FreightKg, e.FreightKg));
         if (e.PayloadKg > 0 && ofp.PayloadKg > 0 && Math.Abs(ofp.PayloadKg - e.PayloadKg) > Math.Max(50, e.PayloadKg * 0.05))
-            problems.Add($"Zuladung (Passagiere, Gepäck, Fracht) im OFP {ofp.PayloadKg:N0} kg, Load-Sheet {e.PayloadKg:N0} kg");
+            problems.Add(L.F("Payload (passengers, baggage, freight) in OFP {0:N0} kg, load sheet {1:N0} kg", ofp.PayloadKg, e.PayloadKg));
         if (e.ZeroFuelWeightKg > 0 && ofp.ZeroFuelWeightKg > 0 &&
             Math.Abs(ofp.ZeroFuelWeightKg - e.ZeroFuelWeightKg) > Math.Max(150, e.ZeroFuelWeightKg * 0.02))
-            problems.Add($"ZFW im OFP {ofp.ZeroFuelWeightKg:N0} kg, Load-Sheet {e.ZeroFuelWeightKg:N0} kg " +
-                         $"(Leergewicht im SimBrief-Airframe {ofp.OperatingEmptyKg:N0} kg)");
+            problems.Add(L.F("ZFW in OFP {0:N0} kg, load sheet {1:N0} kg (empty weight in the SimBrief airframe {2:N0} kg)",
+                ofp.ZeroFuelWeightKg, e.ZeroFuelWeightKg, ofp.OperatingEmptyKg));
         if (e.ProfileMaxZeroFuelKg > 0 && ofp.MaxZeroFuelWeightKg > 0 && e.ProfileMaxZeroFuelKg - ofp.MaxZeroFuelWeightKg > 100)
-            problems.Add($"MZFW im Flugzeugprofil ({e.ProfileMaxZeroFuelKg:N0} kg) liegt über dem SimBrief-Wert ({ofp.MaxZeroFuelWeightKg:N0} kg) – " +
-                         "das Profil erlaubt mehr Zuladung, als das Flugzeug tragen darf");
+            problems.Add(L.F("MZFW in the aircraft profile ({0:N0} kg) is above the SimBrief value ({1:N0} kg) – the profile allows more payload than the aircraft may carry",
+                e.ProfileMaxZeroFuelKg, ofp.MaxZeroFuelWeightKg));
         return problems;
     }
 }

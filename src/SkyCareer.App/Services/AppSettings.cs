@@ -34,14 +34,27 @@ public sealed class AppSettings
     /// <summary>Shows the debug menu, debug tools and developer functions (replay, free relocation).</summary>
     public bool DebugMode => _values.DebugMode;
 
+    /// <summary>UI language ("en", "de"); null follows the Windows display language.</summary>
+    public string? Language => _values.Language;
+
     public event Action? Changed;
 
-    public void SetDebugMode(bool enabled)
+    public void SetDebugMode(bool enabled) => Update(v => v with { DebugMode = enabled });
+
+    /// <summary>Stores the UI language and applies it to the whole app (texts, number and date formats).</summary>
+    public void SetLanguage(string? code)
+    {
+        Update(v => v with { Language = code });
+        Localization.L.SetLanguage(code);
+    }
+
+    private void Update(Func<Values, Values> change)
     {
         lock (_lock)
         {
-            if (_values.DebugMode == enabled) return;
-            _values = _values with { DebugMode = enabled };
+            var changed = change(_values);
+            if (changed == _values) return;
+            _values = changed;
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             File.WriteAllText(_path, JsonSerializer.Serialize(_values, Json));
         }
@@ -51,5 +64,6 @@ public sealed class AppSettings
     private sealed record Values
     {
         public bool DebugMode { get; init; }
+        public string? Language { get; init; }
     }
 }

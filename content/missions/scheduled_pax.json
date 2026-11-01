@@ -1,7 +1,8 @@
 {
   "id": "scheduled_pax",
-  "name": "Linienflug",
-  "description": "Planmäßiger Passagierflug zwischen Verkehrsflughäfen.",
+  "name": "Scheduled flight",
+  "description": "Scheduled passenger flight between commercial airports.",
+  "texts": { "de": { "name": "Linienflug", "description": "Planmäßiger Passagierflug zwischen Verkehrsflughäfen." } },
   "category": "airline",
   "requirements": { "requiredTags": ["pax"], "forbiddenTags": ["helicopter"], "minSeats": 50, "surfaces": ["paved"] },
   "passengers": { "min": 60, "max": 450, "childShare": 0.06, "infantShare": 0.01, "baggage": "european", "loadFactor": 0.85, "loadFactorSpread": 0.1 },

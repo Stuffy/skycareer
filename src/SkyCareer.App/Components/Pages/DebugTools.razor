@@ -7,44 +7,44 @@
 @inject UpdateService Updates
 
 <DebugGate>
-<MudText Typo="Typo.h5" Class="mb-1">Debug-Werkzeuge</MudText>
-<MudText Typo="Typo.body2" Class="mb-4">Zum Testen und für Korrekturen. Änderungen wirken sofort auf die aktive Karriere.</MudText>
+<MudText Typo="Typo.h5" Class="mb-1">@T("Debug Tools")</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">@T("For testing and corrections. Changes apply to the active career immediately.")</MudText>
 
 @if (_career is { } c)
 {
     <MudGrid>
         <MudItem xs="12" md="6">
             <MudPaper Class="pa-4" Style="height:100%">
-                <MudText Typo="Typo.h6" Class="mb-2">Karriere</MudText>
-                <MudText Typo="Typo.body2" Class="mb-2">Kontostand: <b>@Eur(c.Cash)</b> · Reputation: <b>@c.Reputation</b></MudText>
+                <MudText Typo="Typo.h6" Class="mb-2">@T("Career")</MudText>
+                <MudText Typo="Typo.body2" Class="mb-2">@T("Balance:") <b>@Eur(c.Cash)</b> · @T("Reputation:") <b>@c.Reputation</b></MudText>
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-                    <MudNumericField T="decimal" @bind-Value="_cash" Label="Kontostand (€)" Variant="Variant.Outlined" Margin="Margin.Dense" Format="N0" Style="max-width:200px" />
-                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="() => SetCash(_cash)">Setzen</MudButton>
-                    <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="() => SetCash(c.Cash + 100_000)">+100.000 €</MudButton>
-                    <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="() => SetCash(c.Cash + 1_000_000)">+1 Mio €</MudButton>
+                    <MudNumericField T="decimal" @bind-Value="_cash" Label="@T("Balance (€)")" Variant="Variant.Outlined" Margin="Margin.Dense" Format="N0" Style="max-width:200px" />
+                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="() => SetCash(_cash)">@T("Set")</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="() => SetCash(c.Cash + 100_000)">+@Eur(100_000m)</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="Busy" OnClick="() => SetCash(c.Cash + 1_000_000)">@T("+1 million €")</MudButton>
                 </MudStack>
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-3">
-                    <MudSlider T="int" @bind-Value="_reputation" Min="0" Max="100" Step="1" Style="max-width:260px">Reputation: @_reputation</MudSlider>
-                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SetReputation">Setzen</MudButton>
+                    <MudSlider T="int" @bind-Value="_reputation" Min="0" Max="100" Step="1" Style="max-width:260px">@T("Reputation:") @_reputation</MudSlider>
+                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="SetReputation">@T("Set")</MudButton>
                 </MudStack>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Class="pa-4" Style="height:100%">
-                <MudText Typo="Typo.h6" Class="mb-2">Diagnose</MudText>
+                <MudText Typo="Typo.h6" Class="mb-2">@T("Diagnostics")</MudText>
                 <MudSimpleTable Dense="true">
                     <tbody>
-                        <tr><td>Version</td><td>@Updates.CurrentVersion@(Updates.Status == UpdateStatus.Disabled ? " (Entwicklungsversion)" : "")</td></tr>
-                        <tr><td>Simulator</td><td>@Monitor.SourceName – @Monitor.Connection, Phase @(Monitor.Phase is { } p ? MissionTexts.Phase(p) : "–")</td></tr>
-                        <tr><td>Spielzeit</td><td>@c.GameTime.ToString("dd.MM.yyyy HH:mm") UTC</td></tr>
+                        <tr><td>@T("Version")</td><td>@Updates.CurrentVersion@(Updates.Status == UpdateStatus.Disabled ? " " + T("(development build)") : "")</td></tr>
+                        <tr><td>@T("Simulator")</td><td>@Monitor.SourceName – @Monitor.Connection, @T("Phase") @(Monitor.Phase is { } p ? MissionTexts.Phase(p) : "–")</td></tr>
+                        <tr><td>@T("Game time")</td><td>@c.GameTime.ToString("g") UTC</td></tr>
                         @foreach (var (label, path) in Folders)
                         {
                             <tr>
                                 <td>@label</td>
                                 <td class="mono" style="word-break:break-all">
                                     @path
-                                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small" OnClick="() => OpenFolder(path)" aria-label="Ordner öffnen" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small" OnClick="() => OpenFolder(path)" aria-label="@T("Open folder")" />
                                 </td>
                             </tr>
                         }
@@ -55,15 +55,15 @@
 
         <MudItem xs="12">
             <MudPaper Class="pa-4">
-                <MudText Typo="Typo.h6" Class="mb-2">Flotte</MudText>
+                <MudText Typo="Typo.h6" Class="mb-2">@T("Fleet")</MudText>
                 @if (_fleet.Count == 0)
                 {
-                    <MudText Typo="Typo.body2">Keine Flugzeuge.</MudText>
+                    <MudText Typo="Typo.body2">@T("No aircraft.")</MudText>
                 }
                 else
                 {
                     <MudSimpleTable Dense="true">
-                        <thead><tr><th>Flugzeug</th><th>Standort</th><th>Zustand</th><th>Status</th><th>Aktionen</th></tr></thead>
+                        <thead><tr><th>@T("Aircraft")</th><th>@T("Location")</th><th>@T("Condition")</th><th>@T("Status")</th><th>@T("Actions")</th></tr></thead>
                         <tbody>
                             @foreach (var a in _fleet)
                             {
@@ -72,14 +72,14 @@
                                     <td>@a.Registration<br /><small>@Career.ProfileName(a.ProfileId)</small></td>
                                     <td>@a.Location</td>
                                     <td>@a.Condition.ToString("N0") %</td>
-                                    <td>@(a.IsAvailable(c.GameTime) ? "verfügbar" : $"{a.UnavailableReason ?? "Wartung"} bis {a.UnavailableUntil:g}")</td>
+                                    <td>@(a.IsAvailable(c.GameTime) ? T("available") : F("{0} until {1:g}", a.UnavailableReason ?? T("Maintenance"), a.UnavailableUntil))</td>
                                     <td>
                                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
                                             <MudNumericField T="double" @bind-Value="edit.Condition" Min="0" Max="100" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:90px" />
-                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => SetCondition(a, edit.Condition)">Zustand setzen</MudButton>
-                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || a.IsAvailable(c.GameTime))" OnClick="() => ClearDowntime(a)">Wartung beenden</MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => SetCondition(a, edit.Condition)">@T("Set condition")</MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || a.IsAvailable(c.GameTime))" OnClick="() => ClearDowntime(a)">@T("End maintenance")</MudButton>
                                             <MudTextField T="string" @bind-Value="edit.Location" Placeholder="ICAO" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:90px" />
-                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || string.IsNullOrWhiteSpace(edit.Location))" OnClick="() => Move(a, edit.Location)">Versetzen (kostenlos)</MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(Busy || string.IsNullOrWhiteSpace(edit.Location))" OnClick="() => Move(a, edit.Location)">@T("Relocate (free)")</MudButton>
                                         </MudStack>
                                     </td>
                                 </tr>
@@ -93,29 +93,29 @@
         <MudItem xs="12">
             <MudPaper Class="pa-4">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
-                    <MudText Typo="Typo.h6">Aufträge</MudText>
+                    <MudText Typo="Typo.h6">@T("Jobs")</MudText>
                     <MudSpacer />
-                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="ResetMarket">Markt leeren und neu erzeugen</MudButton>
+                    <MudButton Variant="Variant.Outlined" Disabled="Busy" OnClick="ResetMarket">@T("Clear and regenerate market")</MudButton>
                 </MudStack>
                 @if (_jobs.Count == 0)
                 {
-                    <MudText Typo="Typo.body2">Keine angenommenen oder laufenden Aufträge.</MudText>
+                    <MudText Typo="Typo.body2">@T("No accepted or active jobs.")</MudText>
                 }
                 else
                 {
                     <MudSimpleTable Dense="true">
-                        <thead><tr><th>Strecke</th><th>Status</th><th>Deadline</th><th>Vergütung</th><th>Aktionen</th></tr></thead>
+                        <thead><tr><th>@T("Route")</th><th>@T("Status")</th><th>@T("Deadline")</th><th>@T("Payout")</th><th>@T("Actions")</th></tr></thead>
                         <tbody>
                             @foreach (var j in _jobs)
                             {
                                 <tr>
                                     <td>@j.Origin → @j.Destination (@j.DistanceNm.ToString("N0") nm)</td>
-                                    <td>@(j.Status == ContractStatus.InProgress ? "Im Flug" : "Angenommen")</td>
+                                    <td>@(j.Status == ContractStatus.InProgress ? T("In flight") : T("Accepted"))</td>
                                     <td>@j.Deadline.ToString("dd.MM. HH:mm")</td>
                                     <td>@Eur(j.Payout)</td>
                                     <td>
-                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Disabled="Busy" OnClick="() => Complete(j)">Sofort erfolgreich abschließen</MudButton>
-                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => ExtendDeadline(j)">Deadline +24 h</MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Disabled="Busy" OnClick="() => Complete(j)">@T("Complete successfully now")</MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => ExtendDeadline(j)">@T("Deadline +24 h")</MudButton>
                                     </td>
                                 </tr>
                             }
@@ -144,11 +144,11 @@
 
     private static IEnumerable<(string, string)> Folders =>
     [
-        ("Datenbank", Path.GetDirectoryName(SkyCareerDb.DefaultPath)!),
-        ("Eigene Inhalte", ContentStore.DefaultUserRoot),
-        ("Flugpläne", PlnExporter.DefaultDirectory),
-        ("Flug-Aufzeichnungen", FlightMonitorService.TracksDirectory),
-        ("Fehlerprotokoll", App.LogDirectory)
+        (T("Database"), Path.GetDirectoryName(SkyCareerDb.DefaultPath)!),
+        (T("Own content"), ContentStore.DefaultUserRoot),
+        (T("Flight plans"), PlnExporter.DefaultDirectory),
+        (T("Flight recordings"), FlightMonitorService.TracksDirectory),
+        (T("Error log"), App.LogDirectory)
     ];
 
     protected override async Task LoadAsync()
@@ -162,36 +162,37 @@
         _jobs = (await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress)).OrderBy(j => j.Deadline).ToList();
     }
 
-    private Task SetCash(decimal amount) => Run(() => Career.SetCashAsync(amount), $"Kontostand auf {Eur(amount)} gesetzt.");
+    private Task SetCash(decimal amount) => Run(() => Career.SetCashAsync(amount), F("Balance set to {0}.", Eur(amount)));
 
-    private Task SetReputation() => Run(() => Career.SetReputationAsync(_reputation), $"Reputation auf {_reputation} gesetzt.");
+    private Task SetReputation() => Run(() => Career.SetReputationAsync(_reputation), F("Reputation set to {0}.", _reputation));
 
     private Task SetCondition(FleetAircraft a, double condition) =>
-        Run(() => Career.DebugSetAircraftAsync(a.Id, condition: condition), $"{a.Registration}: Zustand {condition:N0} %.");
+        Run(() => Career.DebugSetAircraftAsync(a.Id, condition: condition), F("{0}: condition {1:N0} %.", a.Registration, condition));
 
     private Task ClearDowntime(FleetAircraft a) =>
-        Run(() => Career.DebugSetAircraftAsync(a.Id, clearDowntime: true), $"{a.Registration} ist wieder verfügbar.");
+        Run(() => Career.DebugSetAircraftAsync(a.Id, clearDowntime: true), F("{0} is available again.", a.Registration));
 
     private Task Move(FleetAircraft a, string? location) =>
-        Run(() => Career.DebugSetAircraftAsync(a.Id, location: location), $"{a.Registration} steht jetzt in {location?.Trim().ToUpperInvariant()}.");
+        Run(() => Career.DebugSetAircraftAsync(a.Id, location: location), F("{0} is now parked at {1}.", a.Registration, location?.Trim().ToUpperInvariant()));
 
     private Task Complete(MissionContract job) => Run(async () =>
     {
         // A tracked session for this job would otherwise try to settle it again.
         if (Monitor.ContractId == job.Id) Monitor.EndFlight();
         var result = await Career.DebugCompleteContractAsync(job.Id);
-        Snackbar.Add($"{job.Origin} → {job.Destination} abgerechnet: {(result.Outcome == FlightOutcome.Completed ? "erfolgreich" : result.Outcome.ToString())}, Score {result.Score.Total:N0}, " +
-                     $"{Eur(result.Lines.Sum(l => l.Amount))}.", Severity.Success);
+        Snackbar.Add(F("{0} → {1} settled: {2}, score {3:N0}, {4}.", job.Origin, job.Destination,
+                     result.Outcome == FlightOutcome.Completed ? T("successful") : result.Outcome.ToString(), result.Score.Total,
+                     Eur(result.Lines.Sum(l => l.Amount))), Severity.Success);
     });
 
     private Task ExtendDeadline(MissionContract job) =>
-        Run(() => Career.DebugExtendDeadlineAsync(job.Id, TimeSpan.FromHours(24)), "Deadline um 24 h verlängert.");
+        Run(() => Career.DebugExtendDeadlineAsync(job.Id, TimeSpan.FromHours(24)), T("Deadline extended by 24 h."));
 
     private Task ResetMarket() => Run(async () =>
     {
         int removed = await Career.DebugClearMarketAsync();
         int created = await Career.RefreshMarketAsync();
-        Snackbar.Add($"{removed} Angebote entfernt, {created} neu erzeugt.", Severity.Success);
+        Snackbar.Add(F("{0} offers removed, {1} newly generated.", removed, created), Severity.Success);
     });
 
     private void OpenFolder(string path)

@@ -1,5 +1,6 @@
 using SkyCareer.Application;
 using SkyCareer.Application.Logging;
+using SkyCareer.Localization;
 
 namespace SkyCareer.App.Services;
 
@@ -106,13 +107,13 @@ public sealed class DepartureCoordinator : IDisposable
             if (Math.Abs(t.FuelKg - stored) > Math.Max(20, stored * 0.02))
             {
                 await loader.ApplyFuelAsync(Domain.Mass.FromKg(stored)).ConfigureAwait(false);
-                _monitor.Log($"Tankstand von {aircraft.Registration} wiederhergestellt: {stored:N0} kg");
+                _monitor.Log(L.F("Fuel on board of {0} restored: {1:N0} kg", aircraft.Registration, stored));
             }
             await _career.MarkFuelRestoredAsync(job.Id).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
         {
-            AppLog.Warn("Treibstoff", $"Tankstand konnte nicht gesetzt werden: {ex.Message}", ex);
+            AppLog.Warn("Fuel", $"Could not set the fuel quantity: {ex.Message}", ex);
         }
     }
 

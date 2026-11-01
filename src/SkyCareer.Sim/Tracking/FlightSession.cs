@@ -1,3 +1,5 @@
+using SkyCareer.Localization;
+
 namespace SkyCareer.Sim.Tracking;
 
 public sealed record FlightSummary(
@@ -143,20 +145,20 @@ public sealed class FlightSession
     private void BridgeGap(Telemetry before, Telemetry t, DateTimeOffset startedAt)
     {
         var minutes = (t.Timestamp - before.Timestamp).TotalMinutes;
-        _notes.Add($"App {minutes:N0} min geschlossen; Flug danach aus der Aufzeichnung fortgesetzt.");
+        _notes.Add(L.F("App closed for {0:N0} min; flight then continued from the recording.", minutes));
         bool flying = Phases.Phase is >= FlightPhase.TakeoffRoll and <= FlightPhase.Approach;
         if (flying && t.OnGround)
         {
             // Landed while nobody was watching: continue on the ground, the landing rate is unknown.
             Phases.Resume(t, startedAt);
-            _notes.Add("Landung während die App geschlossen war – Landerate nicht erfasst.");
+            _notes.Add(L.T("Landed while the app was closed – landing rate not recorded."));
         }
         else Phases.Process(t);
 
         if (Integrity.PayloadLocked && Math.Abs(t.PayloadKg - before.PayloadKg) > 10)
         {
             Integrity.LockPayload(t.PayloadKg);
-            _notes.Add($"Gewicht nach Neustart geändert: {before.PayloadKg:N0} → {t.PayloadKg:N0} kg (nicht gewertet).");
+            _notes.Add(L.F("Weight changed after restart: {0:N0} → {1:N0} kg (not rated).", before.PayloadKg, t.PayloadKg));
         }
     }
 

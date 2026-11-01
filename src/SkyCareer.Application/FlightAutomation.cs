@@ -6,6 +6,7 @@ using SkyCareer.Missions.Departure;
 using SkyCareer.Missions.Settlement;
 using SkyCareer.Sim;
 using SkyCareer.Sim.Tracking;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Application;
 
@@ -137,7 +138,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         catch (Exception ex) when (ex is CareerException or InvalidOperationException or IOException)
         {
             // Ticks run every second; log a lasting problem once.
-            if (ex.Message != LastError) AppLog.Warn("Flugautomatik", ex.Message, ex is CareerException ? null : ex);
+            if (ex.Message != LastError) AppLog.Warn("Flight automation", ex.Message, ex is CareerException ? null : ex);
             LastError = ex.Message;
         }
         Changed?.Invoke();
@@ -162,7 +163,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
                 if (t is not null && phase != FlightPhase.TakeoffRoll && _airports.TryGetValue(job.Origin, out var origin) &&
                     t.Position.DistanceNmTo(origin.Position) > DisarmDistanceNm)
                 {
-                    host.Log($"Tracking für {job.Origin} → {job.Destination} beendet: Flugzeug nicht mehr in {job.Origin}");
+                    host.Log(L.F("Tracking for {0} → {1} ended: aircraft no longer at {0}", job.Origin, job.Destination));
                     host.EndFlight();
                 }
                 return;
@@ -212,17 +213,17 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
                 _deboardedAt ??= t.Timestamp;
                 if (t.Timestamp - _deboardedAt < ReceiptGrace)
                 {
-                    Waiting = "GSX-Deboarding abgeschlossen, Belege werden übernommen …";
+                    Waiting = L.T("GSX deboarding completed, collecting receipts …");
                     return true;
                 }
                 return false;
             case GroundServiceState.InProgress:
                 _deboardedAt = null;
-                Waiting = "Wartet auf das Ende des GSX-Deboardings";
+                Waiting = L.T("Waiting for GSX deboarding to finish");
                 return since < DeboardingTimeout;
             default:
                 _deboardedAt = null;
-                Waiting = $"Wartet auf GSX-Deboarding (spätestens {Math.Max(1, (DeboardingStartTimeout - since).TotalMinutes):N0} min)";
+                Waiting = L.F("Waiting for GSX deboarding (at most {0:N0} min)", Math.Max(1, (DeboardingStartTimeout - since).TotalMinutes));
                 return since < DeboardingStartTimeout;
         }
     }
@@ -232,12 +233,12 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         var check = _groundReadiness;
         var blocking = check?.Blocking.ToList() ?? [];
         if (check is null || check[DepartureCheck.Sim]?.Light != Light.Green)
-            blocking.Add(new CheckItem(DepartureCheck.Sim, "Simulator", Light.Red, "keine Daten vom Boden"));
+            blocking.Add(new CheckItem(DepartureCheck.Sim, L.T("Simulator"), Light.Red, L.T("no data from the ground")));
         if (blocking.Count > 0)
         {
             string reason = string.Join("; ", blocking.Select(b => $"{b.Label}: {b.Detail}"));
             _notStarted[job.Id] = reason;
-            host.Log($"Auftrag {job.Origin} → {job.Destination} nicht gestartet: {reason}");
+            host.Log(L.F("Job {0} → {1} not started: {2}", job.Origin, job.Destination, reason));
             host.EndFlight();
             return;
         }
@@ -246,8 +247,8 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         host.DepartureIssues = check!.Penalised.Select(i => $"{i.Label} ({i.Detail})").ToList();
         await career.StartFlightAsync(job.Id, host.DepartureIssues, host.Summarize()?.FuelAtBlockOffKg);
         host.Log(host.DepartureIssues.Count == 0
-            ? $"Auftrag {job.Origin} → {job.Destination} gestartet"
-            : $"Auftrag gestartet mit {host.DepartureIssues.Count} Abweichung(en): {string.Join("; ", host.DepartureIssues)}");
+            ? L.F("Job {0} → {1} started", job.Origin, job.Destination)
+            : L.F("Job started with {0} deviation(s): {1}", host.DepartureIssues.Count, string.Join("; ", host.DepartureIssues)));
         _dirty = true;
     }
 
@@ -263,28 +264,28 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         _wearTried[job.Id] = DateTime.UtcNow;
         if (await host.ReadWearAsync() is not { } wear)
         {
-            if (first) AppLog.Warn("Abnutzung", $"MSFS-Abnutzung für {job.Origin} → {job.Destination} noch nicht lesbar, neuer Versuch alle {WearRetry.TotalSeconds:N0} s");
+            if (first) AppLog.Warn("Wear", $"MSFS wear for {job.Origin} → {job.Destination} not readable yet, retrying every {WearRetry.TotalSeconds:N0} s");
             return;
         }
         await career.RecordSimWearAsync(job.Id, wear);
         job.SimWearAtStart = wear.Serialize();
-        AppLog.Info("Abnutzung", $"Abnutzung zu Beginn erfasst ({wear.Levels.Count} Bauteile, schlechtestes {wear.WorstLevel:P0})");
+        AppLog.Info("Wear", $"Start wear recorded ({wear.Levels.Count} components, worst {wear.WorstLevel:P0})");
     }
 
     private async Task SettleAsync(MissionContract job)
     {
-        var summary = host.Summarize() ?? throw new CareerException("Keine Flugdaten vorhanden.");
+        var summary = host.Summarize() ?? throw new CareerException(L.T("No flight data available."));
         var track = await host.SaveTrackAsync($"{job.Origin}-{job.Destination}-{job.Id:N}");
         // Stored with the job at liftoff, so they survive an app restart mid-flight.
         var issues = job.DepartureIssueList.Count > 0 ? job.DepartureIssueList : host.DepartureIssues;
         var result = FlightResultMapper.Map(summary, issues, await WearDeltaAsync(job));
         if (job.SimWearAtStart is null)
-            result = result with { Notes = [.. result.Notes, "Abnutzung laut MSFS nicht erfasst (kein Startwert)."] };
+            result = result with { Notes = [.. result.Notes, L.T("MSFS wear not recorded (no start value).")] };
         else if (_wearFromResume.Remove(job.Id))
-            result = result with { Notes = [.. result.Notes, "Abnutzung laut MSFS erst ab dem App-Neustart erfasst."] };
+            result = result with { Notes = [.. result.Notes, L.T("MSFS wear only recorded from the app restart onwards.")] };
         LastSettlement = await career.CompleteFlightAsync(job.Id, result, track);
         LastSettledContract = job;
-        host.Log($"Flug {job.Origin} → {job.Destination} automatisch abgerechnet: {LastSettlement.Outcome}");
+        host.Log(L.F("Flight {0} → {1} settled automatically: {2}", job.Origin, job.Destination, LastSettlement.Outcome));
         host.EndFlight();
         _dirty = true;
     }
@@ -294,16 +295,16 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         var start = AircraftWear.Parse(job.SimWearAtStart);
         if (start.IsEmpty)
         {
-            AppLog.Warn("Abnutzung", $"Keine Abnutzung zu Beginn von {job.Origin} → {job.Destination} gespeichert; Bauteile bleiben unverändert");
+            AppLog.Warn("Wear", $"No start wear stored for {job.Origin} → {job.Destination}; components stay unchanged");
             return null;
         }
         if (await host.ReadWearAsync() is not { } end)
         {
-            AppLog.Warn("Abnutzung", "MSFS-Abnutzung nach dem Flug nicht lesbar; Bauteile bleiben unverändert");
+            AppLog.Warn("Wear", "MSFS wear not readable after the flight; components stay unchanged");
             return null;
         }
         var delta = AircraftWear.Delta(start, end);
-        AppLog.Info("Abnutzung", $"Abnutzung {job.Origin} → {job.Destination}: Ø {delta.AverageLoss:P3}, " +
+        AppLog.Info("Wear", $"Wear {job.Origin} → {job.Destination}: avg {delta.AverageLoss:P3}, " +
                                  string.Join(", ", delta.GroupLosses().Take(3).Select(g => $"{g.Group} −{g.Loss:P2}")));
         return delta;
     }
@@ -318,7 +319,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         if (job is null) return false;
         var startedAt = job.FlightStartedAtUtc is { } utc ? new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)) : t.Timestamp;
         if (!host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg)) return false;
-        host.Log($"Flug {job.Origin} → {job.Destination} nach Neustart fortgesetzt");
+        host.Log(L.F("Flight {0} → {1} resumed after restart", job.Origin, job.Destination));
         Resumed?.Invoke(job.Id);
         return true;
     }
@@ -341,7 +342,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         host.DepartureIssues = [];
         _notStarted.Remove(contractId);
         var job = _jobs.First(j => j.Id == contractId);
-        host.Log($"Bereit für {job.Origin} → {job.Destination}: Änderungen sind bis zum Abheben möglich");
+        host.Log(L.F("Ready for {0} → {1}: changes are possible until liftoff", job.Origin, job.Destination));
         Armed?.Invoke(contractId);
     }
 

@@ -9,15 +9,17 @@
         <MudIcon Icon="@Icons.Material.Filled.FlightTakeoff" Size="Size.Large" Color="Color.Primary" />
         <div>
             <MudText Typo="Typo.h4">SkyCareer</MudText>
-            <MudText Typo="Typo.body2">Karriere-Modus für Microsoft Flight Simulator 2024</MudText>
+            <MudText Typo="Typo.body2">@T("Career mode for Microsoft Flight Simulator 2024")</MudText>
         </div>
+        <MudSpacer />
+        <LanguageSelect />
     </MudStack>
 
     @if (_airportCount == 0)
     {
         <MudAlert Severity="Severity.Info" Class="mb-4">
-            Vor dem ersten Start werden Flughafendaten benötigt. SkyCareer nutzt die freien Daten von OurAirports (ca. 15 MB, weltweit rund 40.000 Plätze) und die Städteliste von GeoNames (CC BY 4.0).
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-4" Disabled="Busy" OnClick="ImportAirports">Herunterladen &amp; importieren</MudButton>
+            @T("Airport data is needed before the first start. SkyCareer uses the free data from OurAirports (approx. 15 MB, around 40,000 airfields worldwide) and the city list from GeoNames (CC BY 4.0).")
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-4" Disabled="Busy" OnClick="ImportAirports">@T("Download & import")</MudButton>
         </MudAlert>
     }
     @if (_importing)
@@ -27,7 +29,7 @@
 
     @if (_careers.Count > 0)
     {
-        <MudText Typo="Typo.h6" Class="mb-2">Karriere fortsetzen</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Continue career")</MudText>
         <MudGrid Class="mb-6">
             @foreach (var c in _careers)
             {
@@ -35,17 +37,17 @@
                     <MudCard Outlined="true">
                         <MudCardContent>
                             <MudText Typo="Typo.h6">@c.AirlineName</MudText>
-                            <MudText Typo="Typo.body2">Pilot @c.Name · Basis @c.HomeBase · @DifficultyText(c.Difficulty)</MudText>
+                            <MudText Typo="Typo.body2">@F("Pilot {0} · Base {1} · {2}", c.Name, c.HomeBase, DifficultyText(c.Difficulty))</MudText>
                             <MudText Typo="Typo.body2" Class="mt-2">
-                                <span class="@(c.Cash < 0 ? "bad" : "")">@Eur(c.Cash)</span> · Reputation @c.Reputation · @_fleetCounts.GetValueOrDefault(c.Id) Flugzeuge
+                                <span class="@(c.Cash < 0 ? "bad" : "")">@Eur(c.Cash)</span> · @F("Reputation {0} · {1} aircraft", c.Reputation, _fleetCounts.GetValueOrDefault(c.Id))
                             </MudText>
-                            <MudText Typo="Typo.caption">Spielzeit @c.GameTime.ToString("dd.MM.yyyy HH:mm") UTC</MudText>
+                            <MudText Typo="Typo.caption">@F("Game time {0:g} UTC", c.GameTime)</MudText>
                         </MudCardContent>
                         <MudCardActions>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Continue(c)">Fortsetzen</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Continue(c)">@T("Resume")</MudButton>
                             <MudSpacer />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" Disabled="Busy"
-                                           OnClick="() => Delete(c)" aria-label="Karriere löschen" />
+                                           OnClick="() => Delete(c)" aria-label="@T("Delete career")" />
                         </MudCardActions>
                     </MudCard>
                 </MudItem>
@@ -54,21 +56,21 @@
     }
 
     <MudPaper Class="pa-4" Outlined="true">
-        <MudText Typo="Typo.h6" Class="mb-2">Neue Karriere</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@T("New career")</MudText>
         <MudGrid>
-            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_name" Label="Pilotenname" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_airline" Label="Name der Airline" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_homeBase" Label="Heimatbasis (ICAO)" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_name" Label="@T("Pilot name")" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_airline" Label="@T("Airline name")" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_homeBase" Label="@T("Home base (ICAO)")" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" sm="8">
-                <MudSelect T="Difficulty" @bind-Value="_difficulty" Label="Schwierigkeit" Variant="Variant.Outlined">
-                    <MudSelectItem Value="Difficulty.Easy">Leicht – 750.000 € Startkapital, 20 % günstigere Kosten</MudSelectItem>
-                    <MudSelectItem Value="Difficulty.Normal">Normal – 350.000 € Startkapital</MudSelectItem>
-                    <MudSelectItem Value="Difficulty.Hard">Schwer – 150.000 € Startkapital, 20 % höhere Kosten</MudSelectItem>
+                <MudSelect T="Difficulty" @bind-Value="_difficulty" Label="@T("Difficulty")" Variant="Variant.Outlined">
+                    <MudSelectItem Value="Difficulty.Easy">@F("Easy – {0} starting capital, 20 % lower costs", Eur(750_000m))</MudSelectItem>
+                    <MudSelectItem Value="Difficulty.Normal">@F("Normal – {0} starting capital", Eur(350_000m))</MudSelectItem>
+                    <MudSelectItem Value="Difficulty.Hard">@F("Hard – {0} starting capital, 20 % higher costs", Eur(150_000m))</MudSelectItem>
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_simBriefUser" Label="SimBrief-Benutzername (optional)" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_simBriefUser" Label="@T("SimBrief username (optional)")" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" sm="6" Class="d-flex align-center">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _airportCount <= 0)" OnClick="Create">Karriere starten</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _airportCount <= 0)" OnClick="Create">@T("Start career")</MudButton>
             </MudItem>
         </MudGrid>
     </MudPaper>
@@ -100,10 +102,10 @@
 
     private async Task Delete(Career c)
     {
-        if (await Dialogs.ShowMessageBoxAsync("Karriere löschen",
-                $"„{c.AirlineName}“ mit Flotte, Aufträgen, Flugbuch und Finanzen endgültig löschen?",
-                yesText: "Löschen", cancelText: "Abbrechen") == true)
-            await Run(() => Career.DeleteCareerAsync(c.Id), "Karriere gelöscht.");
+        if (await Dialogs.ShowMessageBoxAsync(T("Delete career"),
+                F("Permanently delete “{0}” with its fleet, jobs, logbook and finances?", c.AirlineName),
+                yesText: T("Delete"), cancelText: T("Cancel")) == true)
+            await Run(() => Career.DeleteCareerAsync(c.Id), T("Career deleted."));
     }
 
     private Task ImportAirports() => Run(async () =>
@@ -112,7 +114,7 @@
         try
         {
             int n = await AirportDownloader.DownloadAndImportAsync(Http, Career);
-            Snackbar.Add($"{n:N0} Flughäfen importiert.", Severity.Success);
+            Snackbar.Add(F("{0:N0} airports imported.", n), Severity.Success);
         }
         finally
         {
@@ -123,10 +125,10 @@
     private Task Create() => Run(async () =>
     {
         if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_airline))
-            throw new CareerException("Bitte Pilotenname und Airline angeben.");
+            throw new CareerException(T("Please enter a pilot name and an airline."));
         await Career.CreateCareerAsync(_name, _airline, _homeBase, _difficulty, _simBriefUser);
         Nav.NavigateTo("fleet");
-    }, "Karriere angelegt – als Nächstes ein Flugzeug beschaffen.");
+    }, T("Career created – next, acquire an aircraft."));
 
-    private static string DifficultyText(Difficulty d) => d switch { Difficulty.Easy => "Leicht", Difficulty.Hard => "Schwer", _ => "Normal" };
+    private static string DifficultyText(Difficulty d) => d switch { Difficulty.Easy => T("Easy"), Difficulty.Hard => T("Hard"), _ => T("Normal") };
 }

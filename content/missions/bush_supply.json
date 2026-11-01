@@ -1,7 +1,8 @@
 {
   "id": "bush_supply",
-  "name": "Busch-Versorgung",
-  "description": "Versorgungsflug zu unbefestigten Pisten. Keine SimBrief-Planung – VFR nach Sicht.",
+  "name": "Bush supply",
+  "description": "Supply flight to unpaved strips. No SimBrief planning – VFR.",
+  "texts": { "de": { "name": "Busch-Versorgung", "description": "Versorgungsflug zu unbefestigten Pisten. Keine SimBrief-Planung – VFR nach Sicht." } },
   "category": "bush",
   "requirements": { "requiredTags": ["unpaved_ok"], "forbiddenTags": ["jet"], "maxMtowKg": 6000, "surfaces": ["gravel", "grass", "dirt"] },
   "cargo": { "minKg": 50, "maxKg": 800, "kinds": ["food", "fuel_drums", "tools", "medical_supplies"] },

@@ -3,27 +3,27 @@
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 
-<MudText Typo="Typo.h5" Class="mb-4">Flugbuch</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">@T("Logbook")</MudText>
 
 @if (_flights.Count == 0)
 {
-    <MudText Typo="Typo.body2">Noch keine Flüge.</MudText>
+    <MudText Typo="Typo.body2">@T("No flights yet.")</MudText>
 }
 else
 {
     <MudText Typo="Typo.body2" Class="mb-2">
-        @_flights.Count Flüge · @_flights.Sum(f => f.BlockHours).ToString("N1") Blockstunden · Ø Score @_flights.Average(f => f.Score).ToString("N0")
-        · Ergebnis @Eur(_flights.Sum(f => f.Revenue - f.Costs))
+        @F("{0} flights · {1:N1} block hours · avg. score {2:N0}", _flights.Count, _flights.Sum(f => f.BlockHours), _flights.Average(f => f.Score))
+        · @T("Result") @Eur(_flights.Sum(f => f.Revenue - f.Costs))
     </MudText>
     <MudSimpleTable Dense="true" Hover="true">
-        <thead><tr><th>Ankunft</th><th>Auftrag</th><th>Strecke</th><th>Flugzeug</th><th>Block</th><th>Landung</th><th>Score</th><th>Ergebnis</th><th>Status</th><th>GSX</th></tr></thead>
+        <thead><tr><th>@T("Arrival")</th><th>@T("Job")</th><th>@T("Route")</th><th>@T("Aircraft")</th><th>@T("Block")</th><th>@T("Landing")</th><th>@T("Score")</th><th>@T("Result")</th><th>@T("Status")</th><th>GSX</th></tr></thead>
         <tbody>
             @foreach (var f in _flights)
             {
                 <tr title="@f.Notes" id="@($"flight-{f.Id}")" style="@(f.Id == Flight ? "background:var(--mud-palette-action-default-hover)" : null)">
                     <td>@f.ArrivedGameTime.ToString("dd.MM.yy HH:mm")</td>
-                    <td>@(Career.Content.MissionTypes.FirstOrDefault(m => m.Id == f.MissionTypeId)?.Name ?? f.MissionTypeId)</td>
-                    <td>@f.Origin → @f.Destination@(f.ArrivedAt != f.Destination ? $" (gelandet {f.ArrivedAt})" : "")</td>
+                    <td>@(Career.Content.MissionTypes.FirstOrDefault(m => m.Id == f.MissionTypeId)?.DisplayName ?? f.MissionTypeId)</td>
+                    <td>@f.Origin → @f.Destination@(f.ArrivedAt != f.Destination ? F(" (landed at {0})", f.ArrivedAt) : "")</td>
                     <td>@(_registrations.GetValueOrDefault(f.AircraftId, "–"))</td>
                     <td>@f.BlockHours.ToString("N1") h</td>
                     <td>@f.TouchdownFpm.ToString("N0") fpm / @f.MaxGForce.ToString("N2") G</td>
@@ -49,7 +49,7 @@ else
                                     <MudText Typo="Typo.body2" Style="min-width:100px;text-align:right">@Eur(-r.AmountEur)</MudText>
                                     <MudText Typo="Typo.caption" Style="flex:1">@r.Lines.Replace("\n", " · ")</MudText>
                                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(r.StoredHtml is null)"
-                                               OnClick="() => GsxReceiptWatcher.Open(r.StoredHtml)">Öffnen</MudButton>
+                                               OnClick="() => GsxReceiptWatcher.Open(r.StoredHtml)">@T("Open")</MudButton>
                                 </MudStack>
                             }
                         </td>

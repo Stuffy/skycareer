@@ -49,7 +49,7 @@ public class DeboardingTests
         Assert.Empty(session.Phases.Touchdowns);
         Assert.Empty(session.Integrity.Violations);
         var summary = session.Summarize();
-        Assert.Contains(summary.Notes!, n => n.Contains("Landerate nicht erfasst"));
+        Assert.Contains(summary.Notes!, n => n.Contains("landing rate not recorded"));
         Assert.NotNull(summary.LandingTime);
     }
 

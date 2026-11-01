@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Domain.Aircraft;
 
@@ -15,45 +16,45 @@ public static partial class AircraftProfileValidator
         void Error(string m) => issues.Add(new(IssueLevel.Error, m));
         void Warn(string m) => issues.Add(new(IssueLevel.Warning, m));
 
-        if (!IdPattern().IsMatch(p.Id)) Error("Die ID darf nur Kleinbuchstaben, Ziffern und _ enthalten (z. B. „c750_citation_x“).");
-        if (string.IsNullOrWhiteSpace(p.Name)) Error("Name fehlt.");
-        if (p.SimMatch.Count == 0 || p.SimMatch.All(string.IsNullOrWhiteSpace)) Warn("Ohne Sim-Erkennung wird das Flugzeug im Sim nicht automatisch zugeordnet.");
+        if (!IdPattern().IsMatch(p.Id)) Error(L.T("The ID may only contain lowercase letters, digits and _ (e.g. “c750_citation_x”)."));
+        if (string.IsNullOrWhiteSpace(p.Name)) Error(L.T("Name is missing."));
+        if (p.SimMatch.Count == 0 || p.SimMatch.All(string.IsNullOrWhiteSpace)) Warn(L.T("Without sim matching the aircraft won't be recognised in the sim automatically."));
 
-        if (p.OperatingEmptyKg <= 0) Error("Leergewicht muss größer als 0 sein.");
-        if (p.MaxTakeoffKg <= p.OperatingEmptyKg) Error("MTOW muss größer als das Leergewicht sein.");
-        if (p.MaxZeroFuelKg <= p.OperatingEmptyKg) Error("MZFW muss größer als das Leergewicht sein.");
-        if (p.MaxZeroFuelKg > p.MaxTakeoffKg) Error("MZFW darf nicht größer als MTOW sein.");
-        if (p.MaxLandingKg > p.MaxTakeoffKg) Error("MLW darf nicht größer als MTOW sein.");
-        if (p.MaxLandingKg < p.MaxZeroFuelKg) Warn("MLW unter MZFW ist ungewöhnlich – bitte prüfen.");
+        if (p.OperatingEmptyKg <= 0) Error(L.T("Empty weight must be greater than 0."));
+        if (p.MaxTakeoffKg <= p.OperatingEmptyKg) Error(L.T("MTOW must be greater than the empty weight."));
+        if (p.MaxZeroFuelKg <= p.OperatingEmptyKg) Error(L.T("MZFW must be greater than the empty weight."));
+        if (p.MaxZeroFuelKg > p.MaxTakeoffKg) Error(L.T("MZFW must not exceed MTOW."));
+        if (p.MaxLandingKg > p.MaxTakeoffKg) Error(L.T("MLW must not exceed MTOW."));
+        if (p.MaxLandingKg < p.MaxZeroFuelKg) Warn(L.T("MLW below MZFW is unusual – please check."));
         if (p.MaxTakeoffKg > 5_700 && p.MaxZeroFuelKg >= p.MaxTakeoffKg)
-            Warn("MZFW gleich MTOW ist bei Flugzeugen dieser Größe unrealistisch – Wert aus Handbuch oder SimBrief übernehmen, sonst passt die Zuladung nicht.");
-        if (p.MaxFuelKg <= 0) Error("Tankkapazität muss größer als 0 sein.");
+            Warn(L.T("MZFW equal to MTOW is unrealistic for aircraft of this size – take the value from the manual or SimBrief, otherwise the payload won't be right."));
+        if (p.MaxFuelKg <= 0) Error(L.T("Fuel capacity must be greater than 0."));
 
-        if (p.CruiseKtas <= 0) Error("Reisegeschwindigkeit fehlt – ohne sie gibt es keine Treibstoffplanung.");
-        if (p.FuelBurnKgPerHour <= 0) Error("Verbrauch pro Stunde fehlt – ohne ihn gibt es keine Treibstoffplanung.");
-        if (p.PassengerSeats <= 0 && p.MaxCargoKg <= 0) Warn("Weder Sitze noch Frachtkapazität – es passen kaum Missionen.");
-        if (p.CrewCount < 1) Error("Mindestens ein Pilot (Crew) ist nötig.");
+        if (p.CruiseKtas <= 0) Error(L.T("Cruise speed is missing – fuel planning is impossible without it."));
+        if (p.FuelBurnKgPerHour <= 0) Error(L.T("Fuel burn per hour is missing – fuel planning is impossible without it."));
+        if (p.PassengerSeats <= 0 && p.MaxCargoKg <= 0) Warn(L.T("Neither seats nor cargo capacity – hardly any missions will fit."));
+        if (p.CrewCount < 1) Error(L.T("At least one pilot (crew) is required."));
         else if (p.CrewCount < p.MinimumPilots)
-            Warn($"Flugzeuge dieser Klasse (Jet, über 5,7 t MTOW oder mehr als 9 Sitze) fliegen mit zwei Piloten – es werden {p.MinimumPilots} eingeplant. "
-                 + $"Für Single-Pilot-zugelassene Typen den Tag „{AircraftProfile.SinglePilotTag}“ setzen.");
-        if (p.Surfaces.Count == 0) Error("Mindestens eine Pistenoberfläche angeben.");
+            Warn(L.F("Aircraft of this class (jet, MTOW above 5.7 t or more than 9 seats) are flown by two pilots – {0} will be planned. ", p.MinimumPilots)
+                 + L.F("For types certified for single-pilot operation, set the tag “{0}”.", AircraftProfile.SinglePilotTag));
+        if (p.Surfaces.Count == 0) Error(L.T("Specify at least one runway surface."));
 
         if (p.Loading == LoadingMethod.SimConnectStations)
         {
-            if (p.Stations.Count == 0) Error("Für das Laden per SimConnect werden Payload-Stationen benötigt.");
-            if (p.Stations.GroupBy(s => s.Index).Any(g => g.Count() > 1)) Error("Stationsnummern müssen eindeutig sein.");
-            if (p.Stations.Any(s => s.Index < 1)) Error("Stationsnummern beginnen bei 1.");
+            if (p.Stations.Count == 0) Error(L.T("Loading via SimConnect requires payload stations."));
+            if (p.Stations.GroupBy(s => s.Index).Any(g => g.Count() > 1)) Error(L.T("Station numbers must be unique."));
+            if (p.Stations.Any(s => s.Index < 1)) Error(L.T("Station numbers start at 1."));
             int seats = p.Stations.Where(s => s.Kind == StationKind.Passengers).Sum(s => s.Seats);
             if (seats != p.PassengerSeats)
-                Warn($"Die Passagierstationen haben {seats} Sitze, das Profil {p.PassengerSeats}.");
+                Warn(L.F("The passenger stations have {0} seats, the profile {1}.", seats, p.PassengerSeats));
             if (p.MaxCargoKg > 0 && !p.Stations.Any(s => s.Kind is StationKind.Baggage or StationKind.Cargo))
-                Warn("Frachtkapazität ohne Gepäck-/Frachtstation – Gepäck und Fracht landen dann nicht im Sim.");
+                Warn(L.T("Cargo capacity without a baggage/cargo station – baggage and cargo then won't reach the sim."));
             if (!p.CrewIncludedInEmptyWeight && !p.Stations.Any(s => s.Kind == StationKind.Crew))
-                Warn("Keine Crew-Station: Das Crewgewicht wird nicht in den Sim geschrieben.");
+                Warn(L.T("No crew station: the crew weight is not written to the sim."));
         }
 
         if (p.Economics.PurchasePriceNew <= 0 || p.Economics.RentPerBlockHour <= 0 || p.Economics.LeasePerMonth <= 0)
-            Warn("Preise fehlen – das Flugzeug kann dann nicht sinnvoll gekauft, geleast oder gemietet werden.");
+            Warn(L.T("Prices are missing – the aircraft can't reasonably be bought, leased or rented."));
         return issues;
     }
 

@@ -87,7 +87,7 @@ public sealed class FleetAircraft
     public DateTime? LeaseEndsAt { get; set; }
     /// <summary>Aircraft is in maintenance (or being ferried) until this game time.</summary>
     public DateTime? UnavailableUntil { get; set; }
-    /// <summary>Why the aircraft is unavailable, e.g. "Planmäßiger Check" or "Überführung nach LOWW"; null = maintenance.</summary>
+    /// <summary>Why the aircraft is unavailable, e.g. "Scheduled check" or "Ferry flight to LOWW" (localized when set); null = maintenance.</summary>
     public string? UnavailableReason { get; set; }
 
     public bool IsAvailable(DateTime gameTime) => UnavailableUntil is null || UnavailableUntil <= gameTime;

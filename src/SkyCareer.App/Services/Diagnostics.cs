@@ -3,6 +3,7 @@ using System.Text;
 using SkyCareer.Application;
 using SkyCareer.Application.Logging;
 using SkyCareer.Domain.Career;
+using SkyCareer.Localization;
 
 namespace SkyCareer.App.Services;
 
@@ -18,10 +19,10 @@ public sealed class Diagnostics(FlightMonitorService monitor, UpdateService upda
     public async Task<string> ReportAsync(int logLines = 200)
     {
         var sb = new StringBuilder()
-            .AppendLine($"SkyCareer {updates.CurrentVersion} ({(updates.Status == UpdateStatus.Disabled ? "Entwicklungsversion" : "installiert")})")
+            .AppendLine($"SkyCareer {updates.CurrentVersion} ({(updates.Status == UpdateStatus.Disabled ? "development build" : "installed")})")
             .AppendLine($"Windows: {Environment.OSVersion}, .NET {Environment.Version}")
-            .AppendLine($"Simulator: {monitor.SourceName} – {monitor.Connection}, SimConnect im Build: {(monitor.LiveAvailable ? "ja" : "nein")}")
-            .AppendLine($"Flug: {(monitor.HasSession ? $"Phase {monitor.Phase}, Auftrag {monitor.ContractId}" : "keiner")}, Flugzeug: {monitor.Latest?.AircraftTitle ?? "–"}");
+            .AppendLine($"Simulator: {monitor.SourceName} – {monitor.Connection}, SimConnect in build: {(monitor.LiveAvailable ? "yes" : "no")}")
+            .AppendLine($"Flight: {(monitor.HasSession ? $"phase {monitor.Phase}, job {monitor.ContractId}" : "none")}, aircraft: {monitor.Latest?.AircraftTitle ?? "–"}");
         if (career.ActiveCareerId is not null)
         {
             try
@@ -29,15 +30,15 @@ public sealed class Diagnostics(FlightMonitorService monitor, UpdateService upda
                 var c = await career.GetCareerAsync();
                 var fleet = await career.GetFleetAsync();
                 var jobs = await career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress);
-                sb.AppendLine($"Karriere: Spielzeit {c.GameTime:yyyy-MM-dd HH:mm}, {fleet.Count} Flugzeug(e) ({string.Join(", ", fleet.Select(f => f.ProfileId))}), " +
-                              $"{jobs.Count} aktive Aufträge, Reputation {c.Reputation}");
+                sb.AppendLine($"Career: game time {c.GameTime:yyyy-MM-dd HH:mm}, {fleet.Count} aircraft ({string.Join(", ", fleet.Select(f => f.ProfileId))}), " +
+                              $"{jobs.Count} active jobs, reputation {c.Reputation}");
             }
             catch (CareerException ex)
             {
-                sb.AppendLine($"Karriere: {ex.Message}");
+                sb.AppendLine($"Career: {ex.Message}");
             }
         }
-        sb.AppendLine().AppendLine($"--- Letzte {logLines} Log-Zeilen ---");
+        sb.AppendLine().AppendLine($"--- Last {logLines} log lines ---");
         foreach (var line in AppLog.Logger?.Tail(logLines) ?? []) sb.AppendLine(line);
         return sb.ToString();
     }
@@ -52,7 +53,7 @@ public sealed class Diagnostics(FlightMonitorService monitor, UpdateService upda
         }
         catch (System.Runtime.InteropServices.ExternalException ex)
         {
-            throw new InvalidOperationException("Die Zwischenablage ist gerade belegt – bitte noch einmal versuchen.", ex);
+            throw new InvalidOperationException(L.T("The clipboard is busy right now – please try again."), ex);
         }
     }
 }

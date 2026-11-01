@@ -1,16 +1,16 @@
 @page "/finance"
 @inherits CareerPageBase
 
-<MudText Typo="Typo.h5" Class="mb-4">Finanzen</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">@T("Finances")</MudText>
 
 <MudGrid>
     <MudItem xs="12" md="4">
         <MudPaper Class="pa-4">
-            <MudText Typo="Typo.caption">Kontostand</MudText>
+            <MudText Typo="Typo.caption">@T("Balance")</MudText>
             <MudText Typo="Typo.h5" Class="@(_cash < 0 ? "bad" : "")">@Eur(_cash)</MudText>
         </MudPaper>
         <MudPaper Class="pa-4 mt-4">
-            <MudSelect T="string" @bind-Value="_month" Label="Monat" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+            <MudSelect T="string" @bind-Value="_month" Label="@T("Month")" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
                 @foreach (var m in _months)
                 {
                     <MudSelectItem Value="@m">@m</MudSelectItem>
@@ -22,16 +22,16 @@
                     {
                         <tr><td>@CategoryText(g.Key)</td><td style="text-align:right" class="@(g.Sum(l => l.Amount) < 0 ? "bad" : "ok")">@Eur(g.Sum(l => l.Amount))</td></tr>
                     }
-                    <tr><td><b>Ergebnis</b></td><td style="text-align:right"><b>@Eur(MonthEntries.Where(l => IsOperating(l.Category)).Sum(l => l.Amount))</b></td></tr>
+                    <tr><td><b>@T("Result")</b></td><td style="text-align:right"><b>@Eur(MonthEntries.Where(l => IsOperating(l.Category)).Sum(l => l.Amount))</b></td></tr>
                 </tbody>
             </MudSimpleTable>
         </MudPaper>
     </MudItem>
     <MudItem xs="12" md="8">
         <MudPaper Class="pa-4">
-            <MudText Typo="Typo.h6" Class="mb-2">Buchungen</MudText>
+            <MudText Typo="Typo.h6" Class="mb-2">@T("Ledger entries")</MudText>
             <MudSimpleTable Dense="true" Hover="true">
-                <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th style="text-align:right">Betrag</th></tr></thead>
+                <thead><tr><th>@T("Date")</th><th>@T("Category")</th><th>@T("Description")</th><th style="text-align:right">@T("Amount")</th></tr></thead>
                 <tbody>
                     @foreach (var l in MonthEntries)
                     {
@@ -42,13 +42,13 @@
                                 @l.Description
                                 @if (_receipts.TryGetValue(l.Id, out var receipt))
                                 {
-                                    <MudTooltip Text="@($"GSX-Rechnung öffnen\n{receipt.Lines}")">
+                                    <MudTooltip Text="@(T("Open GSX receipt") + "\n" + receipt.Lines)">
                                         <MudIconButton Icon="@Icons.Material.Outlined.Receipt" Size="Size.Small" Disabled="@(receipt.StoredHtml is null)"
                                                        OnClick="() => GsxReceiptWatcher.Open(receipt.StoredHtml)" />
                                     </MudTooltip>
                                 }
                             </td>
-                            <td style="text-align:right" class="@(l.Amount < 0 ? "bad" : "ok")">@l.Amount.ToString("N2") €</td>
+                            <td style="text-align:right" class="@(l.Amount < 0 ? "bad" : "ok")">@EurCents(l.Amount)</td>
                         </tr>
                     }
                 </tbody>
@@ -80,4 +80,8 @@
     private static bool IsOperating(LedgerCategory c) => FleetTexts.IsOperating(c);
 
     private static string CategoryText(LedgerCategory c) => FleetTexts.Category(c);
+
+    private static string EurCents(decimal amount) => L.Language == L.German
+        ? amount.ToString("N2") + " €"
+        : (amount < 0 ? "−" : "") + "€" + Math.Abs(amount).ToString("N2");
 }

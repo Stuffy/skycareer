@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Integrations.SimBrief;
 
@@ -84,7 +85,7 @@ public sealed class SimBriefAircraftCatalog
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or IOException)
             {
-                if (!File.Exists(cacheFile)) throw new InvalidOperationException($"SimBrief-Typenliste nicht erreichbar: {ex.Message}", ex);
+                if (!File.Exists(cacheFile)) throw new InvalidOperationException(L.F("SimBrief type list not reachable: {0}", ex.Message), ex);
             }
         }
         var cached = JsonSerializer.Deserialize<List<SimBriefType>>(await File.ReadAllTextAsync(cacheFile, ct).ConfigureAwait(false)) ?? [];

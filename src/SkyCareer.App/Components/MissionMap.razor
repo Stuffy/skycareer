@@ -5,7 +5,7 @@
 <div id="@_id" style="height:@(Height); width:100%; border-radius:4px; background:#1e1e2d"></div>
 @if (_error is not null)
 {
-    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">Karte nicht verfügbar: @_error</MudAlert>
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">@F("Map not available: {0}", _error)</MudAlert>
 }
 
 @code {
@@ -42,7 +42,7 @@
             if (firstRender)
             {
                 _ref = DotNetObjectReference.Create(this);
-                await JS.InvokeVoidAsync("skyMap.init", _id, _ref);
+                await JS.InvokeVoidAsync("skyMap.init", _id, _ref, new { dark = T("Dark"), streets = T("Streets"), terrain = T("Terrain") });
                 _ready = true;
             }
             if (!_ready) return;
@@ -60,7 +60,8 @@
                         id = r.Id, from = r.From, to = r.To, label = r.Label, color = r.Color, accepted = r.Accepted, selected = r.Selected,
                         destIdent = r.DestIdent, destName = r.DestName, title = r.Title, details = r.Details, payout = r.Payout,
                         canAccept = !r.Accepted
-                    })
+                    }),
+                    labels = new { accept = T("Accept"), accepted = T("accepted"), show = T("Show in list"), oneJob = T("1 job"), jobs = T("{0} jobs") }
                 });
             }
             if (_drawnLive != Live)
@@ -91,11 +92,11 @@
     [JSInvokable]
     public Task OnOfferClicked(string id) => OnRouteSelected.InvokeAsync(Guid.Parse(id));
 
-    /// <summary>"In Liste zeigen" in a pin popup.</summary>
+    /// <summary>"Show in list" in a pin popup.</summary>
     [JSInvokable]
     public Task OnShowClicked(string id) => OnShow.InvokeAsync(Guid.Parse(id));
 
-    /// <summary>"Annehmen" in a pin popup.</summary>
+    /// <summary>"Accept" in a pin popup.</summary>
     [JSInvokable]
     public Task OnAcceptClicked(string id) => OnAccept.InvokeAsync(Guid.Parse(id));
 

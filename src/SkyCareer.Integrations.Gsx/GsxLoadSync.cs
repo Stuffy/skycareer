@@ -2,6 +2,7 @@ using SkyCareer.Domain;
 using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Loading;
 using SkyCareer.Sim.Tracking;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Integrations.Gsx;
 
@@ -41,31 +42,31 @@ public sealed class GsxLoadSync(bool departed = false)
         if (s.Deboarding is GsxServiceState.Performing or GsxServiceState.Completed)
         {
             target = s.Deboarding == GsxServiceState.Completed
-                ? (0, 0, "GSX: Deboarding abgeschlossen")
-                : (1 - Fraction(s.PassengersDeboarded, s.PassengersDeboardingTotal), 1 - s.CargoDeboardingPercent / 100, "GSX: Deboarding");
+                ? (0, 0, L.T("GSX: deboarding completed"))
+                : (1 - Fraction(s.PassengersDeboarded, s.PassengersDeboardingTotal), 1 - s.CargoDeboardingPercent / 100, L.T("GSX: deboarding"));
         }
         else if (s.Boarding is GsxServiceState.Performing or GsxServiceState.Completed)
         {
             _boardingSeen = true;
             target = s.Boarding == GsxServiceState.Completed
-                ? (1, 1, "GSX: Boarding abgeschlossen")
-                : (Fraction(s.PassengersBoarded, s.PassengersBoardingTotal), s.CargoBoardingPercent / 100, "GSX: Boarding");
+                ? (1, 1, L.T("GSX: boarding completed"))
+                : (Fraction(s.PassengersBoarded, s.PassengersBoardingTotal), s.CargoBoardingPercent / 100, L.T("GSX: boarding"));
         }
         else if (!_boardingSeen && double.IsNaN(_pax))
         {
             // Empty cabin and holds before GSX starts boarding; crew stays on board.
-            target = (0, 0, "GSX: Kabine vor dem Boarding leeren");
+            target = (0, 0, L.T("GSX: emptying cabin before boarding"));
         }
         else
         {
-            return fuelNow ? new GsxSyncAction(double.NaN, double.NaN, true, "GSX: Betankung abgeschlossen") : null;
+            return fuelNow ? new GsxSyncAction(double.NaN, double.NaN, true, L.T("GSX: refuelling completed")) : null;
         }
 
         bool final = target.pax is 0 or 1 && target.cargo is 0 or 1;
         bool changed = double.IsNaN(_pax) || Math.Abs(target.pax - _pax) >= Step || Math.Abs(target.cargo - _cargo) >= Step ||
                        (final && (target.pax != _pax || target.cargo != _cargo));
         if (!changed)
-            return fuelNow ? new GsxSyncAction(double.NaN, double.NaN, true, "GSX: Betankung abgeschlossen") : null;
+            return fuelNow ? new GsxSyncAction(double.NaN, double.NaN, true, L.T("GSX: refuelling completed")) : null;
 
         _pax = target.pax;
         _cargo = target.cargo;
@@ -104,7 +105,6 @@ public sealed class GsxLoadSync(bool departed = false)
         int gsx = s.PassengersBoardingTotal > 0 ? s.PassengersBoardingTotal : s.Passengers;
         if (gsx <= 0 || gsx == mission.Seated || gsx == mission.Total ||
             gsx == mission.Seated + crewAsPassengers || gsx == mission.Total + crewAsPassengers) return null;
-        return $"GSX rechnet mit {gsx} Passagieren, der Auftrag hat {mission.Seated}. " +
-               "In GSX „Trust SimBrief“ für Passagiere aktivieren und den passenden OFP erzeugen.";
+        return L.F("GSX expects {0} passengers, the job has {1}. Enable “Trust SimBrief” for passengers in GSX and generate the matching OFP.", gsx, mission.Seated);
     }
 }

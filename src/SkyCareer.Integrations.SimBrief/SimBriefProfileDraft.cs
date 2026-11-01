@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using SkyCareer.Domain.Aircraft;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Integrations.SimBrief;
 
@@ -67,8 +68,8 @@ public static partial class SimBriefProfileDraft
         };
         string? warning = t.OperatingEmptyKg > 0 && simDraft.OperatingEmptyKg > 0 &&
                           Math.Abs(t.OperatingEmptyKg - simDraft.OperatingEmptyKg) > simDraft.OperatingEmptyKg * 0.05
-            ? $"Leergewicht laut SimBrief {t.OperatingEmptyKg:N0} kg, im Sim {simDraft.OperatingEmptyKg:N0} kg. Das Profil nutzt den Sim-Wert; " +
-              "für passende OFPs das Leergewicht im SimBrief-Airframe angleichen."
+            ? L.F("Empty weight per SimBrief {0:N0} kg, in the sim {1:N0} kg. The profile uses the sim value; align the empty weight in the SimBrief airframe for matching OFPs.",
+                t.OperatingEmptyKg, simDraft.OperatingEmptyKg)
             : null;
         return (merged, warning);
     }

@@ -2,27 +2,30 @@
 window.skyMap = (() => {
     const maps = {};
 
-    function init(elementId, dotNetRef) {
+    // labels: translated layer names { dark, streets, terrain } from MissionMap.razor.
+    function init(elementId, dotNetRef, labels) {
         if (maps[elementId]) return;
         // Canvas renderer with a click tolerance so thin route lines are easy to hit.
         const map = L.map(elementId, { worldCopyJump: true, zoomControl: true, renderer: L.canvas({ tolerance: 8 }) }).setView([50, 10], 5);
         // Keyless tile sources only (CARTO's basemaps now require an API key). Dark is the default to match the app.
+        const t = labels || {};
+        const dark = t.dark || 'Dark', streets = t.streets || 'Streets', terrain = t.terrain || 'Terrain';
         const baseLayers = {
-            'Dunkel': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            [dark]: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
                 maxZoom: 16,
                 attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
             }),
-            'Straßen': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            [streets]: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             }),
-            'Gelände': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            [terrain]: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
                 maxZoom: 17,
                 subdomains: 'abc',
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM | &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
             })
         };
-        baseLayers['Dunkel'].addTo(map);
+        baseLayers[dark].addTo(map);
         L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
 
         maps[elementId] = {
@@ -39,20 +42,22 @@ window.skyMap = (() => {
         return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
-    function popupHtml(group) {
+    // labels: translated popup texts { accept, accepted, show, oneJob, jobs ("{0}" = count) } from MissionMap.razor.
+    function popupHtml(group, labels) {
+        const t = labels || {};
         const items = group.offers.map(o => `
             <div class="sc-pop-item${o.selected ? ' sc-pop-selected' : ''}">
                 <div class="sc-pop-title"><span style="color:${esc(o.color)}">●</span> ${esc(o.title)}
                     <span class="sc-pop-pay">${esc(o.payout)}</span></div>
                 ${o.details.map(d => `<div class="sc-pop-line">${esc(d)}</div>`).join('')}
                 <div class="sc-pop-actions">
-                    ${o.canAccept ? `<button type="button" class="sc-pop-btn sc-pop-primary" data-action="accept" data-id="${esc(o.id)}">Annehmen</button>` : '<span class="sc-pop-line">angenommen</span>'}
-                    <button type="button" class="sc-pop-btn" data-action="show" data-id="${esc(o.id)}">In Liste zeigen</button>
+                    ${o.canAccept ? `<button type="button" class="sc-pop-btn sc-pop-primary" data-action="accept" data-id="${esc(o.id)}">${esc(t.accept || 'Accept')}</button>` : `<span class="sc-pop-line">${esc(t.accepted || 'accepted')}</span>`}
+                    <button type="button" class="sc-pop-btn" data-action="show" data-id="${esc(o.id)}">${esc(t.show || 'Show in list')}</button>
                 </div>
             </div>`).join('');
         return `<div class="sc-pop">
             <div class="sc-pop-head">${esc(group.destIdent)} · ${esc(group.destName)}</div>
-            <div class="sc-pop-sub">${group.offers.length} Auftrag${group.offers.length === 1 ? '' : 'e'}</div>
+            <div class="sc-pop-sub">${esc(group.offers.length === 1 ? (t.oneJob || '1 job') : (t.jobs || '{0} jobs').replace('{0}', group.offers.length))}</div>
             <div class="sc-pop-list">${items}</div>
         </div>`;
     }
@@ -92,7 +97,7 @@ window.skyMap = (() => {
             }).addTo(m.layers);
             if (count > 1) pin.bindTooltip(String(count), { permanent: true, direction: 'center', className: 'sc-pin-count' });
             else pin.bindTooltip(`${g.destIdent} · ${g.offers[0].title}`);
-            pin.bindPopup(() => popupHtml(g), { maxWidth: 360, minWidth: 260, className: 'sc-popup' });
+            pin.bindPopup(() => popupHtml(g, data.labels), { maxWidth: 360, minWidth: 260, className: 'sc-popup' });
             pin.on('popupopen', e => {
                 for (const btn of e.popup.getElement().querySelectorAll('button[data-action]')) {
                     btn.addEventListener('click', () => {

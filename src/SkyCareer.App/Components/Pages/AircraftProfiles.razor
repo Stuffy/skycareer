@@ -6,25 +6,24 @@
 @inject NavigationManager Nav
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
-    <MudText Typo="Typo.h5">Flugzeugprofile</MudText>
+    <MudText Typo="Typo.h5">@T("Aircraft Profiles")</MudText>
     <MudSpacer />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FlightLand"
-               Disabled="@(Monitor.Inspector is null)" Href="aircraft/edit?fromSim=true">Aus aktuellem Sim-Flugzeug</MudButton>
-    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FlightTakeoff" Href="aircraft/edit?simbrief=">Aus SimBrief-Typ</MudButton>
-    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Href="aircraft/edit">Leeres Profil</MudButton>
+               Disabled="@(Monitor.Inspector is null)" Href="aircraft/edit?fromSim=true">@T("From current sim aircraft")</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FlightTakeoff" Href="aircraft/edit?simbrief=">@T("From SimBrief type")</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Href="aircraft/edit">@T("Empty profile")</MudButton>
 </MudStack>
 
 @if (SimTitle is { } title)
 {
     @if (Recognized is { } match)
     {
-        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">Im Sim geladen: „@title“ – erkannt als <b>@match.Name</b>.</MudAlert>
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@F("Loaded in the sim: “{0}” – recognised as", title) <b>@match.Name</b>.</MudAlert>
     }
     else
     {
         <MudAlert Severity="Severity.Warning" Class="mb-4">
-            Im Sim geladen: „@title“ – kein passendes Profil. Mit „Aus aktuellem Sim-Flugzeug“ ein Profil anlegen;
-            Gewichte, Stationen und Tanks werden aus dem Sim übernommen, der Rest aus einem ähnlichen Profil geschätzt.
+            @F("Loaded in the sim: “{0}” – no matching profile. Create one with “From current sim aircraft”; weights, stations and tanks are taken from the sim, the rest is estimated from a similar profile.", title)
         </MudAlert>
     }
 }
@@ -36,7 +35,7 @@
 
 <MudPaper Class="pa-4">
     <MudSimpleTable Dense="true" Hover="true">
-        <thead><tr><th>Name</th><th>ICAO</th><th>Herkunft</th><th>Sitze / Fracht</th><th>MTOW</th><th>Laden</th><th>Prüfung</th><th></th></tr></thead>
+        <thead><tr><th>@T("Name")</th><th>ICAO</th><th>@T("Source")</th><th>@T("Seats / cargo")</th><th>MTOW</th><th>@T("Loading method")</th><th>@T("Validation")</th><th></th></tr></thead>
         <tbody>
             @foreach (var p in Store.Current.Aircraft)
             {
@@ -45,21 +44,21 @@
                 <tr>
                     <td><b>@p.Name</b><br /><MudText Typo="Typo.caption" Class="mono">@p.Id</MudText></td>
                     <td>@p.IcaoType</td>
-                    <td>@(own ? "Eigenes Profil" : "Mitgeliefert")</td>
+                    <td>@(own ? T("Own profile") : T("Shipped"))</td>
                     <td>@p.PassengerSeats / @p.MaxCargoKg.ToString("N0") kg</td>
                     <td>@p.MaxTakeoffKg.ToString("N0") kg</td>
                     <td>@p.Loading</td>
                     <td>
-                        @if (issues.Any(i => i.Level == IssueLevel.Error)) { <span class="bad">@issues.Count(i => i.Level == IssueLevel.Error) Fehler</span> }
-                        else if (issues.Count > 0) { <span>@issues.Count Hinweis(e)</span> }
+                        @if (issues.Any(i => i.Level == IssueLevel.Error)) { <span class="bad">@F("{0} errors", issues.Count(i => i.Level == IssueLevel.Error))</span> }
+                        else if (issues.Count > 0) { <span>@F("{0} note(s)", issues.Count)</span> }
                         else { <span class="ok">OK</span> }
                     </td>
                     <td style="white-space:nowrap">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"aircraft/edit?id={p.Id}")">@(own ? "Bearbeiten" : "Anpassen")</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"aircraft/edit?copy={p.Id}")">Kopieren</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"aircraft/edit?id={p.Id}")">@(own ? T("Edit") : T("Customise"))</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"aircraft/edit?copy={p.Id}")">@T("Copy")</MudButton>
                         @if (own)
                         {
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Disabled="Busy" OnClick="() => Delete(p)" aria-label="Löschen" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Disabled="Busy" OnClick="() => Delete(p)" aria-label="@T("Delete")" />
                         }
                     </td>
                 </tr>
@@ -67,7 +66,7 @@
         </tbody>
     </MudSimpleTable>
     <MudText Typo="Typo.caption" Class="mt-2 d-block">
-        Eigene Profile liegen unter <span class="mono">@Store.UserAircraftDir</span>. „Anpassen“ eines mitgelieferten Profils legt dort eine eigene Version an, die das Original ersetzt.
+        @T("Own profiles are stored in") <span class="mono">@Store.UserAircraftDir</span>@T(". “Customise” on a shipped profile creates your own version there that replaces the original.")
     </MudText>
 </MudPaper>
 
@@ -84,15 +83,15 @@
     {
         if (await Career.IsProfileInUseAsync(p.Id))
         {
-            Snackbar.Add($"„{p.Name}“ wird noch von Flugzeugen in einer Karriere genutzt und kann nicht gelöscht werden.", Severity.Warning);
+            Snackbar.Add(F("“{0}” is still used by aircraft in a career and can't be deleted.", p.Name), Severity.Warning);
             return;
         }
-        if (await Dialogs.ShowMessageBoxAsync("Profil löschen", $"Eigenes Profil „{p.Name}“ löschen?", yesText: "Löschen", cancelText: "Abbrechen") != true)
+        if (await Dialogs.ShowMessageBoxAsync(T("Delete profile"), F("Delete own profile “{0}”?", p.Name), yesText: T("Delete"), cancelText: T("Cancel")) != true)
             return;
         await Run(() =>
         {
             Store.DeleteUserAircraft(p.Id);
             return Task.CompletedTask;
-        }, "Profil gelöscht.");
+        }, T("Profile deleted."));
     }
 }

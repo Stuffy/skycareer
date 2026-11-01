@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using MudBlazor;
 using SkyCareer.Application;
+using SkyCareer.Localization;
 
 namespace SkyCareer.App.Components;
 
@@ -57,7 +58,7 @@ public abstract class CareerPageBase : ComponentBase, IDisposable
         }
     }
 
-    protected static string Eur(decimal amount) => $"{amount:N0} €";
+    protected static string Eur(decimal amount) => L.Eur(amount);
 
     public virtual void Dispose()
     {

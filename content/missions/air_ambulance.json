@@ -1,7 +1,8 @@
 {
   "id": "air_ambulance",
-  "name": "Ambulanzflug",
-  "description": "Patiententransport mit medizinischer Begleitung – ruhig und schnell fliegen.",
+  "name": "Air ambulance",
+  "description": "Patient transport with medical escort – fly smoothly and quickly.",
+  "texts": { "de": { "name": "Ambulanzflug", "description": "Patiententransport mit medizinischer Begleitung – ruhig und schnell fliegen." } },
   "category": "medical",
   "requirements": { "requiredTags": ["medevac"] },
   "passengers": { "min": 2, "max": 3, "childShare": 0, "baggage": "handOnly" },

@@ -2,6 +2,7 @@ using SkyCareer.Domain;
 using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Career;
 using SkyCareer.Sim.Tracking;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Application;
 
@@ -27,8 +28,8 @@ public static class FlightResultMapper
         Parked = s.FinalPhase == FlightPhase.Arrived,
         Violations = s.Violations.Select(v => new RuleViolation(Type(v.Kind), v.Detail)).ToList(),
         Notes = s.Violations.Select(v => $"{v.Kind}: {v.Detail}").Concat(s.Notes ?? [])
-            .Concat(s.Resumed ? ["Tracking war unterbrochen (App-Neustart ohne Flugaufzeichnung); Zeiten teils geschätzt."] : [])
-            .Concat(s.ManualPhaseChanges > 0 ? [$"Flugphase {s.ManualPhaseChanges}× manuell gesetzt (Debug-Modus)."] : [])
+            .Concat(s.Resumed ? [L.T("Tracking was interrupted (app restart without flight recording); times partly estimated.")] : [])
+            .Concat(s.ManualPhaseChanges > 0 ? [L.F("Flight phase set manually {0}× (debug mode).", s.ManualPhaseChanges)] : [])
             .ToList(),
         DepartureIssues = departureIssues ?? []
     };

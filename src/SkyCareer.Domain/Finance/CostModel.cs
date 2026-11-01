@@ -1,6 +1,7 @@
 using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Career;
 using SkyCareer.Domain.World;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Domain.Finance;
 
@@ -119,17 +120,17 @@ public static class CostModel
         string route = $"{from.Ident}→{to.Ident}";
         var lines = new List<CostLine>
         {
-            new(LedgerCategory.Fuel, Math.Round(price * (decimal)fuelKg, 2), $"Überführung {route}: Treibstoff {fuelKg:N0} kg"),
-            new(LedgerCategory.LandingFee, LandingFee(t, a, to), $"Überführung {route}: Landegebühr {to.Ident}"),
-            new(LedgerCategory.Handling, Handling(t, from, 0, 0) + Handling(t, to, 0, 0), $"Überführung {route}: Abfertigung"),
-            new(LedgerCategory.Navigation, Navigation(t, a, distance, true), $"Überführung {route}: Flugsicherung"),
+            new(LedgerCategory.Fuel, Math.Round(price * (decimal)fuelKg, 2), L.F("Ferry flight {0}: fuel {1:N0} kg", route, fuelKg)),
+            new(LedgerCategory.LandingFee, LandingFee(t, a, to), L.F("Ferry flight {0}: landing fee {1}", route, to.Ident)),
+            new(LedgerCategory.Handling, Handling(t, from, 0, 0) + Handling(t, to, 0, 0), L.F("Ferry flight {0}: handling", route)),
+            new(LedgerCategory.Navigation, Navigation(t, a, distance, true), L.F("Ferry flight {0}: ATC charges", route)),
             new(LedgerCategory.Crew, Math.Round(a.Pilots * t.CopilotPerBlockHour * (decimal)blockHours * t.CostFactor, 2),
-                $"Überführung {route}: Überführungscrew"),
+                L.F("Ferry flight {0}: ferry crew", route)),
             aircraft.Ownership == Ownership.Rented
                 ? new(LedgerCategory.Rent, Math.Round(aircraft.RentPerBlockHour * (decimal)Math.Max(1, blockHours), 2),
-                    $"Überführung {route}: Miete {Math.Max(1, blockHours):0.0} h")
+                    L.F("Ferry flight {0}: rent {1:0.0} h", route, Math.Max(1, blockHours)))
                 : new(LedgerCategory.Maintenance, Maintenance(t, a, airHours, aircraft.EffectiveCondition),
-                    $"Überführung {route}: Wartungsrücklage {airHours:0.0} FH")
+                    L.F("Ferry flight {0}: maintenance reserve {1:0.0} FH", route, airHours))
         };
         return new FerryEstimate(distance, blockHours, airHours, lines.Where(l => l.Amount > 0).ToList());
     }

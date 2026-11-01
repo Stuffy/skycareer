@@ -10,6 +10,7 @@ using SkyCareer.Integrations.Gsx;
 using SkyCareer.Missions;
 using SkyCareer.Missions.Generation;
 using SkyCareer.Missions.Settlement;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Application;
 
@@ -104,7 +105,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var home = await db.Airports.FindAsync(homeBase.Trim().ToUpperInvariant())
-                   ?? throw new CareerException($"Flughafen {homeBase} nicht gefunden. Sind die Flughafendaten importiert?");
+                   ?? throw new CareerException(L.F("Airport {0} not found. Has the airport data been imported?", homeBase));
 
         var now = startTime ?? DateTime.UtcNow;
         var start = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, DateTimeKind.Utc);
@@ -119,7 +120,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             FixedCostsBookedThrough = new DateTime(start.Year, start.Month, 1, 0, 0, 0, DateTimeKind.Utc)
         };
         db.Careers.Add(career);
-        Book(db, career, LedgerCategory.StartingCapital, EconomyTables.StartingCash(difficulty), "Startkapital");
+        Book(db, career, LedgerCategory.StartingCapital, EconomyTables.StartingCash(difficulty), L.T("Starting capital"));
         await db.SaveChangesAsync();
         ActiveCareerId = career.Id;
         Changed?.Invoke();
@@ -209,9 +210,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     public async Task UpdateLoadWeightsAsync(double passengerKg, double bagKg)
     {
         if (double.IsNaN(passengerKg) || passengerKg < MinPassengerWeightKg || passengerKg > MaxPassengerWeightKg)
-            throw new CareerException($"Das Passagiergewicht muss zwischen {MinPassengerWeightKg:N0} und {MaxPassengerWeightKg:N0} kg liegen.");
+            throw new CareerException(L.F("The passenger weight must be between {0:N0} and {1:N0} kg.", MinPassengerWeightKg, MaxPassengerWeightKg));
         if (double.IsNaN(bagKg) || bagKg < 0 || bagKg > MaxBagWeightKg)
-            throw new CareerException($"Das Gepäckgewicht muss zwischen 0 und {MaxBagWeightKg:N0} kg liegen.");
+            throw new CareerException(L.F("The bag weight must be between 0 and {0:N0} kg.", MaxBagWeightKg));
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         career.PassengerWeightKg = Math.Round(passengerKg, 2);
@@ -263,17 +264,17 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         switch (ownership)
         {
             case Ownership.Owned:
-                if (career.Cash < e.PurchasePriceNew) throw new CareerException($"Nicht genug Geld: {e.PurchasePriceNew:N0} € benötigt.");
+                if (career.Cash < e.PurchasePriceNew) throw new CareerException(L.F("Not enough money: {0} required.", L.Eur(e.PurchasePriceNew)));
                 aircraft.PurchasePrice = e.PurchasePriceNew;
-                Book(db, career, LedgerCategory.AircraftPurchase, -e.PurchasePriceNew, $"Kauf {profile.Name} {aircraft.Registration}", aircraft.Id);
+                Book(db, career, LedgerCategory.AircraftPurchase, -e.PurchasePriceNew, L.F("Purchase {0} {1}", profile.Name, aircraft.Registration), aircraft.Id);
                 break;
             case Ownership.Leased:
                 // Pro-rata rate for the rest of the current month; full months are booked at month boundaries.
                 decimal firstMonth = Math.Round(e.LeasePerMonth * (decimal)RemainingMonthFraction(career.GameTime), 0);
-                if (career.Cash < firstMonth) throw new CareerException($"Nicht genug Geld für die erste Leasingrate ({firstMonth:N0} €).");
+                if (career.Cash < firstMonth) throw new CareerException(L.F("Not enough money for the first lease payment ({0}).", L.Eur(firstMonth)));
                 aircraft.MonthlyRate = e.LeasePerMonth;
                 aircraft.LeaseEndsAt = career.GameTime.AddMonths(LeaseTermMonths);
-                Book(db, career, LedgerCategory.Lease, -firstMonth, $"Leasing {aircraft.Registration} (anteilig)", aircraft.Id);
+                Book(db, career, LedgerCategory.Lease, -firstMonth, L.F("Lease {0} (pro rata)", aircraft.Registration), aircraft.Id);
                 break;
             case Ownership.Rented:
                 aircraft.RentPerBlockHour = e.RentPerBlockHour;
@@ -293,7 +294,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var career = await RequireCareer(db);
         var aircraft = await RequireAircraft(db, aircraftId);
         if (await db.Contracts.AnyAsync(c => c.AircraftId == aircraftId && (c.Status == ContractStatus.Accepted || c.Status == ContractStatus.InProgress)))
-            throw new CareerException("Das Flugzeug hat noch einen angenommenen Auftrag.");
+            throw new CareerException(L.T("The aircraft still has an accepted job."));
 
         var profile = Profile(aircraft.ProfileId);
         decimal amount = aircraft.Ownership switch
@@ -304,7 +305,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         };
         if (amount != 0)
             Book(db, career, aircraft.Ownership == Ownership.Owned ? LedgerCategory.AircraftSale : LedgerCategory.Lease, amount,
-                aircraft.Ownership == Ownership.Owned ? $"Verkauf {aircraft.Registration}" : $"Vorzeitige Leasingrückgabe {aircraft.Registration}", aircraft.Id);
+                aircraft.Ownership == Ownership.Owned ? L.F("Sale {0}", aircraft.Registration) : L.F("Early lease return {0}", aircraft.Registration), aircraft.Id);
 
         await db.Contracts.Where(c => c.AircraftId == aircraftId && c.Status == ContractStatus.Offered).ExecuteDeleteAsync();
         db.Fleet.Remove(aircraft);
@@ -322,14 +323,14 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var profile = Profile(aircraft.ProfileId);
         var cost = FleetEconomics.RepairCost(profile, aircraft);
         if (cost <= 0) return;
-        if (career.Cash < cost) throw new CareerException($"Nicht genug Geld für die Reparatur ({cost:N0} €).");
+        if (career.Cash < cost) throw new CareerException(L.F("Not enough money for the repair ({0}).", L.Eur(cost)));
 
         var worn = aircraft.Components.Groups().Where(g => g.Level < 0.995).Select(g => $"{g.Group} {g.Level:P0}").ToList();
         Book(db, career, LedgerCategory.Repair, -cost,
-            $"Reparatur {aircraft.Registration} ({aircraft.Condition:N0} % → 100 %{(worn.Count > 0 ? "; " + string.Join(", ", worn) : "")})", aircraft.Id);
+            L.F("Repair {0} ({1:N0}% → 100%{2})", aircraft.Registration, aircraft.Condition, worn.Count > 0 ? "; " + string.Join(", ", worn) : ""), aircraft.Id);
         aircraft.Condition = 100;
         RestoreComponents(aircraft, 1);
-        SetDowntime(aircraft, career.GameTime + TimeSpan.FromDays(1), "Reparatur");
+        SetDowntime(aircraft, career.GameTime + TimeSpan.FromDays(1), L.T("Repair"));
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }
@@ -347,18 +348,18 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var wear = aircraft.Components;
         var worn = componentIds.Distinct().Where(id => wear.Levels.TryGetValue(id, out var l) && l < 1)
             .Select(id => (Component: WearComponents.All[id], Level: wear.Levels[id])).ToList();
-        if (worn.Count == 0) throw new CareerException("Diese Bauteile sind nicht abgenutzt.");
+        if (worn.Count == 0) throw new CareerException(L.T("These components are not worn."));
         var cost = FleetEconomics.ComponentRepairCost(Profile(aircraft.ProfileId), wear, worn.Select(w => w.Component.Id));
-        if (career.Cash < cost) throw new CareerException($"Nicht genug Geld für die Reparatur ({cost:N0} €).");
+        if (career.Cash < cost) throw new CareerException(L.F("Not enough money for the repair ({0}).", L.Eur(cost)));
 
         string what = worn.Count == 1 ? worn[0].Component.Name
-            : worn.Select(w => w.Component.Group).Distinct().Count() == 1 ? $"{worn[0].Component.Group} ({worn.Count} Bauteile)"
-            : $"{worn.Count} Bauteile";
+            : worn.Select(w => w.Component.GroupKey).Distinct().Count() == 1 ? L.F("{0} ({1} components)", worn[0].Component.Group, worn.Count)
+            : L.F("{0} components", worn.Count);
         Book(db, career, LedgerCategory.Repair, -cost,
-            $"Reparatur {aircraft.Registration}: {string.Join(", ", worn.Select(w => $"{w.Component.Name} {w.Level:P0}"))} → 100 %", aircraft.Id);
+            L.F("Repair {0}: {1} → 100%", aircraft.Registration, string.Join(", ", worn.Select(w => $"{w.Component.Name} {w.Level:P0}"))), aircraft.Id);
         aircraft.ComponentWear = wear.RepairComponents(worn.Select(w => w.Component.Id)).Serialize();
-        var downtime = worn.Select(w => WearComponents.RepairDowntime(w.Component.Group)).Max();
-        SetDowntime(aircraft, career.GameTime + downtime, $"Reparatur {what}");
+        var downtime = worn.Select(w => WearComponents.RepairDowntime(w.Component.GroupKey)).Max();
+        SetDowntime(aircraft, career.GameTime + downtime, L.F("Repair {0}", what));
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }
@@ -366,9 +367,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     /// <summary>Rentals are maintained by the lessor, and nothing is repaired while the aircraft is flying a job.</summary>
     private async Task RequireRepairableAsync(SkyCareerDb db, FleetAircraft aircraft)
     {
-        if (aircraft.Ownership == Ownership.Rented) throw new CareerException("Mietflugzeuge wartet der Vermieter.");
+        if (aircraft.Ownership == Ownership.Rented) throw new CareerException(L.T("Rental aircraft are maintained by the lessor."));
         if (await db.Contracts.AnyAsync(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.InProgress))
-            throw new CareerException($"{aircraft.Registration} ist gerade im Flug.");
+            throw new CareerException(L.F("{0} is currently in flight.", aircraft.Registration));
     }
 
     /// <summary>Workshop time never shortens a downtime that is already longer.</summary>
@@ -403,14 +404,14 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         if (ferryFlight)
         {
             ferry = CostModel.Ferry(EconomyTables.For(career.Difficulty), profile, aircraft, from, to, career.GameTime);
-            if (career.Cash < ferry.Total) throw new CareerException($"Nicht genug Geld für die Überführung ({ferry.Total:N0} €).");
+            if (career.Cash < ferry.Total) throw new CareerException(L.F("Not enough money for the ferry flight ({0}).", L.Eur(ferry.Total)));
             foreach (var line in ferry.Costs) Book(db, career, line.Category, -line.Amount, line.Description, aircraft.Id);
             aircraft.AirframeHours += ferry.AirHours;
             aircraft.HoursSinceCheck += ferry.AirHours;
             aircraft.Cycles++;
             aircraft.Condition = Math.Max(0, aircraft.Condition - FleetEconomics.ConditionLoss(ferry.AirHours, 0, 1));
             aircraft.UnavailableUntil = career.GameTime + TimeSpan.FromHours(ferry.BlockHours);
-            aircraft.UnavailableReason = $"Überführung nach {to.Ident}";
+            aircraft.UnavailableReason = L.F("Ferry flight to {0}", to.Ident);
             PerformDueCheck(db, career, aircraft, profile);
         }
         aircraft.Location = to.Ident;
@@ -426,23 +427,23 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var aircraft = await RequireAircraft(db, aircraftId);
         var profile = Profile(aircraft.ProfileId);
         string ident = destination.Trim().ToUpperInvariant();
-        if (ident.Length == 0) throw new CareerException("Bitte einen Zielflughafen angeben.");
+        if (ident.Length == 0) throw new CareerException(L.T("Please enter a destination airport."));
         if (string.Equals(ident, aircraft.Location, StringComparison.OrdinalIgnoreCase))
-            throw new CareerException($"{aircraft.Registration} steht bereits in {ident}.");
+            throw new CareerException(L.F("{0} is already at {1}.", aircraft.Registration, ident));
         if (!aircraft.IsAvailable(career.GameTime))
-            throw new CareerException($"{aircraft.Registration} ist bis {aircraft.UnavailableUntil:g} nicht verfügbar ({aircraft.UnavailableReason ?? "Wartung"}).");
+            throw new CareerException(L.F("{0} is unavailable until {1:g} ({2}).", aircraft.Registration, aircraft.UnavailableUntil, aircraft.UnavailableReason ?? L.T("Maintenance")));
         if (await db.Contracts.AnyAsync(c => c.AircraftId == aircraft.Id && (c.Status == ContractStatus.Accepted || c.Status == ContractStatus.InProgress)))
-            throw new CareerException($"{aircraft.Registration} hat angenommene Aufträge ab {aircraft.Location}. Erst fliegen oder stornieren.");
+            throw new CareerException(L.F("{0} has accepted jobs from {1}. Fly or cancel them first.", aircraft.Registration, aircraft.Location));
 
         var from = await RequireAirport(db, aircraft.Location);
-        var to = await LoadAirportAsync(db, ident) ?? throw new CareerException($"Flughafen {ident} ist nicht bekannt.");
+        var to = await LoadAirportAsync(db, ident) ?? throw new CareerException(L.F("Airport {0} is unknown.", ident));
         if (to.LongestRunwayM < profile.MinRunwayM || !to.Surfaces.Any(profile.Surfaces.Contains))
-            throw new CareerException($"{profile.Name} kann in {to.Ident} nicht landen (Piste zu kurz oder ungeeignet).");
+            throw new CareerException(L.F("{0} cannot land at {1} (runway too short or unsuitable).", profile.Name, to.Ident));
         if (to.IsMilitary && !profile.IsMilitary)
-            throw new CareerException($"{to.Ident} ist ein Militärflugplatz.");
+            throw new CareerException(L.F("{0} is a military airfield.", to.Ident));
         double range = RequirementEvaluator.EstimatedRangeNm(profile);
         if (from.Position.DistanceNmTo(to.Position) > range * 0.9)
-            throw new CareerException($"{to.Ident} liegt außerhalb der Reichweite ({range * 0.9:N0} nm). Bitte in Etappen überführen.");
+            throw new CareerException(L.F("{0} is out of range ({1:N0} nm). Please ferry it in legs.", to.Ident, range * 0.9));
         return (aircraft, profile, from, to);
     }
 
@@ -607,14 +608,14 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
-        if (c.Status != ContractStatus.Offered) throw new CareerException("Angebot ist nicht mehr verfügbar.");
-        if (c.IsReturnLeg) throw new CareerException("Der Rückflug wird zusammen mit dem Hinflug angenommen.");
-        if (c.ExpiresAt < career.GameTime) throw new CareerException("Angebot ist abgelaufen.");
+        if (c.Status != ContractStatus.Offered) throw new CareerException(L.T("The offer is no longer available."));
+        if (c.IsReturnLeg) throw new CareerException(L.T("The return flight is accepted together with the outbound flight."));
+        if (c.ExpiresAt < career.GameTime) throw new CareerException(L.T("The offer has expired."));
         var aircraft = await RequireAircraft(db, c.AircraftId);
         if (!string.Equals(aircraft.Location, c.Origin, StringComparison.OrdinalIgnoreCase))
-            throw new CareerException($"{aircraft.Registration} steht nicht mehr in {c.Origin}.");
+            throw new CareerException(L.F("{0} is no longer at {1}.", aircraft.Registration, c.Origin));
         if (await db.Contracts.AnyAsync(x => x.AircraftId == c.AircraftId && (x.Status == ContractStatus.Accepted || x.Status == ContractStatus.InProgress)))
-            throw new CareerException("Dieses Flugzeug hat bereits einen angenommenen Auftrag.");
+            throw new CareerException(L.T("This aircraft already has an accepted job."));
         c.Status = ContractStatus.Accepted;
         if (c.PackageId is { } package)
             foreach (var leg in await db.Contracts.Where(x => x.PackageId == package && x.Id != c.Id && x.Status == ContractStatus.Offered).ToListAsync())
@@ -632,14 +633,14 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
-        if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress)) throw new CareerException("Nur angenommene Aufträge können storniert werden.");
+        if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress)) throw new CareerException(L.T("Only accepted jobs can be cancelled."));
         var legs = new List<MissionContract> { c };
         if (c is { PackageId: { } package, IsReturnLeg: false })
             legs.AddRange(await db.Contracts.Where(x => x.PackageId == package && x.Id != c.Id && x.Status == ContractStatus.Accepted).ToListAsync());
         foreach (var leg in legs)
         {
             leg.Status = ContractStatus.Cancelled;
-            Book(db, career, LedgerCategory.Penalty, -Math.Round(leg.Payout * CancellationPenalty, 0), $"Stornierung {leg.Origin}→{leg.Destination}", leg.AircraftId);
+            Book(db, career, LedgerCategory.Penalty, -Math.Round(leg.Payout * CancellationPenalty, 0), L.F("Cancellation {0}→{1}", leg.Origin, leg.Destination), leg.AircraftId);
         }
         career.Reputation = Math.Max(0, career.Reputation - 1);
         await db.SaveChangesAsync();
@@ -663,10 +664,10 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
-        if (c.Status != ContractStatus.Accepted) throw new CareerException("Auftrag muss zuerst angenommen werden.");
+        if (c.Status != ContractStatus.Accepted) throw new CareerException(L.T("The job must be accepted first."));
         var aircraft = await RequireAircraft(db, c.AircraftId);
-        if (aircraft.Location != c.Origin) throw new CareerException($"{aircraft.Registration} steht in {aircraft.Location}, nicht in {c.Origin}.");
-        if (!aircraft.IsAvailable(career.GameTime)) throw new CareerException($"{aircraft.Registration} ist bis {aircraft.UnavailableUntil:g} nicht verfügbar ({aircraft.UnavailableReason ?? "Wartung"}).");
+        if (aircraft.Location != c.Origin) throw new CareerException(L.F("{0} is at {1}, not at {2}.", aircraft.Registration, aircraft.Location, c.Origin));
+        if (!aircraft.IsAvailable(career.GameTime)) throw new CareerException(L.F("{0} is unavailable until {1:g} ({2}).", aircraft.Registration, aircraft.UnavailableUntil, aircraft.UnavailableReason ?? L.T("Maintenance")));
         c.Status = ContractStatus.InProgress;
         c.FlightStartedAtUtc = DateTime.UtcNow;
         c.FuelAtBlockOffKg = fuelAtBlockOffKg;
@@ -695,7 +696,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
-        if (c.Status != ContractStatus.InProgress) throw new CareerException("Für diesen Auftrag läuft kein Flug.");
+        if (c.Status != ContractStatus.InProgress) throw new CareerException(L.T("No flight is in progress for this job."));
         var aircraft = await RequireAircraft(db, c.AircraftId);
         var profile = Profile(aircraft.ProfileId);
         var type = MissionType(c.MissionTypeId);
@@ -976,14 +977,14 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var career = await RequireCareer(db);
         decimal delta = Math.Round(amount, 2) - career.Cash;
         if (delta == 0) return;
-        Book(db, career, LedgerCategory.Adjustment, delta, "Korrektur (Debug)");
+        Book(db, career, LedgerCategory.Adjustment, delta, L.T("Adjustment (debug)"));
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }
 
     public async Task SetReputationAsync(int value)
     {
-        if (value is < 0 or > 100) throw new CareerException("Die Reputation muss zwischen 0 und 100 liegen.");
+        if (value is < 0 or > 100) throw new CareerException(L.T("Reputation must be between 0 and 100."));
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
         career.Reputation = value;
@@ -997,7 +998,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     /// </summary>
     public async Task DebugSetAircraftAsync(Guid aircraftId, double? condition = null, bool clearDowntime = false, string? location = null)
     {
-        if (condition is < 0 or > 100) throw new CareerException("Der Zustand muss zwischen 0 und 100 % liegen.");
+        if (condition is < 0 or > 100) throw new CareerException(L.T("Condition must be between 0 and 100 %."));
         await using var db = await dbFactory.CreateDbContextAsync();
         await RequireCareer(db);
         var aircraft = await RequireAircraft(db, aircraftId);
@@ -1011,7 +1012,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         if (!string.IsNullOrWhiteSpace(location))
         {
             string ident = location.Trim().ToUpperInvariant();
-            if (await LoadAirportAsync(db, ident) is null) throw new CareerException($"Flughafen {ident} ist nicht bekannt.");
+            if (await LoadAirportAsync(db, ident) is null) throw new CareerException(L.F("Airport {0} is unknown.", ident));
             if (!string.Equals(ident, aircraft.Location, StringComparison.OrdinalIgnoreCase))
             {
                 aircraft.Location = ident;
@@ -1032,7 +1033,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             await RequireCareer(db);
             var c = await RequireContract(db, contractId);
             if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress))
-                throw new CareerException("Nur angenommene oder laufende Aufträge lassen sich abschließen.");
+                throw new CareerException(L.T("Only accepted or active jobs can be completed."));
             var aircraft = await RequireAircraft(db, c.AircraftId);
             var profile = Profile(aircraft.ProfileId);
             blockHours = c.DistanceNm / Math.Max(1, profile.CruiseKtas) + 0.5;
@@ -1057,7 +1058,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             FinalFuelKg = loadedFuel - burntFuel,
             FinalPosition = destination,
             Parked = true,
-            Notes = ["Mit den Debug-Werkzeugen abgeschlossen."]
+            Notes = [L.T("Completed with the debug tools.")]
         };
         return await CompleteFlightAsync(contractId, result);
     }
@@ -1100,9 +1101,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 var profile = content.Aircraft.FirstOrDefault(p => p.Id == a.ProfileId);
                 if (profile is null) continue;
                 if (a.Ownership == Ownership.Leased)
-                    BookAt(db, career, next, LedgerCategory.Lease, -a.MonthlyRate, $"Leasingrate {a.Registration} {next:MM/yyyy}", a.Id);
+                    BookAt(db, career, next, LedgerCategory.Lease, -a.MonthlyRate, L.F("Lease payment {0} {1:MM/yyyy}", a.Registration, next), a.Id);
                 if (a.Ownership != Ownership.Rented && profile.Economics.InsurancePerMonth > 0)
-                    BookAt(db, career, next, LedgerCategory.Insurance, -profile.Economics.InsurancePerMonth, $"Versicherung {a.Registration} {next:MM/yyyy}", a.Id);
+                    BookAt(db, career, next, LedgerCategory.Insurance, -profile.Economics.InsurancePerMonth, L.F("Insurance {0} {1:MM/yyyy}", a.Registration, next), a.Id);
             }
             career.FixedCostsBookedThrough = next;
             next = next.AddMonths(1);
@@ -1122,12 +1123,12 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     private void PerformDueCheck(SkyCareerDb db, Career career, FleetAircraft aircraft, AircraftProfile profile)
     {
         if (aircraft.Ownership == Ownership.Rented || aircraft.HoursSinceCheck < FleetEconomics.CheckIntervalHours(profile)) return;
-        Book(db, career, LedgerCategory.Maintenance, -FleetEconomics.CheckCost(profile), $"Planmäßiger Check {aircraft.Registration}", aircraft.Id);
+        Book(db, career, LedgerCategory.Maintenance, -FleetEconomics.CheckCost(profile), L.F("Scheduled check {0}", aircraft.Registration), aircraft.Id);
         aircraft.HoursSinceCheck = 0;
         aircraft.Condition = Math.Min(100, aircraft.Condition + 15);
         RestoreComponents(aircraft, 0.15);
         aircraft.UnavailableUntil = career.GameTime + FleetEconomics.CheckDowntime(profile);
-        aircraft.UnavailableReason = "Planmäßiger Check";
+        aircraft.UnavailableReason = L.T("Scheduled check");
     }
 
     /// <summary>The return leg's bonus on both payouts, when the package's outbound was flown (on time or late).</summary>
@@ -1275,17 +1276,17 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         return (next - t).TotalHours / (next - monthStart).TotalHours;
     }
 
-    private Guid RequireCareerId() => ActiveCareerId ?? throw new CareerException("Keine Karriere aktiv.");
+    private Guid RequireCareerId() => ActiveCareerId ?? throw new CareerException(L.T("No career active."));
 
     private async Task<Career> RequireCareer(SkyCareerDb db) =>
-        await db.Careers.FindAsync(RequireCareerId()) ?? throw new CareerException("Karriere nicht gefunden.");
+        await db.Careers.FindAsync(RequireCareerId()) ?? throw new CareerException(L.T("Career not found."));
 
     private async Task<FleetAircraft> RequireAircraft(SkyCareerDb db, Guid id) =>
-        await db.Fleet.FirstOrDefaultAsync(f => f.Id == id && f.CareerId == RequireCareerId()) ?? throw new CareerException("Flugzeug nicht gefunden.");
+        await db.Fleet.FirstOrDefaultAsync(f => f.Id == id && f.CareerId == RequireCareerId()) ?? throw new CareerException(L.T("Aircraft not found."));
 
     private async Task<MissionContract> RequireContract(SkyCareerDb db, Guid id) =>
-        await db.Contracts.FirstOrDefaultAsync(c => c.Id == id && c.CareerId == RequireCareerId()) ?? throw new CareerException("Auftrag nicht gefunden.");
+        await db.Contracts.FirstOrDefaultAsync(c => c.Id == id && c.CareerId == RequireCareerId()) ?? throw new CareerException(L.T("Job not found."));
 
     private static async Task<Airport> RequireAirport(SkyCareerDb db, string ident) =>
-        await LoadAirportAsync(db, ident) ?? throw new CareerException($"Flughafen {ident} nicht in der Datenbank.");
+        await LoadAirportAsync(db, ident) ?? throw new CareerException(L.F("Airport {0} not in the database.", ident));
 }

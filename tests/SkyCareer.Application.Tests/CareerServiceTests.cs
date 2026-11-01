@@ -303,7 +303,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var moved = (await _svc.GetFleetAsync()).Single();
         Assert.Equal("EDDM", moved.Location);
         Assert.False(moved.IsAvailable(career.GameTime));
-        Assert.Equal("Überführung nach EDDM", moved.UnavailableReason);
+        Assert.Equal("Ferry flight to EDDM", moved.UnavailableReason);
         Assert.Equal(1, moved.Cycles);
         Assert.Empty(await OffersAsync());
     }
@@ -380,12 +380,12 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await _svc.AcceptAsync(outbound.Id);
         Assert.Equal(2, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Count);
         var first = await _svc.DebugCompleteContractAsync(outbound.Id);
-        Assert.DoesNotContain(first.Lines, l => l.Description == "Hin- und Rückflug-Bonus");
+        Assert.DoesNotContain(first.Lines, l => l.Description == "Return flight bonus");
         Assert.Equal(back.Origin, (await _svc.GetFleetAsync()).Single().Location);
         Assert.Equal(back.Id, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().Id);
 
         var second = await _svc.DebugCompleteContractAsync(back.Id);
-        var bonus = Assert.Single(second.Lines, l => l.Description == "Hin- und Rückflug-Bonus");
+        var bonus = Assert.Single(second.Lines, l => l.Description == "Return flight bonus");
         var rule = _svc.MissionType(back.MissionTypeId).ReturnFlight!;
         Assert.Equal(Math.Round(rule.Bonus * (outbound.Payout + back.Payout), 0), bonus.Amount);
         Assert.Equal(outbound.Origin, (await _svc.GetFleetAsync()).Single().Location);
@@ -414,7 +414,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Equal(FlightOutcome.Diverted, diverted.Outcome);
         Assert.Equal(back.Id, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().Id);
         var second = await _svc.DebugCompleteContractAsync(back.Id);
-        Assert.DoesNotContain(second.Lines, l => l.Description == "Hin- und Rückflug-Bonus");
+        Assert.DoesNotContain(second.Lines, l => l.Description == "Return flight bonus");
     }
 
     [Fact]
@@ -472,13 +472,13 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var s = await _svc.CompleteFlightAsync(job.Id, new FlightResult
         {
             BlockTime = TimeSpan.FromMinutes(20), AirTime = TimeSpan.FromMinutes(10), FuelUsedKg = 30, TouchdownFpm = -150,
-            FinalPosition = dest.Position, Parked = true, DepartureIssues = ["Zuladung (Sim 900 kg, Soll 700 kg)", "Treibstoff (zu wenig)"]
+            FinalPosition = dest.Position, Parked = true, DepartureIssues = ["Payload (sim 900 kg, planned 700 kg)", "Fuel (too little)"]
         });
 
-        var penalties = s.Lines.Where(l => l.Description.StartsWith("Abweichung beim Abflug")).ToList();
+        var penalties = s.Lines.Where(l => l.Description.StartsWith("Departure deviation")).ToList();
         Assert.Equal(2, penalties.Count);
         Assert.All(penalties, l => Assert.Equal(-Math.Round(job.Payout * 0.1m, 0), l.Amount));
-        Assert.Contains(s.Notes, n => n.Contains("Zuladung"));
+        Assert.Contains(s.Notes, n => n.Contains("Payload"));
     }
 
     [Fact]
@@ -496,7 +496,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var s = automation.LastSettlement;
         Assert.NotNull(s);
         Assert.Equal(FlightOutcome.Diverted, s!.Outcome);
-        Assert.Contains(s.Notes, n => n.Contains("manuell gesetzt"));
+        Assert.Contains(s.Notes, n => n.Contains("set manually"));
         Assert.False(host.HasSession);
     }
 
@@ -537,7 +537,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Equal(job.Id, restarted.ContractId);
         Assert.Equal(job.Id, resumed);
         await automation2.TickAsync();   // in flight: the missing start wear is read now
-        Assert.Contains(restarted.Log, l => l.Contains("nach Neustart fortgesetzt"));
+        Assert.Contains(restarted.Log, l => l.Contains("resumed after restart"));
 
         var landing = Segment(cruise[^1], 1, t => t with { OnGround = true, AltitudeAglFt = 0, VerticalSpeedFpm = 0, TouchdownVsFpm = -150, GForce = 1.2, GroundSpeedKt = 60 })
             .Concat(Segment(cruise[^1] with { OnGround = true, AltitudeAglFt = 0 }, 20, t => t with { GForce = 1, GroundSpeedKt = 10, TouchdownVsFpm = 0 }))
@@ -552,9 +552,9 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.NotNull(s);
         Assert.Contains(s!.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
         // Departure issues come from the job, not from the (new) host.
-        Assert.Contains(s.Lines, l => l.Category == LedgerCategory.Penalty && l.Description.Contains("Zuladung"));
-        Assert.Equal(!withJournal, s.Notes.Any(n => n.Contains("Tracking war unterbrochen")));
-        Assert.Contains(s.Notes, n => n.Contains("erst ab dem App-Neustart"));
+        Assert.Contains(s.Lines, l => l.Category == LedgerCategory.Penalty && l.Description.Contains("Payload"));
+        Assert.Equal(!withJournal, s.Notes.Any(n => n.Contains("Tracking was interrupted")));
+        Assert.Contains(s.Notes, n => n.Contains("only recorded from the app restart"));
     }
 
     /// <summary>
@@ -698,7 +698,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
             host.Wear = AircraftWear.FromSim(new Dictionary<int, double> { [35] = 0.98, [36] = 1.0, [37] = 0.65, [46] = 0.97 }));
 
         var s = automation.LastSettlement!;
-        Assert.Contains(s.Notes, n => n.StartsWith("Abnutzung laut MSFS: Reifen −30 %"));
+        Assert.Contains(s.Notes, n => n.StartsWith("MSFS wear: Tires −30 %"));
         double model = FleetEconomics.ConditionLoss(s.AirHours, -150, 1.2);
         Assert.Equal(model + 30.0 / 4, s.ConditionLoss, 3);
 
@@ -722,7 +722,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await automation.TickAsync();
         var technical = automation.Readiness[next.Id][DepartureCheck.Technical]!;
         Assert.Equal(Light.Yellow, technical.Light);
-        Assert.Contains("Reifen 65", technical.Detail);
+        Assert.Contains("Tires 65", technical.Detail);
         Assert.DoesNotContain(automation.Readiness[next.Id].Penalised, i => i.Key == DepartureCheck.Technical);
     }
 
@@ -749,8 +749,8 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Equal(0.8, plane.Components.Level(40), 6);
         Assert.Equal(cash - tireCost, (await _svc.GetCareerAsync()).Cash);
         Assert.Equal(career.GameTime + TimeSpan.FromHours(2), plane.UnavailableUntil);
-        Assert.Equal("Reparatur Reifen", plane.UnavailableReason);
-        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.Repair && l.Amount == -tireCost && l.Description.Contains("Reifen 60 %"));
+        Assert.Equal("Repair Tires", plane.UnavailableReason);
+        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.Repair && l.Amount == -tireCost && l.Description.Contains("Tires 60%"));
 
         // Tire pressure and the engine together: the engine's day in the workshop wins.
         await _svc.RepairComponentsAsync(plane.Id, [38, 40]);
@@ -814,7 +814,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         plane = (await _svc.GetFleetAsync()).Single();
         Assert.Equal(1.0, plane.Components.WorstLevel, 3);
         Assert.Equal(100, plane.EffectiveCondition, 3);
-        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.Repair && l.Amount == -cost && l.Description.Contains("Reifen 90"));
+        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Category == LedgerCategory.Repair && l.Amount == -cost && l.Description.Contains("Tires 90"));
     }
 
     [Fact]
@@ -850,7 +850,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await automation.TickAsync();
 
         Assert.False(host.HasSession);
-        Assert.Contains("Flugzeugtyp", automation.NotStarted[job.Id]);
+        Assert.Contains("Aircraft type", automation.NotStarted[job.Id]);
         Assert.Single(await _svc.GetContractsAsync(ContractStatus.Accepted));
     }
 
@@ -994,18 +994,18 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         Assert.Contains(s.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
         Assert.Contains(s.Lines, l => l.Category == LedgerCategory.MissionRevenue && l.Amount == job.Payout);
-        var penalties = s.Lines.Where(l => l.Description.StartsWith("Regelverstoß")).Sum(l => -l.Amount);
+        var penalties = s.Lines.Where(l => l.Description.StartsWith("Rule violation")).Sum(l => -l.Amount);
         Assert.InRange(penalties, job.Payout * (decimal)share - 2, job.Payout * (decimal)share + 2);
         Assert.True(s.Score.Total > 0);
         if (share > 0)
         {
-            Assert.Contains(s.Notes, n => n.StartsWith("Regelverstoß:"));
+            Assert.Contains(s.Notes, n => n.StartsWith("Rule violation:"));
             Assert.True(s.ReputationChange < 1);
         }
         Assert.DoesNotContain(s.Notes, n => n.Contains("annulliert"));
         if (violations.Contains(ViolationType.SimRate))
         {
-            Assert.Contains(s.Notes, n => n.StartsWith("Zeitbeschleunigung"));
+            Assert.Contains(s.Notes, n => n.StartsWith("Time acceleration"));
             Assert.Equal(0, s.Score.SafetyPenalty);
             Assert.True(s.ReputationChange >= 0);
         }
@@ -1023,7 +1023,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
 
         Assert.Equal(FlightPhase.Arrived, host.Phase);
         Assert.Null(automation.LastSettlement);
-        Assert.Contains("GSX-Deboarding", automation.Waiting);
+        Assert.Contains("GSX deboarding", automation.Waiting);
 
         async Task After(int seconds)
         {
@@ -1073,9 +1073,9 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await _svc.WaitAsync(TimeSpan.FromDays(50)); // 15 Oct → 4 Dec: Nov 1 and Dec 1 boundaries
 
         var ledger = await _svc.GetLedgerAsync();
-        Assert.Equal(2, ledger.Count(l => l.Category == LedgerCategory.Lease && l.Description.StartsWith("Leasingrate")));
+        Assert.Equal(2, ledger.Count(l => l.Category == LedgerCategory.Lease && l.Description.StartsWith("Lease payment")));
         Assert.Equal(2, ledger.Count(l => l.Category == LedgerCategory.Insurance));
-        Assert.All(ledger.Where(l => l.Category == LedgerCategory.Lease && l.Description.StartsWith("Leasingrate")),
+        Assert.All(ledger.Where(l => l.Category == LedgerCategory.Lease && l.Description.StartsWith("Lease payment")),
             l => Assert.Equal(-leased.MonthlyRate, l.Amount));
 
         var career = await _svc.GetCareerAsync();
@@ -1139,7 +1139,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await _svc.MarkFuelRestoredAsync(first.Id);
         Assert.NotNull((await _svc.GetContractsAsync(ContractStatus.Accepted)).Single().FuelRestoredAtUtc);
         var r1 = await _svc.DebugCompleteContractAsync(first.Id);
-        Assert.Contains(r1.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Treibstoff"));
+        Assert.Contains(r1.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Fuel ") && !l.Description.StartsWith("Fuel uplift"));
         double left = (await _svc.GetFleetAsync()).Single().FuelKg!.Value;
         Assert.True(left > 0);
 
@@ -1151,7 +1151,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var r2 = await _svc.DebugCompleteContractAsync(second.Id);
         Assert.True(block > left, "test needs a flight that requires uplift");
         var fuelLine = Assert.Single(r2.Lines, l => l.Category == LedgerCategory.Fuel);
-        Assert.StartsWith($"Getankt {block - left:N0} kg", fuelLine.Description);
+        Assert.StartsWith($"Fuel uplift {block - left:N0} kg", fuelLine.Description);
 
         // Switched off: back to paying the burn.
         await _svc.UpdatePersistFuelAsync(false);
@@ -1159,7 +1159,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var third = (await OffersAsync()).First();
         await _svc.AcceptAsync(third.Id);
         var r3 = await _svc.DebugCompleteContractAsync(third.Id);
-        Assert.Contains(r3.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Treibstoff"));
+        Assert.Contains(r3.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Fuel ") && !l.Description.StartsWith("Fuel uplift"));
     }
 
     [Fact]

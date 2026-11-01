@@ -1,0 +1,6 @@
+{
+  "Language": "Sprache",
+  "System (Windows: {0})": "System (Windows: {0})",
+  "An unexpected error occurred:\n\n{0}\n\nDetails are in the error log ({1}). The app keeps running.": "Es ist ein unerwarteter Fehler aufgetreten:\n\n{0}\n\nDetails stehen im Fehlerprotokoll ({1}). Die App läuft weiter.",
+  "Number and date formats switch completely after a restart.": "Zahlen- und Datumsformate wechseln vollständig nach einem Neustart."
+}

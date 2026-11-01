@@ -1,10 +1,10 @@
 @page "/missions"
 @inherits CareerPageBase
 
-<MudText Typo="Typo.h5" Class="mb-1">Missionstypen</MudText>
+<MudText Typo="Typo.h5" Class="mb-1">@T("Mission Types")</MudText>
 <MudText Typo="Typo.body2" Class="mb-4">
-    Deine Reputation: <b>@_reputation</b> / 100 – manche Missionstypen erscheinen erst ab einer bestimmten Reputation im Markt.
-    Reputation gibt es für pünktliche, saubere Flüge; Verspätungen, Umleitungen und Regelverstöße kosten sie.
+    @T("Your reputation:") <b>@_reputation</b> @T("/ 100 – some mission types only appear on the market from a certain reputation.")
+    @T("Reputation is earned for punctual, clean flights; delays, diversions and rule violations cost reputation.")
 </MudText>
 
 @foreach (var err in Career.Content.Errors)
@@ -12,34 +12,34 @@
     <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@Path.GetFileName(err.File): @err.Message</MudAlert>
 }
 
-<MudSelect T="string" @bind-Value="_aircraftId" Label="Verfügbarkeit prüfen für Flugzeug" Variant="Variant.Outlined" Class="mb-4" Style="max-width:400px">
+<MudSelect T="string" @bind-Value="_aircraftId" Label="@T("Check availability for aircraft")" Variant="Variant.Outlined" Class="mb-4" Style="max-width:400px">
     @foreach (var a in Career.Content.Aircraft)
     {
-        <MudSelectItem Value="@a.Id">@a.Name@(_fleetProfiles.Contains(a.Id) ? " (in deiner Flotte)" : "")</MudSelectItem>
+        <MudSelectItem Value="@a.Id">@a.Name@(_fleetProfiles.Contains(a.Id) ? " " + T("(in your fleet)") : "")</MudSelectItem>
     }
 </MudSelect>
 
 <MudSimpleTable Dense="true" Hover="true">
     <thead>
-        <tr><th>Mission</th><th>Kategorie</th><th>Distanz</th><th>Bevorzugte Ziele</th><th>Reputation</th><th>SimBrief</th><th>Regeln</th><th>Verfügbar</th></tr>
+        <tr><th>@T("Mission")</th><th>@T("Category")</th><th>@T("Distance")</th><th>@T("Preferred destinations")</th><th>@T("Reputation")</th><th>SimBrief</th><th>@T("Flight rules")</th><th>@T("Available")</th></tr>
     </thead>
     <tbody>
-        @foreach (var m in Career.Content.MissionTypes.OrderBy(m => m.MinReputation).ThenBy(m => m.Name))
+        @foreach (var m in Career.Content.MissionTypes.OrderBy(m => m.MinReputation).ThenBy(m => m.DisplayName))
         {
             var result = Selected is null ? null : RequirementEvaluator.Evaluate(m, Selected);
             bool locked = m.MinReputation > _reputation;
             <tr>
-                <td><b>@m.Name</b><br /><MudText Typo="Typo.caption">@m.Description</MudText></td>
+                <td><b>@m.DisplayName</b><br /><MudText Typo="Typo.caption">@m.DisplayDescription</MudText></td>
                 <td>@MissionTexts.Category(m.Category)</td>
                 <td>@m.Distance.MinNm.ToString("N0")–@m.Distance.MaxNm.ToString("N0") nm</td>
                 <td>@MissionTexts.Destinations(m.Destinations)</td>
-                <td class="@(locked ? "bad" : "")">@(m.MinReputation > 0 ? $"ab {m.MinReputation}" : "–")</td>
+                <td class="@(locked ? "bad" : "")">@(m.MinReputation > 0 ? F("from {0}", m.MinReputation) : "–")</td>
                 <td>@m.SimBrief</td>
                 <td>@m.FlightRules</td>
                 <td>
                     @if (result is null) { <span>–</span> }
                     else if (!result.Eligible) { <span class="bad">✘ @string.Join("; ", result.Reasons)</span> }
-                    else if (locked) { <span>🔒 gesperrt – Reputation @m.MinReputation nötig (aktuell @_reputation)</span> }
+                    else if (locked) { <span>🔒 @F("locked – reputation {0} required (currently {1})", m.MinReputation, _reputation)</span> }
                     else { <span class="ok">✔</span> }
                 </td>
             </tr>

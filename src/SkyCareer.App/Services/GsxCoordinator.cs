@@ -2,6 +2,7 @@ using SkyCareer.Application;
 using SkyCareer.Application.Logging;
 using SkyCareer.Domain.Loading;
 using SkyCareer.Integrations.Gsx;
+using SkyCareer.Localization;
 using SkyCareer.Sim;
 using SkyCareer.Sim.Tracking;
 
@@ -163,8 +164,8 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
         if (action.ApplyFuel)
             await loader.ApplyFuelAsync(sheet.Fuel.Block, ct);
         LastAction = $"{DateTime.Now:HH:mm:ss} {action.Reason}" +
-                     (action.WritesPayload ? $" – Kabine {action.PassengerFraction:P0}, Fracht {action.CargoFraction:P0}" : "") +
-                     (action.ApplyFuel ? $" – Treibstoff {sheet.Fuel.Block.Kg:N0} kg" : "");
+                     (action.WritesPayload ? " – " + L.F("cabin {0:P0}, cargo {1:P0}", action.PassengerFraction, action.CargoFraction) : "") +
+                     (action.ApplyFuel ? " – " + L.F("fuel {0:N0} kg", sheet.Fuel.Block.Kg) : "");
     }
 
     public ValueTask DisposeAsync()

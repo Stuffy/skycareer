@@ -1,7 +1,8 @@
 {
   "id": "charter",
   "name": "Charter",
-  "description": "Geschäftsreisen und Gruppenflüge auf Bestellung – ohne VIP-Ansprüche, aber pünktlich.",
+  "description": "Business trips and group flights on demand – no VIP demands, but on time.",
+  "texts": { "de": { "name": "Charter", "description": "Geschäftsreisen und Gruppenflüge auf Bestellung – ohne VIP-Ansprüche, aber pünktlich." } },
   "category": "charter",
   "requirements": { "requiredTags": ["pax"], "anyOfTags": ["jet", "turboprop", "business"], "forbiddenTags": ["helicopter"] },
   "passengers": { "min": 2, "max": 50, "childShare": 0.03, "infantShare": 0, "baggage": "european", "loadFactor": 0.9, "loadFactorSpread": 0.08 },

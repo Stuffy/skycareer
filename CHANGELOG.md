@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 – 2026-11-01
 
 ### Added
 - **English and German:** the whole app is now available in English and German. It follows the Windows display language

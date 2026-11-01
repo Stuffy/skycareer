@@ -137,13 +137,13 @@ public class GsxTests
 public class GsxCrewTests
 {
     [Fact]
-    public void Gsx_may_count_the_crew_from_the_ofp()
+    public void Gsx_counts_the_passengers_without_crew()
     {
-        var mission = new PassengerCount(8);
-        var state = new GsxState { Boarding = GsxServiceState.Callable, PassengersBoardingTotal = 11 };
-        Assert.Null(GsxLoadSync.PassengerMismatch(state, mission, crewAsPassengers: 3));
-        Assert.NotNull(GsxLoadSync.PassengerMismatch(state, mission));
-        Assert.NotNull(GsxLoadSync.PassengerMismatch(state with { PassengersBoardingTotal = 12 }, mission, 3));
+        var mission = new PassengerCount(8, 0, 1);
+        var state = new GsxState { Boarding = GsxServiceState.Callable, PassengersBoardingTotal = 8 };
+        Assert.Null(GsxLoadSync.PassengerMismatch(state, mission));
+        Assert.Null(GsxLoadSync.PassengerMismatch(state with { PassengersBoardingTotal = 9 }, mission));   // infant counted
+        Assert.NotNull(GsxLoadSync.PassengerMismatch(state with { PassengersBoardingTotal = 11 }, mission));
     }
 }
 

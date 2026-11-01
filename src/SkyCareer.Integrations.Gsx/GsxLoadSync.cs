@@ -98,13 +98,12 @@ public sealed class GsxLoadSync(bool departed = false)
 
     /// <summary>
     /// Warns when GSX boards a different number of passengers than the mission has (e.g. no SimBrief OFP loaded).
-    /// The OFP counts the crew as passengers (<paramref name="crewAsPassengers"/>), so GSX may include them.
+    /// The crew never reaches SimBrief as passengers, so GSX counts the passengers only.
     /// </summary>
-    public static string? PassengerMismatch(GsxState s, PassengerCount mission, int crewAsPassengers = 0)
+    public static string? PassengerMismatch(GsxState s, PassengerCount mission)
     {
         int gsx = s.PassengersBoardingTotal > 0 ? s.PassengersBoardingTotal : s.Passengers;
-        if (gsx <= 0 || gsx == mission.Seated || gsx == mission.Total ||
-            gsx == mission.Seated + crewAsPassengers || gsx == mission.Total + crewAsPassengers) return null;
+        if (gsx <= 0 || gsx == mission.Seated || gsx == mission.Total) return null;
         return L.F("GSX expects {0} passengers, the job has {1}. Enable “Trust SimBrief” for passengers in GSX and generate the matching OFP.", gsx, mission.Seated);
     }
 }

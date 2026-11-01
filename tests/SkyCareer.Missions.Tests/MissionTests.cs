@@ -186,33 +186,36 @@ public class MissionTests
     }
 
     [Fact]
-    public void SimBrief_payload_sends_crew_as_passengers_and_the_rest_as_cargo()
+    public void SimBrief_payload_sends_cabin_crew_as_cargo_and_never_the_pilots()
     {
         var jet = Aircraft("a20n");
         var pax = new PassengerCount(10, 0, 1);
         var fuel = FuelPlanner.Plan(jet, 300, FlightRules.Ifr, 100);
         var sheet = LoadSheetBuilder.FromMasses(jet, pax, Mass.FromKg(10 * 79.38 + 10), Mass.FromKg(237), Mass.FromKg(300), fuel);
-        int crew = jet.Pilots + jet.CabinCrewCount;
+        double cabinCrew = jet.CabinCrewCount * jet.CabinCrewMassKg;
         Assert.True(jet.Pilots >= 2);
+        Assert.True(jet.CabinCrewCount > 0);
 
-        // Standard: passengers and freight only, SimBrief adds its own bags.
+        // Standard: seated passengers, freight plus cabin crew as cargo; SimBrief adds its own bags.
         var standard = SimBriefPayload.For(sheet, 79.38, detailed: false);
         Assert.Equal(10, standard.Passengers);
-        Assert.Equal(300, standard.CargoKg);
+        Assert.Equal(Math.Round(300 + cabinCrew), standard.CargoKg);
+        Assert.Equal(sheet.Payload.Kg + cabinCrew, standard.ExpectedPayloadKg, 3);
 
+        // Detailed: bags, freight, the infant and the cabin crew as cargo; the passenger count holds no crew.
         var load = SimBriefPayload.For(sheet, 79.38);
-        Assert.Equal(10 + crew, load.Passengers);
-        Assert.Equal(crew, load.CrewAsPassengers);
-        // Bags, freight, the infant and the crew's standard masses above/below the passenger weight.
-        double expectedCargo = 237 + 300 + 10 + jet.Pilots * (jet.CrewMassKg - 79.38) + jet.CabinCrewCount * (jet.CabinCrewMassKg - 79.38);
-        Assert.Equal(Math.Round(expectedCargo), load.CargoKg);
-        // SimBrief's ZFW (airframe OEW = sim empty weight) equals ours.
-        Assert.Equal(sheet.ZeroFuelWeight.Kg, jet.OperatingEmptyKg + load.Passengers * 79.38 + load.CargoKg, 0.6);
+        Assert.Equal(10, load.Passengers);
+        Assert.Equal(Math.Round(237 + 300 + 10 + cabinCrew), load.CargoKg);
+        // SimBrief's ZFW (airframe OEW = sim empty weight + pilots) equals ours.
+        Assert.Equal(sheet.ZeroFuelWeight.Kg, jet.OperatingEmptyKg + jet.Pilots * jet.CrewMassKg + load.Passengers * 79.38 + load.CargoKg, 0.6);
+        Assert.Equal(sheet.SimPayload.Kg - jet.Pilots * jet.CrewMassKg, load.ExpectedPayloadKg, 3);
 
         var crewInEmpty = SimBriefPayload.For(LoadSheetBuilder.FromMasses(jet with { CrewIncludedInEmptyWeight = true }, pax,
             Mass.FromKg(10 * 79.38 + 10), Mass.FromKg(237), Mass.FromKg(300), fuel), 79.38);
         Assert.Equal(10, crewInEmpty.Passengers);
         Assert.Equal(547, crewInEmpty.CargoKg);
+        Assert.Equal(300, SimBriefPayload.For(LoadSheetBuilder.FromMasses(jet with { CrewIncludedInEmptyWeight = true }, pax,
+            Mass.FromKg(10 * 79.38 + 10), Mass.FromKg(237), Mass.FromKg(300), fuel), 79.38, detailed: false).CargoKg);
     }
 
     [Fact]

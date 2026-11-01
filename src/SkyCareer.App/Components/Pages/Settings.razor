@@ -55,6 +55,7 @@
             @T("Every passenger (children too) counts with this weight and has one bag, except on hand-luggage-only jobs – SimBrief calculates the same way.")
             @T("SimBrief doesn't take weights from the dispatch link but uses the values of your SimBrief airframe: enter the same values here.")
             @T("Applies to new jobs; jobs already offered or accepted keep their weights.")
+            @T("The cabin crew goes to SimBrief as freight; the pilots are expected in the empty weight of your SimBrief airframe.")
         </MudText>
         <MudSwitch T="bool" Value="c.PersistFuel" ValueChanged="SetPersistFuel" Color="Color.Primary" Class="mt-3"
                    Label="@T("Keep fuel on board between flights")" />
@@ -62,9 +63,9 @@
             @T("The remaining fuel stays in the aircraft after parking and is set in the sim when the next job is armed (once per job, before taxiing). You then only pay for the fuel uplifted up to block-off instead of the burn.")
         </MudText>
         <MudSwitch T="bool" Value="c.SimBriefDetailedLoad" ValueChanged="SetDetailedLoad" Color="Color.Primary" Class="mt-3"
-                   Label="@T("Send detailed load to SimBrief (crew and varying bag weights)")" />
+                   Label="@T("Send detailed load to SimBrief (varying bag weights)")" />
         <MudText Typo="Typo.caption" Style="display:block">
-            @T("The crew is sent as passengers, bags and weight differences as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.")
+            @T("Bags and weight differences go to SimBrief as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.")
             <b>@T("For this, once in SimBrief")</b> @T("edit the airframe you use under “Airframes” and in the weights set the")
             <b>@T("bag weight to 0")</b>@T(", otherwise SimBrief counts the bags twice. Applies to new jobs.")
         </MudText>

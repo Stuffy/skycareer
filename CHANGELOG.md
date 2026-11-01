@@ -13,6 +13,12 @@ All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://
 - README and changelog are now in English. Ledger entries and flight notes keep the language they were created in, so
   older entries stay German.
 - Log files are written in English.
+- **Crew weight to SimBrief:** the cabin crew's weight now goes to SimBrief as cargo, so the OFP's zero fuel weight
+  matches the load sheet. Pilots are never sent, as they are part of the SimBrief airframe's empty weight. With
+  *Send detailed load to SimBrief* the crew is no longer sent as passengers, so GSX no longer boards it.
+
+### Fixed
+- The loading screen ("Running pre-flight checks …") is shown in the app's language.
 
 ## 0.1.5 – 2026-10-31
 

@@ -150,8 +150,7 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
         if (thisJob && monitor.Phase is >= FlightPhase.TakeoffRoll and not FlightPhase.Crashed) _departed = true;
         var sheet = _sheet;
         if (sheet is null) return;
-        var crew = sheet.Aircraft.CrewIncludedInEmptyWeight ? 0 : sheet.Aircraft.Pilots + sheet.Aircraft.CabinCrewCount;
-        Mismatch = GsxLoadSync.PassengerMismatch(state, sheet.Passengers, crew);
+        Mismatch = GsxLoadSync.PassengerMismatch(state, sheet.Passengers);
 
         if (!SyncEnabled || monitor.Loader is not { } loader || sheet.Aircraft.Loading != Domain.Aircraft.LoadingMethod.SimConnectStations) return;
         // Only on the ground at the gate: before block-off and after parking. Writing payload in between would be

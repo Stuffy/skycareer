@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using SkyCareer.Localization;
 
 namespace SkyCareer.App;
 
@@ -8,5 +9,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         WebView.Services = services;
+        // The loading screen in index.html runs before Blazor; it picks its texts from this (else the browser language).
+        WebView.BlazorWebViewInitialized += (_, e) =>
+            _ = e.WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync($"window.skyLang = '{L.Language}';");
     }
 }

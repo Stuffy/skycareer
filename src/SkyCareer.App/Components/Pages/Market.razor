@@ -744,9 +744,9 @@
         var sheet = Career.BuildLoadSheet(c, p);
         bool detailed = career.SimBriefDetailedLoad;
         var load = SimBriefPayload.For(sheet, career.PassengerWeightKg, detailed);
-        // Standard mode: SimBrief's payload has no crew (the crew isn't sent).
+        // The pilots are in SimBrief's empty weight, so its ZFW still equals ours.
         var problems = OfpValidator.Validate(ofp, new OfpExpectation(c.Origin, c.Destination, p.IcaoType, load.Passengers, load.CargoKg,
-            (detailed ? sheet.SimPayload : sheet.Payload).Kg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg,
+            load.ExpectedPayloadKg, sheet.ZeroFuelWeight.Kg, p.MaxZeroFuelKg, career.PassengerWeightKg,
             career.BagWeightKg, BagsAsFreight: detailed));
         if (!ofp.Origin.Equals(c.Origin, StringComparison.OrdinalIgnoreCase) || !ofp.Destination.Equals(c.Destination, StringComparison.OrdinalIgnoreCase))
             throw new CareerException(F("The latest OFP doesn't match the job: {0}", string.Join("; ", problems)));

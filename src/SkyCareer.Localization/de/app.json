@@ -81,8 +81,6 @@
   "Applies to new jobs; jobs already offered or accepted keep their weights.": "Gilt für neue Aufträge; bereits angebotene und angenommene Aufträge behalten ihre Gewichte.",
   "Keep fuel on board between flights": "Tankstand zwischen Flügen beibehalten",
   "The remaining fuel stays in the aircraft after parking and is set in the sim when the next job is armed (once per job, before taxiing). You then only pay for the fuel uplifted up to block-off instead of the burn.": "Der Resttreibstoff bleibt nach dem Parken im Flugzeug und wird beim Scharfschalten des nächsten Auftrags im Sim gesetzt (einmal je Auftrag, vor dem Rollen). Bezahlt wird dann nur, was bis zum Block-Off nachgetankt wurde, statt des Verbrauchs.",
-  "Send detailed load to SimBrief (crew and varying bag weights)": "Genaue Beladung an SimBrief übergeben (Crew und unterschiedliche Gepäckgewichte)",
-  "The crew is sent as passengers, bags and weight differences as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.": "Die Crew wird als Passagiere übergeben, Gepäck und Gewichtsunterschiede als Fracht; Gepäck wiegt dann je Passagier unterschiedlich (der Wert oben ist der Durchschnitt). Das Zero Fuel Weight im OFP stimmt so genau mit dem Load-Sheet überein.",
   "For this, once in SimBrief": "Dafür einmalig in SimBrief",
   "edit the airframe you use under “Airframes” and in the weights set the": "unter „Flugzeuge“ das verwendete Flugzeug bearbeiten und bei den Gewichten das",
   "bag weight to 0": "Gepäckgewicht (Bag Weight) auf 0",
@@ -358,5 +356,8 @@
   "The update will be installed after the flight.": "Das Update wird nach dem Flug installiert.",
   "Read value": "Lesen",
   "Kind": "Art",
-  "Economic data": "Wirtschaft"
+  "Economic data": "Wirtschaft",
+  "Send detailed load to SimBrief (varying bag weights)": "Genaue Beladung an SimBrief übergeben (unterschiedliche Gepäckgewichte)",
+  "Bags and weight differences go to SimBrief as freight; bag weight then varies per passenger (the value above is the average). This way the zero fuel weight in the OFP matches the load sheet exactly.": "Gepäck und Gewichtsunterschiede werden als Fracht übergeben; Gepäck wiegt dann je Passagier unterschiedlich (der Wert oben ist der Durchschnitt). Das Zero Fuel Weight im OFP stimmt so genau mit dem Load-Sheet überein.",
+  "The cabin crew goes to SimBrief as freight; the pilots are expected in the empty weight of your SimBrief airframe.": "Das Kabinenpersonal geht als Fracht an SimBrief; die Piloten sind im Leergewicht deines SimBrief-Airframes enthalten."
 }

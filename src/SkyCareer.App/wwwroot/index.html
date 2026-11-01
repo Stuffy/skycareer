@@ -72,18 +72,37 @@
                 </div>
             </div>
             <div class="sc-title">SkyCareer</div>
-            <div class="sc-msg" id="sc-msg">Vorflugkontrolle läuft …</div>
+            <div class="sc-msg" id="sc-msg">Running pre-flight checks …</div>
             <div class="sc-bar"><span></span></div>
         </div>
     </div>
     <div id="blazor-error-ui">
-        Ein unerwarteter Fehler ist aufgetreten (Details im Fehlerprotokoll, Einstellungen → Erweitert). <a href="" class="reload">Neu laden</a> <a class="dismiss">🗙</a>
+        <span id="sc-error-text">An unexpected error occurred (details in the error log, Settings → Advanced).</span> <a href="" class="reload" id="sc-error-reload">Reload</a> <a class="dismiss">🗙</a>
     </div>
     <script>
-        // Cycle cockpit-style status lines until Blazor replaces the loading screen.
+        // Cycle cockpit-style status lines until Blazor replaces the loading screen. The app sets window.skyLang to its
+        // UI language before this page loads; the browser language is the fallback.
         (() => {
-            const lines = ["Vorflugkontrolle läuft …", "Checkliste wird abgearbeitet …", "Triebwerke werden angelassen …",
-                "Rollfreigabe wird eingeholt …", "Flugplan wird geladen …"];
+            const texts = {
+                en: {
+                    lines: ["Running pre-flight checks …", "Working through the checklist …", "Starting engines …",
+                        "Requesting taxi clearance …", "Loading flight plan …"],
+                    error: "An unexpected error occurred (details in the error log, Settings → Advanced).",
+                    reload: "Reload"
+                },
+                de: {
+                    lines: ["Vorflugkontrolle läuft …", "Checkliste wird abgearbeitet …", "Triebwerke werden angelassen …",
+                        "Rollfreigabe wird eingeholt …", "Flugplan wird geladen …"],
+                    error: "Ein unerwarteter Fehler ist aufgetreten (Details im Fehlerprotokoll, Einstellungen → Erweitert).",
+                    reload: "Neu laden"
+                }
+            };
+            const lang = (window.skyLang || navigator.language || "en").slice(0, 2).toLowerCase();
+            const t = texts[lang] || texts.en;
+            const lines = t.lines;
+            document.getElementById("sc-msg").textContent = lines[0];
+            document.getElementById("sc-error-text").textContent = t.error;
+            document.getElementById("sc-error-reload").textContent = t.reload;
             let i = 0;
             const timer = setInterval(() => {
                 const el = document.getElementById("sc-msg");

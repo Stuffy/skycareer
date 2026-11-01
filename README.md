@@ -85,8 +85,9 @@ Game time only passes through flights and deliberate waiting (title bar) – bre
 from the selected airframe; for job and OFP to match, enter the same values under **Settings → Loading** (default: 175 lbs
 per passenger, 50 lbs per bag).
 
-Optionally, **Send detailed load to SimBrief** also sends the crew (as passengers) and bags of varying weight (as cargo), so the
-ZFW in the OFP matches the load sheet exactly. The SimBrief airframe then needs a **bag weight of 0**, otherwise SimBrief
+The cabin crew goes to SimBrief as cargo; the pilots are expected in the empty weight of your SimBrief airframe.
+Optionally, **Send detailed load to SimBrief** also sends bags of varying weight and other weight differences as cargo, so
+the ZFW in the OFP matches the load sheet exactly. The SimBrief airframe then needs a **bag weight of 0**, otherwise SimBrief
 counts the baggage twice.
 
 "Load OFP" takes over block fuel and route and reports differences in route, type, passengers, cargo and weights. Custom

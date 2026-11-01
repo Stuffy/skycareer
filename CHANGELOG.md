@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.1 – 2026-11-01
 
 ### Fixed
 - **Settlement after GSX deboarding:** GSX reports a completed deboarding only for a moment; SkyCareer missed it and

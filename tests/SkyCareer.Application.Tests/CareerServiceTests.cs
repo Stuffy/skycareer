@@ -1135,8 +1135,11 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Null(automation.LastSettlement);
         gsx = GroundServiceState.Completed;
         await After(1);
-        Assert.Null(automation.LastSettlement);   // a moment for the GSX receipt
-        await After(20);
+        Assert.Null(automation.LastSettlement);   // time for the last GSX receipts
+        Assert.Contains("5 min", automation.Waiting);
+        await After(240);
+        Assert.Null(automation.LastSettlement);
+        await After(70);
         Assert.NotNull(automation.LastSettlement);
         Assert.Null(automation.Waiting);
     }

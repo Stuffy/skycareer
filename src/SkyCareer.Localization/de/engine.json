@@ -81,7 +81,7 @@
   "Fuel {0:N0} kg at €{1:0.000}/kg": "Treibstoff {0:N0} kg à {1:0.000} €/kg",
   "Fuel, handling and catering as per GSX receipts.": "Treibstoff, Abfertigung und Catering laut GSX-Belegen.",
   "General": "Allgemein",
-  "GSX deboarding completed, collecting receipts …": "GSX-Deboarding abgeschlossen, Belege werden übernommen …",
+  "GSX deboarding completed, waiting for the last GSX receipts (at most {0:N0} min)": "GSX-Deboarding abgeschlossen, warte auf die letzten GSX-Belege (höchstens {0:N0} min)",
   "GSX expects {0} passengers, the job has {1}. Enable “Trust SimBrief” for passengers in GSX and generate the matching OFP.": "GSX rechnet mit {0} Passagieren, der Auftrag hat {1}. In GSX „Trust SimBrief“ für Passagiere aktivieren und den passenden OFP erzeugen.",
   "GSX: boarding": "GSX: Boarding",
   "GSX: boarding completed": "GSX: Boarding abgeschlossen",

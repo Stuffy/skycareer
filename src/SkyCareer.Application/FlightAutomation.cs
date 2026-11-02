@@ -57,8 +57,11 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     public static readonly TimeSpan DeboardingStartTimeout = TimeSpan.FromMinutes(20);
     /// <summary>Upper bound for a deboarding that never completes.</summary>
     public static readonly TimeSpan DeboardingTimeout = TimeSpan.FromMinutes(60);
-    /// <summary>Pause after GSX deboarding so its receipt is written and booked before the settlement.</summary>
-    public static readonly TimeSpan ReceiptGrace = TimeSpan.FromSeconds(15);
+    /// <summary>
+    /// Pause after GSX deboarding so its receipts are written and booked before the settlement: GSX writes the last
+    /// ones (e.g. the crew bus) only minutes after deboarding; 15 s settled flights without them (2026-11-02).
+    /// </summary>
+    public static readonly TimeSpan ReceiptGrace = TimeSpan.FromMinutes(5);
     /// <summary>A failed read of the sim's wear is retried after this long.</summary>
     public static readonly TimeSpan WearRetry = TimeSpan.FromSeconds(30);
 
@@ -237,7 +240,8 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
                 _deboardedAt ??= t.Timestamp;
                 if (t.Timestamp - _deboardedAt < ReceiptGrace)
                 {
-                    Waiting = L.T("GSX deboarding completed, collecting receipts …");
+                    Waiting = L.F("GSX deboarding completed, waiting for the last GSX receipts (at most {0:N0} min)",
+                        Math.Max(1, Math.Ceiling((ReceiptGrace - (t.Timestamp - _deboardedAt.Value)).TotalMinutes)));
                     return true;
                 }
                 return false;

@@ -2,6 +2,13 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **Last GSX receipts:** after GSX deboarding, SkyCareer now waits up to 5 minutes before settling, so receipts GSX
+  writes only minutes later (e.g. the crew bus) are part of the flight's costs. Starting an engine, moving the aircraft
+  or "Settle now" still settles at once.
+
 ## 0.2.1 – 2026-11-01
 
 ### Fixed

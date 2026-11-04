@@ -16,6 +16,10 @@ public sealed record GsxSyncAction(double PassengerFraction, double CargoFractio
 /// Keeps the sim's payload in step with GSX boarding and deboarding: the cabin fills as GSX counts passengers
 /// on board, the holds as its cargo percentage grows, and the block fuel from the load sheet is set once GSX
 /// refuelling finishes (or at the end of boarding if GSX doesn't refuel). One instance per flight.
+/// The block fuel is only set when nobody else fuelled the aircraft: a GSX refuelling that raised the fuel (GSX fuels to
+/// the OFP) or fuel loaded otherwise (EFB, stored fuel restored) is kept, and a refuelling or boarding must have been
+/// seen running, because GSX can show a stale "completed" when the sim starts (2026-11-02: the restored fuel was
+/// overwritten two seconds after arming).
 /// Created for a job that already departed (after an app restart), it only follows deboarding: GSX may still report
 /// the boarding of the departure, and re-boarding or emptying the cabin then would change the load in flight.
 /// </summary>
@@ -23,20 +27,38 @@ public sealed class GsxLoadSync(bool departed = false)
 {
     /// <summary>Smallest change in load fraction worth a SimConnect write.</summary>
     public const double Step = 0.05;
+    /// <summary>A fuel rise above this counts as fuel loaded by someone else (GSX, EFB, restored fuel).</summary>
+    public const double FuelLoadedKg = 20;
 
     private double _pax = double.NaN, _cargo = double.NaN;
-    private bool _fuelApplied, _boardingSeen;
+    private bool _fuelApplied, _boardingSeen, _boardingRan, _refuelRan;
+    private double? _lowestFuel, _fuelAtRefuel;
 
-    public GsxSyncAction? Next(GsxState s)
+    /// <param name="s">The current GSX state.</param>
+    /// <param name="fuelKg">Fuel on board now; null when unknown (the block fuel is then set as if nobody fuelled).</param>
+    public GsxSyncAction? Next(GsxState s, double? fuelKg = null)
     {
         if (!s.Detected) return null;
         if (departed && s.Deboarding is not (GsxServiceState.Performing or GsxServiceState.Completed)) return null;
 
         bool refuelHandled = s.Refueling is GsxServiceState.Requested or GsxServiceState.Performing;
-        bool fuelNow = !departed && !_fuelApplied &&
-                       (s.Refueling == GsxServiceState.Completed ||
-                        (s.Boarding == GsxServiceState.Completed && !refuelHandled));
-        if (fuelNow) _fuelApplied = true;
+        if (refuelHandled && !_refuelRan)
+        {
+            _refuelRan = true;
+            _fuelAtRefuel = fuelKg;
+        }
+        if (s.Boarding == GsxServiceState.Performing) _boardingRan = true;
+        if (fuelKg is { } f && !(_lowestFuel <= f)) _lowestFuel = f;
+
+        // After GSX refuelling only if it didn't change the fuel (an aircraft GSX can't fuel); after boarding only
+        // if GSX never refuelled and nobody else loaded fuel since this sync started.
+        bool refuelled = _refuelRan && s.Refueling == GsxServiceState.Completed &&
+                         !(fuelKg > _fuelAtRefuel + FuelLoadedKg);
+        bool boarded = _boardingRan && !_refuelRan && s.Boarding == GsxServiceState.Completed && !refuelHandled &&
+                       !(fuelKg > _lowestFuel + FuelLoadedKg);
+        bool fuelNow = !departed && !_fuelApplied && (refuelled || boarded);
+        // Decided once: a GSX refuelling that fuelled the aircraft ends the question as well.
+        if (fuelNow || _refuelRan && s.Refueling == GsxServiceState.Completed) _fuelApplied = true;
 
         (double pax, double cargo, string reason) target;
         if (s.Deboarding is GsxServiceState.Performing or GsxServiceState.Completed)

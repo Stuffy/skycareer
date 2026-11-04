@@ -163,7 +163,7 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
         // Only on the ground at the gate: before block-off and after parking. Writing payload in between would be
         // flagged as a payload change; right after an app restart the phase is unknown until the flight is resumed.
         if (!GsxLoadSync.MayWrite(monitor.Phase, monitor.Latest?.OnGround == true, _departed, thisJob)) return;
-        if (_sync.Next(state) is not { } action) return;
+        if (_sync.Next(state, monitor.Latest?.FuelKg) is not { } action) return;
 
         if (action.WritesPayload)
             await loader.ApplyPayloadAsync(GsxLoadSync.ScaleStations(sheet, action.PassengerFraction, action.CargoFraction), ct);

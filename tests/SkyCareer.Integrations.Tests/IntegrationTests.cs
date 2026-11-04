@@ -43,7 +43,9 @@ public class GsxTests
 
         Assert.Null(sync.Next(State())); // nothing changed
 
-        var refuelDone = sync.Next(State(refuel: GsxServiceState.Completed));
+        // An aircraft GSX can't fuel: the fuel stays the same during the refuelling, so the block fuel is set afterwards.
+        Assert.Null(sync.Next(State(refuel: GsxServiceState.Performing), fuelKg: 500));
+        var refuelDone = sync.Next(State(refuel: GsxServiceState.Completed), fuelKg: 505);
         Assert.True(refuelDone!.ApplyFuel);
         Assert.False(refuelDone.WritesPayload);
 
@@ -63,9 +65,33 @@ public class GsxTests
     public void Fuel_is_set_at_end_of_boarding_when_gsx_does_not_refuel()
     {
         var sync = new GsxLoadSync();
-        sync.Next(State());
-        var done = sync.Next(State(GsxServiceState.Completed, boarded: 4, total: 4, cargo: 100));
+        sync.Next(State(), fuelKg: 300);
+        sync.Next(State(GsxServiceState.Performing, boarded: 2, total: 4, cargo: 50), fuelKg: 300);
+        var done = sync.Next(State(GsxServiceState.Completed, boarded: 4, total: 4, cargo: 100), fuelKg: 300);
         Assert.True(done!.ApplyFuel);
+    }
+
+    [Fact]
+    public void Fuel_loaded_by_gsx_or_otherwise_is_kept()
+    {
+        // A stale "completed" at sim start is no refuelling (the restored fuel stays).
+        var stale = new GsxLoadSync();
+        var first = stale.Next(State(refuel: GsxServiceState.Completed), fuelKg: 1180);
+        Assert.False(first!.ApplyFuel);
+
+        // GSX fuelled the aircraft (to the OFP's block fuel): kept, and not set at the end of boarding either.
+        var gsx = new GsxLoadSync();
+        gsx.Next(State(), fuelKg: 1180);
+        gsx.Next(State(refuel: GsxServiceState.Performing), fuelKg: 640);
+        Assert.Null(gsx.Next(State(refuel: GsxServiceState.Completed), fuelKg: 2378));
+        gsx.Next(State(GsxServiceState.Performing, refuel: GsxServiceState.Completed, boarded: 2, total: 4), fuelKg: 2378);
+        Assert.False(gsx.Next(State(GsxServiceState.Completed, refuel: GsxServiceState.Completed, boarded: 4, total: 4, cargo: 100), fuelKg: 2378)!.ApplyFuel);
+
+        // Fuelled in the EFB, no GSX refuelling: the end of boarding leaves it alone.
+        var efb = new GsxLoadSync();
+        efb.Next(State(), fuelKg: 1180);
+        efb.Next(State(GsxServiceState.Performing, boarded: 2, total: 4), fuelKg: 2400);
+        Assert.False(efb.Next(State(GsxServiceState.Completed, boarded: 4, total: 4, cargo: 100), fuelKg: 2400)!.ApplyFuel);
     }
 
     [Fact]

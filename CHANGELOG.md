@@ -2,13 +2,13 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0 – 2026-11-04
 
 ### Added
 - **Three times as many jobs:** a search now adds up to 60 jobs per aircraft (was 20), and up to 240 open offers are
   kept per aircraft. The offer list is split into pages of 50.
-- **Reproducible job market:** every career has a market seed (random, or entered when starting a career; shown under
-  *Settings → Career*). Jobs follow from the seed, the game date, the aircraft and the search criteria: the same search
+- **Reproducible job market:** every career has a market seed (random, or entered when starting a career; shown on the
+  airline page). Jobs follow from the seed, the game date, the aircraft and the search criteria: the same search
   gives the same jobs after a restart or in another career with the same seed, and each further search continues with
   new jobs.
 - The job search filter, its sorting and whether it is expanded are saved with the career.

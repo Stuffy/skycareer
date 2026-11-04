@@ -1312,6 +1312,24 @@ public sealed class CareerServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_better_reputation_pays_more_for_the_same_jobs()
+    {
+        await SeededCareerAsync(7);
+        var low = await _svc.SearchMarketAsync(CargoSearch) is { Created: > 0 } ? await PayoutsAsync() : [];
+        await SeededCareerAsync(7);
+        await _svc.SetReputationAsync(100);
+        await _svc.SearchMarketAsync(CargoSearch);
+        var high = await PayoutsAsync();
+
+        // Same seed, same jobs: only the pay differs, by 1.5 / 1.05 (reputation 100 vs the start value 10).
+        Assert.Equal(low.Count, high.Count);
+        Assert.All(low.Zip(high), p => Assert.InRange(p.Second, p.First * 1.5m / 1.05m - 2, p.First * 1.5m / 1.05m + 2));
+
+        async Task<List<decimal>> PayoutsAsync() =>
+            (await _svc.GetContractsAsync(ContractStatus.Offered)).OrderBy(o => o.MarketIndex).ThenBy(o => o.PackageLeg).Select(o => o.Payout).ToList();
+    }
+
+    [Fact]
     public async Task Market_seed_of_older_careers_comes_from_the_career_id_and_the_filter_is_stored()
     {
         var career = await NewCareer();

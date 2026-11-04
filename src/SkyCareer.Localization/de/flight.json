@@ -293,6 +293,8 @@
   "Offers": "Angebote",
   "{0} of {1}": "{0} von {1}",
   "Click a column header to sort.": "Zum Sortieren auf eine Spaltenüberschrift klicken.",
+  "Reputation {0}: +{1:P0} pay": "Reputation {0}: +{1:P0} Vergütung",
+  "New jobs pay more the better your reputation (up to +50 % at 100).": "Neue Aufträge zahlen umso mehr, je besser deine Reputation ist (bis +50 % bei 100).",
   "No aircraft, no jobs – get one under “Fleet”.": "Ohne Flugzeug keine Aufträge – unter „Flotte“ eines beschaffen.",
   "No offers. “Search jobs” creates new jobs at your aircraft's locations.": "Keine Angebote. „Aufträge suchen“ erzeugt neue Aufträge an den Standorten deiner Flugzeuge.",
   "No offer matches the filters. “Search jobs” creates matching new jobs.": "Kein Angebot passt zu den Filtern. „Aufträge suchen“ erzeugt passende neue Aufträge.",

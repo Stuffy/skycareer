@@ -35,7 +35,8 @@ airline career: accept jobs, build a fleet, keep costs under control and earn re
 - **Automatic flight flow** – no start button: once the aircraft is at the departure airport, the job is tracked. A
   departure light checks type, position, payload, fuel, weight limits and OFP. The job starts at liftoff and is settled
   automatically after shutdown on stand at the destination.
-- **Scoring and integrity** – landing, punctuality and handling feed into score and reputation. Slew, time acceleration,
+- **Scoring and integrity** – landing, punctuality and handling feed into score and reputation; a better reputation
+  unlocks mission types and raises the pay of new jobs (up to +50 % at reputation 100). Slew, time acceleration,
   in-flight refuelling and position jumps are detected and cost part of the pay, but never void the flight.
 - **Crash-safe** – flights in progress are recorded and resumed automatically after an app restart.
 - **Integrations** – SimBrief (planning and OFP check), GSX Pro (boarding and deboarding in sync, settlement after

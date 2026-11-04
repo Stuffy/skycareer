@@ -47,6 +47,8 @@ public sealed record GenerationContext(
     /// as SimBrief adds them itself.
     /// </summary>
     public bool VaryBaggage { get; init; }
+    /// <summary>The career's reputation (0–100); raises the pay by <see cref="StandardMissionGenerator.ReputationFactor"/>.</summary>
+    public int Reputation { get; init; }
 
     /// <summary>
     /// Destinations already used in the current search. Picking one of them again on purpose produces several jobs
@@ -73,6 +75,11 @@ public sealed class StandardMissionGenerator : IMissionGenerator
 {
     /// <summary>Preferred trip length as a share of the aircraft's still-air range.</summary>
     public const double PreferredRangeShare = 0.45;
+    /// <summary>Pay bonus at reputation 100; it grows linearly from 0 at reputation 0 (+5 % at the start value 10).</summary>
+    public const decimal MaxReputationBonus = 0.5m;
+
+    /// <summary>Pay multiplier for a reputation (0–100): a better name earns better rates.</summary>
+    public static decimal ReputationFactor(int reputation) => 1 + MaxReputationBonus * Math.Clamp(reputation, 0, 100) / 100m;
     /// <summary>Spread of the log-normal distance weighting (larger = more variety).</summary>
     private const double Sigma = 0.6;
     /// <summary>Floor weight so destinations far from the preferred distance still occur occasionally.</summary>
@@ -151,7 +158,7 @@ public sealed class StandardMissionGenerator : IMissionGenerator
         }
         if (!sheet.IsWithinLimits || pax.Seated < paxMin || cargo.Kg < cargoMin) return null;
 
-        var payout = Payout(type, aircraft, dist, pax, cargo);
+        var payout = new Money(Math.Round(Payout(type, aircraft, dist, pax, cargo).Amount * ReputationFactor(ctx.Reputation), 0));
         if (search.PayoutMin is { } minPay && payout.Amount < minPay) return null;
 
         return new MissionOffer

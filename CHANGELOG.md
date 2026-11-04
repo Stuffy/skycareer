@@ -13,6 +13,11 @@ All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://
   new jobs.
 - The job search filter, its sorting and whether it is expanded are saved with the career.
 
+### Changed
+- **Reputation pays:** new jobs pay more the better your reputation, rising linearly to +50 % at reputation 100 (+5 % at
+  the starting value 10). Offers and accepted jobs keep the pay they were offered with. The market page shows the
+  current bonus.
+
 ### Fixed
 - **Last GSX receipts:** after GSX deboarding, SkyCareer now waits up to 5 minutes before settling, so receipts GSX
   writes only minutes later (e.g. the crew bus) are part of the flight's costs. Starting an engine, moving the aircraft

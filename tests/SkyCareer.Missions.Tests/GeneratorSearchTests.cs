@@ -223,6 +223,24 @@ public class GeneratorSearchTests
     }
 
     [Fact]
+    public void Reputation_raises_the_pay_up_to_half()
+    {
+        Assert.Equal(1m, StandardMissionGenerator.ReputationFactor(0));
+        Assert.Equal(1.05m, StandardMissionGenerator.ReputationFactor(10));
+        Assert.Equal(1.5m, StandardMissionGenerator.ReputationFactor(100));
+        Assert.Equal(1.5m, StandardMissionGenerator.ReputationFactor(150));
+
+        // The same draw pays 50 % more at reputation 100 (rounded to whole euros).
+        var gen = new StandardMissionGenerator();
+        MissionOffer Draw(int reputation) =>
+            gen.TryGenerate(new GenerationContext(WideType, Jet(), Origin, Grid(), DateTimeOffset.UnixEpoch, new Random(7)) { Reputation = reputation })!;
+        var plain = Draw(0);
+        var famous = Draw(100);
+        Assert.Equal(plain.Destination.Ident, famous.Destination.Ident);
+        Assert.InRange(famous.Payout.Amount, plain.Payout.Amount * 1.5m - 1, plain.Payout.Amount * 1.5m + 1);
+    }
+
+    [Fact]
     public void Return_legs_fly_back_after_the_outbound()
     {
         var scheduled = Content.MissionTypes.Single(t => t.Id == "scheduled_pax");

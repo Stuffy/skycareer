@@ -550,7 +550,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 bool needLarge = rule.MinLargeShare > 0 && typeLarge < Math.Ceiling(rule.MinLargeShare * (typeOffers + 1));
                 var ctxBase = new GenerationContext(type, profile, origin, airports, career.GameTime, draw)
                 {
-                    Search = search, RecentDestinations = recent, Masses = masses, VaryBaggage = career.SimBriefDetailedLoad
+                    Search = search, RecentDestinations = recent, Masses = masses, VaryBaggage = career.SimBriefDetailedLoad,
+                    Reputation = career.Reputation
                 };
                 var generator = generators.Get(type);
                 var offer = (needCapital ? generator.TryGenerate(ctxBase with { RequireCapital = true }) : null)

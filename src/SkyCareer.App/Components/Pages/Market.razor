@@ -282,6 +282,11 @@
         {
             <MudText Typo="Typo.body2">@F("{0} of {1}", VisibleOffers.Count(), _offers.Count)</MudText>
         }
+        <MudTooltip Text="@T("New jobs pay more the better your reputation (up to +50 % at 100).")">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Star">
+                @F("Reputation {0}: +{1:P0} pay", _reputation, SkyCareer.Missions.Generation.StandardMissionGenerator.ReputationFactor(_reputation) - 1)
+            </MudChip>
+        </MudTooltip>
         <MudSpacer />
         <MudText Typo="Typo.caption">@T("Click a column header to sort.")</MudText>
     </MudStack>

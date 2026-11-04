@@ -26,6 +26,8 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
 
     public ConnectionState Connection => _source?.State ?? ConnectionState.Disconnected;
     public bool Connected => Connection == ConnectionState.Connected;
+    /// <summary>When the current connection to the sim was made (null before the first one).</summary>
+    public DateTime? ConnectedSinceUtc { get; private set; }
     public bool HasSession
     {
         get { lock (_sessionLock) return Session is not null; }
@@ -231,6 +233,7 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
         _source.StateChanged += (_, s) =>
         {
             // While MSFS isn't running the source retries every few seconds; only real connects/disconnects are worth a line.
+            if (s == ConnectionState.Connected && _lastLoggedState != ConnectionState.Connected) ConnectedSinceUtc = DateTime.UtcNow;
             if (s == ConnectionState.Connected || _lastLoggedState == ConnectionState.Connected) Log($"Connection: {s}");
             _lastLoggedState = s;
             Changed?.Invoke();

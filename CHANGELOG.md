@@ -2,6 +2,13 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **Fuel after restarting MSFS:** when the next job was prepared right after parking and MSFS was closed before the
+  next flight, the aircraft started the new flight with its default fuel (e.g. 50 %). SkyCareer now sets the fuel
+  left over again when the job is prepared in a newly loaded flight.
+
 ## 0.3.0 – 2026-11-04
 
 ### Added

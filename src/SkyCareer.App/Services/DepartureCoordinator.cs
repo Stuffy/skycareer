@@ -1,4 +1,4 @@
-using SkyCareer.Application;
+﻿using SkyCareer.Application;
 using SkyCareer.Application.Logging;
 using SkyCareer.Localization;
 
@@ -108,15 +108,19 @@ public sealed class DepartureCoordinator : IDisposable
     /// </summary>
     private async Task RestoreFuelAsync(Domain.Career.MissionContract job, Domain.Career.FleetAircraft aircraft)
     {
-        if (job.FuelRestoredAtUtc is not null || aircraft.FuelKg is not { } stored || _monitor.Loader is not { } loader)
+        if (aircraft.FuelKg is not { } stored || _monitor.Loader is not { } loader)
         {
-            AppLog.Info("Fuel", job.FuelRestoredAtUtc is not null ? $"Fuel for {job.Origin} → {job.Destination} was already restored"
-                : aircraft.FuelKg is null ? $"No stored fuel for {aircraft.Registration}" : "Not connected to the sim, fuel not restored");
+            AppLog.Info("Fuel", aircraft.FuelKg is null ? $"No stored fuel for {aircraft.Registration}" : "Not connected to the sim, fuel not restored");
             return;
         }
         // Still the armed job, and still its aircraft type in the sim.
         if (!StillPreparing(job, aircraft) || _monitor.Latest is not { OnGround: true } t) return;
         double tolerance = Math.Max(20, stored * 0.02);
+        if (job.FuelRestoredAtUtc is { } restoredAt && !FreshSimFlight(restoredAt, t, stored, tolerance, _career.Profile(aircraft.ProfileId).CrewMass.Kg))
+        {
+            AppLog.Info("Fuel", $"Fuel for {job.Origin} → {job.Destination} was already restored ({t.FuelKg:N0} kg on board)");
+            return;
+        }
         try
         {
             if (Math.Abs(t.FuelKg - stored) > tolerance)
@@ -153,6 +157,18 @@ public sealed class DepartureCoordinator : IDisposable
             AppLog.Warn("Fuel", $"Could not set the fuel quantity: {ex.Message}", ex);
         }
     }
+
+    /// <summary>
+    /// Whether a job whose fuel was already restored sits in a new sim flight that has to get it again. The next job is
+    /// often armed right after block-on, still in the old flight; when MSFS is closed and the flight loaded again later,
+    /// the aircraft starts with its defaults (Citation X: 50 % fuel, empty stations; 2026-11-04). Restored during the
+    /// current connection: same flight, later uplift stays. From an earlier connection (sim or app restarted): restored
+    /// again when the fuel differs and nothing but (at most) the crew is aboard, as after loading a flight; with
+    /// passengers or cargo aboard it is the same flight after an app restart and any uplift is kept.
+    /// </summary>
+    private bool FreshSimFlight(DateTime restoredAtUtc, Sim.Telemetry t, double stored, double tolerance, double crewKg) =>
+        _monitor.ConnectedSinceUtc is { } since && restoredAtUtc < since
+        && Math.Abs(t.FuelKg - stored) > tolerance && t.PayloadKg < crewKg + 10;
 
     private bool StillPreparing(Domain.Career.MissionContract job, Domain.Career.FleetAircraft aircraft) =>
         _monitor.ContractId == job.Id && _monitor.Phase is null or Sim.Tracking.FlightPhase.Preflight

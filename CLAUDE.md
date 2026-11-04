@@ -96,6 +96,7 @@ Dependency direction: `Domain` ‚Üê `Sim`, `Missions`, `Data`, `Integrations.*` ‚
 ## Conventions and pitfalls
 
 - Never put padding utility classes (`pa-4` etc., they are `!important`) on `MudMainContent`: its `padding-top` reserves the app bar height. Page padding lives on the inner `div` in `MainLayout`.
+- BlazorWebView renders through `WebView2CompositionControl` (Direct3D image). Its recovery after a display change (MSFS full screen/resolution/HDR) only retries on `COMException`; a D3D9 `ArgumentException` left the UI black for good (WebView2 SDK 1.0.4258.31). `WebViewDisplayRecovery` catches it in `DispatcherUnhandledException` (no message box) and retries the private `GraphicsItemD3DImage.RecoverAfterDisplayChange` via reflection every second for up to 2 min; it logs a warning at start when the internals are gone after an SDK update.
 - Telemetry and GSX events arrive on background threads; UI components must use `InvokeAsync(StateHasChanged)` and should throttle re-renders.
 - Never block the UI thread on async cleanup (`OnExit` disposes services via `Task.Run` with a timeout); use `ConfigureAwait(false)` in library-side shutdown paths.
 - Values that must stay identical across app restarts (e.g. the daily fuel price in `CostModel`) use a stable FNV hash, not `string.GetHashCode`.

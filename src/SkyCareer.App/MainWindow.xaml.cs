@@ -11,6 +11,9 @@ public partial class MainWindow : Window
         WebView.Services = services;
         // The loading screen in index.html runs before Blazor; it picks its texts from this (else the browser language).
         WebView.BlazorWebViewInitialized += (_, e) =>
+        {
+            WebViewDisplayRecovery.Attach(e.WebView);
             _ = e.WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync($"window.skyLang = '{L.Language}';");
+        };
     }
 }

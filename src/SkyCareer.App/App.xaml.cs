@@ -36,6 +36,13 @@ public partial class App : System.Windows.Application
                            $"DB {SkyCareerDb.DefaultPath}, SimConnect {(FlightDataSourceFactory.SimConnectAvailable ? "yes" : "no")}, language {L.Language}");
         DispatcherUnhandledException += (_, args) =>
         {
+            if (WebViewDisplayRecovery.IsDisplayChangeFailure(args.Exception))
+            {
+                // A WebView2 bug, not ours: retried quietly instead of a message box over the sim.
+                WebViewDisplayRecovery.Recover(Dispatcher, args.Exception);
+                args.Handled = true;
+                return;
+            }
             AppLog.Error("App", "Unhandled error (UI)", args.Exception);
             MessageBox.Show(L.F("An unexpected error occurred:\n\n{0}\n\nDetails are in the error log ({1}). The app keeps running.",
                 args.Exception.Message, LogDirectory), "SkyCareer", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -109,6 +116,8 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Tells a normal close apart from a crash in the log.
+        AppLog.Info("App", $"SkyCareer exiting (exit code {e.ApplicationExitCode})");
         // Dispose on the thread pool: blocking the UI thread on async cleanup deadlocks as soon as any
         // continuation wants the UI context (that kept the process alive after closing the window while
         // connected to MSFS). The timeout guarantees the app exits even if the simulator doesn't respond.

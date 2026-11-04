@@ -8,6 +8,9 @@ All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://
 - **Fuel after restarting MSFS:** when the next job was prepared right after parking and MSFS was closed before the
   next flight, the aircraft started the new flight with its default fuel (e.g. 50 %). SkyCareer now sets the fuel
   left over again when the job is prepared in a newly loaded flight.
+- **Black window after a display change:** when MSFS switched between full screen and window or changed the display
+  mode, the app could show an error message and then stay black without any controls. SkyCareer now rebuilds the
+  display quietly as soon as the screen has settled. Closing the app is now noted in the log.
 
 ## 0.3.0 – 2026-11-04
 

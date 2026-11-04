@@ -4,7 +4,7 @@
 <MudPaper Class="pa-4 mb-4">
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
         <MudIconButton Icon="@(Filter.Expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small"
-                       OnClick="() => Filter.Expanded = !Filter.Expanded" aria-label="@T("Expand/collapse filter")" />
+                       OnClick="ToggleExpanded" aria-label="@T("Expand/collapse filter")" />
         <MudText Typo="Typo.h6">@T("Job search")</MudText>
         @if (Filter.ActiveCount > 0)
         {
@@ -95,6 +95,12 @@
     private bool HasFleet => Fleet.Count > 0;
 
     private Task Changed() => OnFilterChanged.InvokeAsync();
+
+    private Task ToggleExpanded()
+    {
+        Filter.Expanded = !Filter.Expanded;
+        return Changed();
+    }
 
     private Task Reset()
     {

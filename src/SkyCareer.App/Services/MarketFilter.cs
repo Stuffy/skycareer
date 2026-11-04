@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SkyCareer.Domain.World;
 using SkyCareer.Missions;
 
@@ -7,11 +8,14 @@ namespace SkyCareer.App.Services;
 public enum OfferColumn { Aircraft, Mission, Distance, Runway, Load, BlockFuel, Deadline, Expires, Payout }
 
 /// <summary>
-/// Editable job-search filter of the market page. Kept as a singleton so the filter survives page changes during a
-/// session (it is deliberately not stored in the database).
+/// Editable job-search filter of the market page. A singleton for the session; stored per career as JSON
+/// (<c>Career.MarketFilterJson</c>) and loaded when the market page opens for another career.
 /// </summary>
 public sealed class MarketFilter
 {
+    /// <summary>Career the values were loaded for (a field, so neither JSON nor <see cref="Reset"/> touch it).</summary>
+    public Guid? LoadedFor;
+
     public Guid? AircraftId { get; set; }
     public IReadOnlyCollection<string> MissionTypeIds { get; set; } = [];
     public double? DistanceMinNm { get; set; }
@@ -52,6 +56,18 @@ public sealed class MarketFilter
         new object?[] { AircraftId, DistanceMinNm, DistanceMaxNm, PaxMin, PaxMax, CargoMinKg, PayoutMin, MinRunwayM }.Count(v => v is not null)
         + (MissionTypeIds.Count > 0 ? 1 : 0) + (Sizes.Count > 0 ? 1 : 0)
         + new[] { RequirePaved, RequireLighted, RequireIls, ScheduledServiceOnly }.Count(b => b);
+
+    public string ToJson() => JsonSerializer.Serialize(this);
+
+    /// <summary>Takes the stored values; missing or unreadable JSON gives the defaults.</summary>
+    public void Load(string? json)
+    {
+        MarketFilter source;
+        try { source = string.IsNullOrWhiteSpace(json) ? new MarketFilter() : JsonSerializer.Deserialize<MarketFilter>(json) ?? new MarketFilter(); }
+        catch (JsonException) { source = new MarketFilter(); }
+        foreach (var p in typeof(MarketFilter).GetProperties().Where(p => p.CanWrite))
+            p.SetValue(this, p.GetValue(source));
+    }
 
     /// <summary>Clears all criteria; sorting and the panel state are kept.</summary>
     public void Reset()

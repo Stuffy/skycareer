@@ -20,6 +20,7 @@
                 <tr><td>@T("Home base")</td><td>@c.HomeBase</td></tr>
                 <tr><td>@T("Difficulty")</td><td>@(c.Difficulty switch { Difficulty.Easy => T("Easy"), Difficulty.Hard => T("Hard"), _ => T("Normal") })</td></tr>
                 <tr><td>@T("Created")</td><td>@c.CreatedAtUtc.ToLocalTime().ToString("d")</td></tr>
+                <tr><td>@T("Market seed")</td><td>@CareerService.MarketSeedOf(c)</td></tr>
             </tbody>
         </MudSimpleTable>
     </MudPaper>

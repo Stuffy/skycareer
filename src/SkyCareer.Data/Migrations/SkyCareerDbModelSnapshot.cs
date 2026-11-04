@@ -155,6 +155,12 @@ namespace SkyCareer.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MarketFilterJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MarketSeed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -502,6 +508,13 @@ namespace SkyCareer.Data.Migrations
                     b.Property<int>("Infants")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("MarketIndex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MarketStream")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("MissionTypeId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -547,6 +560,8 @@ namespace SkyCareer.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CareerId", "MarketStream");
 
                     b.HasIndex("CareerId", "Status");
 

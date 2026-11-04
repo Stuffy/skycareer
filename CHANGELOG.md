@@ -4,10 +4,22 @@ All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://
 
 ## Unreleased
 
+### Added
+- **Three times as many jobs:** a search now adds up to 60 jobs per aircraft (was 20), and up to 240 open offers are
+  kept per aircraft. The offer list is split into pages of 50.
+- **Reproducible job market:** every career has a market seed (random, or entered when starting a career; shown under
+  *Settings → Career*). Jobs follow from the seed, the game date, the aircraft and the search criteria: the same search
+  gives the same jobs after a restart or in another career with the same seed, and each further search continues with
+  new jobs.
+- The job search filter, its sorting and whether it is expanded are saved with the career.
+
 ### Fixed
 - **Last GSX receipts:** after GSX deboarding, SkyCareer now waits up to 5 minutes before settling, so receipts GSX
   writes only minutes later (e.g. the crew bus) are part of the flight's costs. Starting an engine, moving the aircraft
   or "Settle now" still settles at once.
+- **Fuel at the start of a flight:** the fuel restored from the last flight was overwritten with the planned block fuel
+  right after the job was prepared, when GSX still showed a completed refuelling from earlier. SkyCareer now sets the
+  planned block fuel only after it saw GSX refuel or board, and never over fuel that GSX, the EFB or the restore loaded.
 
 ## 0.2.1 – 2026-11-01
 

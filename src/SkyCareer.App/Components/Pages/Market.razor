@@ -315,7 +315,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var o in SortedOffers)
+                @foreach (var o in SortedOffers.Skip(_page * PageSize).Take(PageSize))
                 {
                     var t = Career.MissionType(o.MissionTypeId);
                     <tr @onclick="() => SelectOffer(o.Id)" style="cursor:pointer; @(o.Id == _selected ? "background:rgba(255,255,255,0.08)" : "")" id="@($"offer-{o.Id:N}")">
@@ -351,10 +351,17 @@
                 }
             </tbody>
         </MudSimpleTable>
+        @if (PageCount > 1)
+        {
+            <MudPagination Count="PageCount" Selected="_page + 1" SelectedChanged="(int p) => _page = p - 1" Class="mt-2" />
+        }
     }
 </MudPaper>
 
 @code {
+    private const int PageSize = 50;
+    private int _page;
+    private int PageCount => (VisibleOffers.Count() + PageSize - 1) / PageSize;
     private List<MissionContract> _offers = [], _active = [];
     private List<FleetAircraft> _fleet = [];
     private SettlementResult? _settlement;
@@ -482,6 +489,11 @@
         _detailedLoad = career.SimBriefDetailedLoad;
         _persistFuel = career.PersistFuel;
         _fleet = await Career.GetFleetAsync();
+        if (Filter.LoadedFor != career.Id)
+        {
+            Filter.Load(career.MarketFilterJson);
+            Filter.LoadedFor = career.Id;
+        }
         _offers = await Career.GetContractsAsync(ContractStatus.Offered);
         // A package's return leg waits below its outbound.
         _active = (await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress))
@@ -493,6 +505,7 @@
             .Concat(_offers.SelectMany(o => new[] { o.Origin, o.Destination }))
             .Concat(_active.SelectMany(o => new[] { o.Origin, o.Destination }));
         _airports = await Career.GetAirportsAsync(idents);
+        _page = Math.Clamp(_page, 0, Math.Max(0, PageCount - 1));
         BuildMapData();
         await TrackGsxAsync();
     }
@@ -529,7 +542,7 @@
         }
     }
 
-    private void SortBy(OfferColumn column)
+    private Task SortBy(OfferColumn column)
     {
         if (Filter.SortColumn == column) Filter.SortDescending = !Filter.SortDescending;
         else
@@ -538,7 +551,12 @@
             // Money and size read best biggest-first; everything else starts ascending.
             Filter.SortDescending = column is OfferColumn.Payout or OfferColumn.Runway or OfferColumn.Load;
         }
+        _page = 0;
+        return SaveFilterAsync();
     }
+
+    /// <summary>The filter is kept with the career, so it is still set after a restart.</summary>
+    private Task SaveFilterAsync() => Career.SaveMarketFilterAsync(Filter.ToJson());
 
     private RenderFragment SortHeader(OfferColumn column, string title) =>
         @<th class="sc-sortable @(Filter.SortColumn == column ? "sc-sorted" : "")" @onclick="() => SortBy(column)">
@@ -649,6 +667,9 @@
     private async Task ShowOffer(Guid id)
     {
         _selected = id;
+        // The row may sit on another page of the list.
+        int index = SortedOffers.Select(o => o.Id).ToList().IndexOf(id);
+        if (index >= 0) _page = index / PageSize;
         BuildMapData();
         StateHasChanged();
         if (_map is not null) await _map.ScrollToAsync($"offer-{id:N}");
@@ -664,10 +685,12 @@
         BuildMapData();
     }
 
-    private void FilterChanged()
+    private Task FilterChanged()
     {
         _selected = null;
+        _page = 0;
         BuildMapData();
+        return SaveFilterAsync();
     }
 
     private static readonly (string Category, string Color)[] CategoryColors =

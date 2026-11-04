@@ -54,6 +54,10 @@ public sealed class Career
     public bool GsxCostsEnabled { get; set; }
     /// <summary>When the GSX cost option was switched on; older receipts are never booked.</summary>
     public DateTime? GsxCostsSinceUtc { get; set; }
+    /// <summary>Seed of the job market: with the game date it makes offer generation reproducible. 0 = not set yet.</summary>
+    public int MarketSeed { get; set; }
+    /// <summary>The market page's filter (JSON, written by the app), kept per career.</summary>
+    public string? MarketFilterJson { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
@@ -141,6 +145,10 @@ public sealed class MissionContract
     public Guid? PackageId { get; set; }
     /// <summary>1 = outbound, 2 = return leg of a package.</summary>
     public int? PackageLeg { get; set; }
+    /// <summary>Market stream the offer was generated from (career seed, game date, origin, aircraft, search).</summary>
+    public string? MarketStream { get; set; }
+    /// <summary>Attempt number within <see cref="MarketStream"/>; the next search of the stream continues after the highest.</summary>
+    public int? MarketIndex { get; set; }
 
     public bool IsReturnLeg => PackageLeg == 2;
 

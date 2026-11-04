@@ -69,7 +69,11 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6"><MudTextField @bind-Value="_simBriefUser" Label="@T("SimBrief username (optional)")" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" sm="6" Class="d-flex align-center">
+            <MudItem xs="12" sm="6">
+                <MudNumericField T="int?" @bind-Value="_seed" Label="@T("Market seed (optional)")" Min="1" Variant="Variant.Outlined"
+                                 HelperText="@T("The same seed gives the same jobs on the same game day; empty = random.")" />
+            </MudItem>
+            <MudItem xs="12" Class="d-flex align-center">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _airportCount <= 0)" OnClick="Create">@T("Start career")</MudButton>
             </MudItem>
         </MudGrid>
@@ -83,6 +87,7 @@
     private bool _importing;
     private string _name = "", _airline = "", _homeBase = "EDDF";
     private string? _simBriefUser;
+    private int? _seed;
     private Difficulty _difficulty = Difficulty.Normal;
 
     protected override bool NeedsCareer => false;
@@ -126,7 +131,7 @@
     {
         if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_airline))
             throw new CareerException(T("Please enter a pilot name and an airline."));
-        await Career.CreateCareerAsync(_name, _airline, _homeBase, _difficulty, _simBriefUser);
+        await Career.CreateCareerAsync(_name, _airline, _homeBase, _difficulty, _simBriefUser, marketSeed: _seed);
         Nav.NavigateTo("fleet");
     }, T("Career created – next, acquire an aircraft."));
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SkyCareer.Data;
 using SkyCareer.Domain;
@@ -27,11 +28,11 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     private GameContent content => store.Current;
 
     /// <summary>Offers kept on the market per aircraft location.</summary>
-    public const int OffersPerLocation = 15;
+    public const int OffersPerLocation = 45;
     /// <summary>New offers per aircraft for a search with criteria.</summary>
-    public const int OffersPerSearch = 20;
+    public const int OffersPerSearch = 60;
     /// <summary>Open offers kept per aircraft; older ones are dropped.</summary>
-    public const int MaxOffersPerAircraft = 80;
+    public const int MaxOffersPerAircraft = 240;
     /// <summary>Unknown airports checked in the sim per search (each check takes up to ~0.6 s).</summary>
     public const int IlsChecksPerSearch = 25;
     /// <summary>Ground time added after each flight before the next can depart.</summary>
@@ -101,7 +102,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         return await RequireCareer(db);
     }
 
-    public async Task<Career> CreateCareerAsync(string name, string airline, string homeBase, Difficulty difficulty, string? simBriefUser, DateTime? startTime = null)
+    /// <param name="marketSeed">Seed of the job market (same seed and date = same jobs); null or ≤ 0 = random.</param>
+    public async Task<Career> CreateCareerAsync(string name, string airline, string homeBase, Difficulty difficulty, string? simBriefUser,
+        DateTime? startTime = null, int? marketSeed = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var home = await db.Airports.FindAsync(homeBase.Trim().ToUpperInvariant())
@@ -116,6 +119,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             HomeBase = home.Ident,
             Difficulty = difficulty,
             SimBriefUser = string.IsNullOrWhiteSpace(simBriefUser) ? null : simBriefUser.Trim(),
+            MarketSeed = marketSeed is > 0 and var seed ? seed : Random.Shared.Next(1, int.MaxValue),
             GameTime = start,
             FixedCostsBookedThrough = new DateTime(start.Year, start.Month, 1, 0, 0, 0, DateTimeKind.Utc)
         };
@@ -125,6 +129,19 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         ActiveCareerId = career.Id;
         Changed?.Invoke();
         return career;
+    }
+
+    /// <summary>The career's market seed; careers from before seeds derive it from their id (stored at the first search).</summary>
+    public static int MarketSeedOf(Career career) => career.MarketSeed != 0 ? career.MarketSeed : Math.Max(1, StableHash.Of(career.Id));
+
+    /// <summary>Stores the market page's filter with the career (no <see cref="Changed"/>: nothing else depends on it).</summary>
+    public async Task SaveMarketFilterAsync(string? json)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        if (career.MarketFilterJson == json) return;
+        career.MarketFilterJson = json;
+        await db.SaveChangesAsync();
     }
 
     public async Task UpdateSimBriefUserAsync(string? user)
@@ -464,14 +481,18 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     /// criteria it only tops the market up to <see cref="OffersPerLocation"/>; with criteria it adds up to
     /// <see cref="OffersPerSearch"/> matching offers per aircraft. If ILS is required, unknown candidate airports are
     /// checked in the simulator first and the result is cached.
+    /// Without <paramref name="rng"/> (tests pass one) generation is reproducible: every aircraft and search draws from a
+    /// stream keyed by the career's <see cref="Career.MarketSeed"/>, the game date, the aircraft's location and
+    /// registration and the search criteria, each attempt with its own seed; a repeated search continues the stream after
+    /// the highest <see cref="MissionContract.MarketIndex"/> stored, so restarts or copies of a career get the same jobs.
     /// </summary>
     public async Task<MarketSearchResult> SearchMarketAsync(MissionSearch search, Guid? aircraftId = null, Random? rng = null,
         CancellationToken ct = default)
     {
-        rng ??= Random.Shared;
         bool plainRefresh = search == MissionSearch.Any;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var career = await RequireCareer(db);
+        if (rng is null && career.MarketSeed == 0) career.MarketSeed = MarketSeedOf(career);
         ExpireOffers(db, career);
         await db.SaveChangesAsync(ct);
 
@@ -513,16 +534,21 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             int added = 0;
             var recent = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var perType = new Dictionary<string, (int Offers, int Large, int Capital)>();
+            string? stream = rng is null ? MarketStream(career, aircraft, search) : null;
+            int first = stream is null ? 0
+                : (await db.Contracts.Where(c => c.CareerId == career.Id && c.MarketStream == stream).MaxAsync(c => c.MarketIndex, ct) ?? -1) + 1;
             for (int attempt = 0; attempt < wanted * 6 && added < wanted; attempt++)
             {
-                var type = PickWeighted(types, rng);
+                int index = first + attempt;
+                var draw = rng ?? new Random(StableHash.Of(stream, index));
+                var type = PickWeighted(types, draw);
                 var (typeOffers, typeLarge, typeCapital) = perType.GetValueOrDefault(type.Id);
                 // Keep the type's minimum shares of capitals and large airports: when the next offer would drop below
                 // one, ask for such a destination first and fall back to any destination if none is in reach.
                 var rule = type.Destinations;
                 bool needCapital = rule.MinCapitalShare > 0 && typeCapital < Math.Ceiling(rule.MinCapitalShare * (typeOffers + 1));
                 bool needLarge = rule.MinLargeShare > 0 && typeLarge < Math.Ceiling(rule.MinLargeShare * (typeOffers + 1));
-                var ctxBase = new GenerationContext(type, profile, origin, airports, career.GameTime, rng)
+                var ctxBase = new GenerationContext(type, profile, origin, airports, career.GameTime, draw)
                 {
                     Search = search, RecentDestinations = recent, Masses = masses, VaryBaggage = career.SimBriefDetailedLoad
                 };
@@ -533,11 +559,13 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 if (offer is null) continue;
 
                 var contract = ToContract(offer, career, aircraft);
+                (contract.MarketStream, contract.MarketIndex) = (stream, stream is null ? null : index);
                 db.Contracts.Add(contract);
                 offers.Add(contract);
                 if (offer.Return is { } back)
                 {
                     var returnLeg = ToContract(back, career, aircraft);
+                    (returnLeg.MarketStream, returnLeg.MarketIndex) = (contract.MarketStream, contract.MarketIndex);
                     contract.PackageId = returnLeg.PackageId = Guid.NewGuid();
                     contract.PackageLeg = 1;
                     returnLeg.PackageLeg = 2;
@@ -1199,6 +1227,17 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         ExpiresAt = o.ExpiresAt.UtcDateTime,
         Deadline = o.Deadline.UtcDateTime
     };
+
+    /// <summary>Key of the reproducible offer stream for an aircraft and search on the current game date.</summary>
+    internal static string MarketStream(Career career, FleetAircraft aircraft, MissionSearch search)
+    {
+        object[] parts =
+        [
+            career.MarketSeed, career.GameTime.ToString("d-M-yyyy", CultureInfo.InvariantCulture),
+            aircraft.Location.ToUpperInvariant(), aircraft.Registration.ToUpperInvariant(), search.Fingerprint
+        ];
+        return $"{StableHash.Of(parts):x8}{StableHash.Of([.. parts, "stream"]):x8}";
+    }
 
     private static MissionType PickWeighted(List<MissionType> types, Random rng)
     {

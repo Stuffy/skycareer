@@ -45,6 +45,8 @@ public sealed class SkyCareerDb(DbContextOptions<SkyCareerDb> options) : DbConte
         m.Entity<MissionContract>(e =>
         {
             e.HasIndex(x => new { x.CareerId, x.Status });
+            e.HasIndex(x => new { x.CareerId, x.MarketStream });
+            e.Property(x => x.MarketStream).HasMaxLength(32);
             e.HasOne<Career>().WithMany().HasForeignKey(x => x.CareerId).OnDelete(DeleteBehavior.Cascade);
         });
 

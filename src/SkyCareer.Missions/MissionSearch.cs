@@ -27,6 +27,13 @@ public sealed record MissionSearch
 
     public static MissionSearch Any { get; } = new();
 
+    /// <summary>The criteria as stable text (sorted sets, invariant numbers): equal searches give equal fingerprints.</summary>
+    public string Fingerprint => string.Join(";",
+        string.Join(",", MissionTypeIds.Order(StringComparer.Ordinal)),
+        string.Join(",", Sizes.Order()),
+        FormattableString.Invariant($"{DistanceMinNm}/{DistanceMaxNm}/{PaxMin}/{PaxMax}/{CargoMinKg}/{PayoutMin}/{MinRunwayM}"),
+        $"{RequirePaved}/{RequireLighted}/{RequireIls}/{ScheduledServiceOnly}");
+
     public bool HasDestinationCriteria =>
         RequirePaved || MinRunwayM is > 0 || RequireLighted || RequireIls || ScheduledServiceOnly || Sizes.Count > 0;
 

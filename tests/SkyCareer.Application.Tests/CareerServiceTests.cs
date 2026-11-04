@@ -1264,6 +1264,73 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.Contains(r3.Lines, l => l.Category == LedgerCategory.Fuel && l.Description.StartsWith("Fuel ") && !l.Description.StartsWith("Fuel uplift"));
     }
 
+    /// <summary>A career with the given market seed and one Caravan "D-ESED" at EDDF.</summary>
+    private async Task<Career> SeededCareerAsync(int seed)
+    {
+        var career = await _svc.CreateCareerAsync("Test", "Test Air", "EDDF", Difficulty.Normal, null,
+            new DateTime(2026, 10, 15, 8, 0, 0, DateTimeKind.Utc), marketSeed: seed);
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented, "D-ESED");
+        return career;
+    }
+
+    private static readonly MissionSearch CargoSearch = new() { MissionTypeIds = new HashSet<string> { "cargo_feeder" } };
+
+    /// <summary>What a player sees of an offer (ids and stream keys aside).</summary>
+    private async Task<List<string>> SearchAsync(MissionSearch search)
+    {
+        var before = (await _svc.GetContractsAsync(ContractStatus.Offered)).Select(o => o.Id).ToHashSet();
+        await _svc.SearchMarketAsync(search);
+        return (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !before.Contains(o.Id))
+            .OrderBy(o => o.MarketIndex).ThenBy(o => o.PackageLeg)
+            .Select(o => $"{o.MissionTypeId} {o.Origin}-{o.Destination} {o.Adults}/{o.Children}/{o.Infants} {o.CargoKg:F0} {o.Payout:F0} {o.Deadline:O}")
+            .ToList();
+    }
+
+    [Fact]
+    public async Task Offers_are_reproducible_from_the_career_seed_and_continue_with_each_search()
+    {
+        var first = await SeededCareerAsync(42);
+        var a1 = await SearchAsync(CargoSearch);
+        Assert.True(a1.Count >= 20, $"only {a1.Count} offers");
+        var a2 = await SearchAsync(CargoSearch);
+
+        // Another career with the same seed, aircraft and game date gets the same jobs, search by search.
+        var second = await SeededCareerAsync(42);
+        Assert.Equal(a1, await SearchAsync(CargoSearch));
+        Assert.Equal(a2, await SearchAsync(CargoSearch));
+        // The second search continued the stream instead of repeating the first.
+        Assert.NotEqual(a1, a2);
+
+        // Another seed, other criteria or another game day draw from other streams.
+        await SeededCareerAsync(43);
+        Assert.NotEqual(a1, await SearchAsync(CargoSearch));
+        _svc.SelectCareer(first.Id);
+        Assert.NotEqual(a1, await SearchAsync(CargoSearch with { DistanceMaxNm = 300 }));
+        _svc.SelectCareer(second.Id);
+        await _svc.WaitAsync(TimeSpan.FromDays(1));
+        Assert.NotEqual(a1, await SearchAsync(CargoSearch));
+    }
+
+    [Fact]
+    public async Task Market_seed_of_older_careers_comes_from_the_career_id_and_the_filter_is_stored()
+    {
+        var career = await NewCareer();
+        await using (var db = _factory.CreateDbContext())
+        {
+            var row = await db.Careers.SingleAsync(c => c.Id == career.Id);
+            row.MarketSeed = 0;   // as migrated from 0.2.x
+            await db.SaveChangesAsync();
+        }
+        int derived = CareerService.MarketSeedOf(await _svc.GetCareerAsync());
+        Assert.NotEqual(0, derived);
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(CargoSearch);
+        Assert.Equal(derived, (await _svc.GetCareerAsync()).MarketSeed);
+
+        await _svc.SaveMarketFilterAsync("{\"PaxMin\":4}");
+        Assert.Equal("{\"PaxMin\":4}", (await _svc.GetCareerAsync()).MarketFilterJson);
+    }
+
     [Fact]
     public async Task Offers_from_the_old_airport_are_dropped_once_the_aircraft_moved()
     {
@@ -1298,7 +1365,8 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var staleOffer = (await OffersAsync()).Single(o => o.Origin == job.Origin);
         await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(staleOffer.Id));
         await _svc.RefreshMarketAsync(new Random(5));
-        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin == job.Origin);
+        // Return legs of packages from the new location fly back to the old one.
+        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin == job.Origin && !o.IsReturnLeg);
     }
 
     [Fact]

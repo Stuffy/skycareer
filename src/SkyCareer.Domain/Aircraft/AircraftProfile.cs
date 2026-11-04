@@ -89,6 +89,8 @@ public sealed record AircraftProfile
 
     /// <summary>Crew mass that has to be loaded into the sim on top of the empty weight.</summary>
     public Mass CrewMass => CrewIncludedInEmptyWeight ? Mass.Zero : Mass.FromKg(Pilots * CrewMassKg + CabinCrewCount * CabinCrewMassKg);
+    /// <summary>The cabin crew's part of <see cref="CrewMass"/>.</summary>
+    public Mass CabinCrewMass => CrewIncludedInEmptyWeight ? Mass.Zero : Mass.FromKg(CabinCrewCount * CabinCrewMassKg);
 
     public bool HasTag(string tag) => Tags.Contains(tag, StringComparer.OrdinalIgnoreCase);
 

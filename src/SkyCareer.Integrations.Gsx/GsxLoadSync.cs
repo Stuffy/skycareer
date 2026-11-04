@@ -106,7 +106,7 @@ public sealed class GsxLoadSync(bool departed = false)
 
     private static double Fraction(int done, int total) => total <= 0 ? 0 : Math.Clamp((double)done / total, 0, 1);
 
-    /// <summary>Station loads for the given progress: crew always full, cabin and holds scaled.</summary>
+    /// <summary>Station loads for the given progress: crew always full (also cabin crew carried in the hold), cabin and holds scaled.</summary>
     public static IReadOnlyList<StationLoad> ScaleStations(LoadSheet sheet, double passengerFraction, double cargoFraction)
     {
         var kinds = sheet.Aircraft.Stations.ToDictionary(s => s.Index, s => s.Kind);
@@ -114,7 +114,7 @@ public sealed class GsxLoadSync(bool departed = false)
         {
             StationKind.Crew => st,
             StationKind.Passengers => st with { Mass = st.Mass * passengerFraction },
-            _ => st with { Mass = st.Mass * cargoFraction }
+            _ => st with { Mass = st.CrewMass + (st.Mass - st.CrewMass) * cargoFraction }
         }).ToList();
     }
 

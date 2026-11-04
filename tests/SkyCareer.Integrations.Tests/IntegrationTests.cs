@@ -152,6 +152,39 @@ public class GsxTests
     }
 
     [Fact]
+    public void Cabin_crew_without_crew_seats_ride_in_the_hold_and_stay_aboard()
+    {
+        // Citation X: two pilot stations, one flight attendant (2026-11-04: both pilots weighed 270 lb).
+        var ac = new AircraftProfile
+        {
+            Id = "c750", Name = "Citation X", IcaoType = "C750", OperatingEmptyKg = 10038, MaxZeroFuelKg = 11000, MaxTakeoffKg = 16000,
+            MaxLandingKg = 14000, MaxFuelKg = 5000, PassengerSeats = 9, MaxCargoKg = 500, CruiseKtas = 500, FuelBurnKgPerHour = 1200,
+            CrewCount = 2, CabinCrewCount = 1,
+            Stations = [new(1, "PILOT", StationKind.Crew, 1), new(2, "COPILOT", StationKind.Crew, 1), new(3, "PAX", StationKind.Passengers, 9),
+                new(4, "BAGGAGE", StationKind.Baggage)]
+        };
+        var sheet = LoadSheetBuilder.Build(ac, new PassengerCount(6), BaggageProfile.Domestic, Mass.FromKg(50), FuelPlanner.Plan(ac, 600, FlightRules.Ifr));
+
+        Assert.Equal(85, sheet.Stations.Single(s => s.Index == 1).Mass.Kg, 3);
+        Assert.Equal(85, sheet.Stations.Single(s => s.Index == 2).Mass.Kg, 3);
+        var hold = sheet.Stations.Single(s => s.Index == 4);
+        Assert.Equal(6 * 22.68 + 50 + 75, hold.Mass.Kg, 3);
+        Assert.Equal(75, hold.CrewMass.Kg, 3);
+        Assert.Equal(sheet.SimPayload.Kg, sheet.Stations.Sum(s => s.Mass.Kg), 3);
+
+        // Emptied before boarding or after deboarding, the flight attendant is still on board.
+        var empty = GsxLoadSync.ScaleStations(sheet, 0, 0);
+        Assert.Equal(75, empty.Single(s => s.Index == 4).Mass.Kg, 3);
+        Assert.Equal(245, empty.Sum(s => s.Mass.Kg), 3);
+
+        // With a crew seat for everyone the cabin crew sits there, as before.
+        var withJumpseat = ac with { Stations = [.. ac.Stations, new(5, "JUMPSEAT", StationKind.Crew, 1)] };
+        var seated = LoadSheetBuilder.Build(withJumpseat, new PassengerCount(6), BaggageProfile.Domestic, Mass.FromKg(50), FuelPlanner.Plan(ac, 600, FlightRules.Ifr));
+        Assert.Equal(0, seated.Stations.Single(s => s.Index == 4).CrewMass.Kg);
+        Assert.Equal(245, seated.Stations.Where(s => s.Index is 1 or 2 or 5).Sum(s => s.Mass.Kg), 3);
+    }
+
+    [Fact]
     public void Passenger_mismatch_is_reported()
     {
         Assert.Null(GsxLoadSync.PassengerMismatch(State(total: 120), new PassengerCount(118, 2)));

@@ -2,7 +2,11 @@ using SkyCareer.Domain.Aircraft;
 
 namespace SkyCareer.Domain.Loading;
 
-public sealed record StationLoad(int Index, string Name, Mass Mass);
+public sealed record StationLoad(int Index, string Name, Mass Mass)
+{
+    /// <summary>Crew mass included in <see cref="Mass"/> on a non-crew station (cabin crew in the hold); it stays aboard when GSX scales the load.</summary>
+    public Mass CrewMass { get; init; }
+}
 
 public enum LimitViolation { SeatsExceeded, CargoExceeded, ZeroFuelWeight, TakeoffWeight, LandingWeight, FuelCapacity }
 
@@ -79,7 +83,8 @@ public static class LoadSheetBuilder
 
     /// <summary>
     /// Puts crew on crew stations, spreads passengers over passenger stations by seat count and hold load
-    /// over baggage/cargo stations by capacity.
+    /// over baggage/cargo stations by capacity. Cabin crew without crew seats of their own (e.g. Citation X: only pilot
+    /// and copilot stations) go to the hold, as SimBrief gets them as cargo, instead of making the pilots heavier.
     /// </summary>
     public static IReadOnlyList<StationLoad> DistributeToStations(AircraftProfile aircraft, PassengerCount pax, Mass paxMass, Mass holdMass)
     {
@@ -89,8 +94,10 @@ public static class LoadSheetBuilder
         var holdStations = aircraft.Stations.Where(s => s.Kind is StationKind.Baggage or StationKind.Cargo).ToList();
 
         int crewSeats = crewStations.Sum(s => Math.Max(1, s.Seats));
+        bool cabinCrewInHold = holdStations.Count > 0 && crewStations.Count > 0 && crewSeats < aircraft.Pilots + aircraft.CabinCrewCount;
+        var cabinCrewHold = cabinCrewInHold ? aircraft.CabinCrewMass : Mass.Zero;
         foreach (var s in crewStations)
-            result.Add(new StationLoad(s.Index, s.Name, aircraft.CrewMass * ((double)Math.Max(1, s.Seats) / crewSeats)));
+            result.Add(new StationLoad(s.Index, s.Name, (aircraft.CrewMass - cabinCrewHold) * ((double)Math.Max(1, s.Seats) / crewSeats)));
 
         // Fill seats front to back so a half-full cabin is realistic, then convert seats to mass.
         double massPerSeated = pax.Seated > 0 ? paxMass.Kg / pax.Seated : 0;
@@ -109,7 +116,7 @@ public static class LoadSheetBuilder
         foreach (var s in holdStations)
         {
             double share = totalCap > 0 ? s.MaxKg / totalCap : 1.0 / holdStations.Count;
-            result.Add(new StationLoad(s.Index, s.Name, holdMass * share));
+            result.Add(new StationLoad(s.Index, s.Name, (holdMass + cabinCrewHold) * share) { CrewMass = cabinCrewHold * share });
         }
 
         return result;

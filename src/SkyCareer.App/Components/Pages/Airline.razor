@@ -1,0 +1,104 @@
+@page "/airline"
+@inherits CareerPageBase
+
+<MudText Typo="Typo.h5" Class="mb-4">@T("Airline")</MudText>
+
+@if (_career is { } c)
+{
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Airline profile")</MudText>
+        <MudGrid>
+            <MudItem xs="12"><MudTextField @bind-Value="_name" Label="@T("Airline name")" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+            <MudItem xs="12" sm="5">
+                <MudTextField @bind-Value="_icao" Label="@T("ICAO code")" Placeholder="@AirlineCodes.IcaoFromName(_name)" Variant="Variant.Outlined"
+                              MaxLength="3" Immediate="true" HelperText="@T("Three letters; empty = from the airline name")" />
+            </MudItem>
+            <MudItem xs="12" sm="7">
+                <MudTextField @bind-Value="_telephony" Label="@T("Radio callsign")" Placeholder="@AirlineCodes.TelephonyFromName(_name)" Variant="Variant.Outlined"
+                              MaxLength="30" Immediate="true" HelperText="@T("Spoken callsign for ATC; empty = from the airline name")" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.body2">
+                    @T("Example callsign:") <b>@AirlineCodes.Callsign(Icao, 1234)</b> · <b>@Telephony 1234</b>
+                </MudText>
+                <MudText Typo="Typo.caption">@T("ICAO code and flight number are sent to SimBrief with each job. Scheduled flights keep one flight number per route; return flights use the next even number.")</MudText>
+            </MudItem>
+            <MudItem xs="12" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Text" OnClick="FromName">@T("Derive from name")</MudButton>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="Save">@T("Save")</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+        <MudText Typo="Typo.h6" Class="mb-2">@T("Career")</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="7"><MudTextField @bind-Value="_pilot" Label="@T("Pilot name")" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="5">
+                <MudTextField @bind-Value="_homeBase" Label="@T("Home base (ICAO)")" Variant="Variant.Outlined" MaxLength="8"
+                              HelperText="@T("Where newly acquired aircraft are delivered")" />
+            </MudItem>
+        </MudGrid>
+        <MudSimpleTable Dense="true" Class="mt-3">
+            <tbody>
+                <tr><td>@T("Difficulty")</td><td>@(c.Difficulty switch { Difficulty.Easy => T("Easy"), Difficulty.Hard => T("Hard"), _ => T("Normal") })</td></tr>
+                <tr><td>@T("Created")</td><td>@c.CreatedAtUtc.ToLocalTime().ToString("d")</td></tr>
+                <tr><td>@T("Market seed")</td><td>@CareerService.MarketSeedOf(c)</td></tr>
+            </tbody>
+        </MudSimpleTable>
+        <div class="d-flex mt-2">
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="Save">@T("Save")</MudButton>
+        </div>
+    </MudPaper>
+
+    @if (_overview is { } o)
+    {
+        <MudPaper Class="pa-4 mb-4" Style="max-width:720px">
+            <MudText Typo="Typo.h6" Class="mb-2">@T("Key figures")</MudText>
+            <MudSimpleTable Dense="true">
+                <tbody>
+                    <tr><td>@T("Fleet")</td><td>@F("{0} owned · {1} leased · {2} rented", o.Owned, o.Leased, o.Rented)</td></tr>
+                    <tr><td>@T("Flights")</td><td>@o.Flights.ToString("N0")</td></tr>
+                    <tr><td>@T("Block hours")</td><td>@o.BlockHours.ToString("N1") h</td></tr>
+                    <tr><td>@T("Distance flown")</td><td>@o.DistanceNm.ToString("N0") nm</td></tr>
+                    <tr><td>@T("On time")</td><td>@(o.OnTimeShare is { } p ? p.ToString("P0") : "–")</td></tr>
+                    <tr><td>@T("Average score")</td><td>@(o.AverageScore is { } s ? s.ToString("N0") : "–")</td></tr>
+                    <tr><td>@T("Flight revenue")</td><td>@Eur(o.Revenue)</td></tr>
+                    <tr><td>@T("Flight costs")</td><td>@Eur(o.Costs)</td></tr>
+                    <tr><td>@T("Reputation")</td><td>@F("{0} (+{1:P0} pay on new jobs)", o.Reputation, o.PayBonus)</td></tr>
+                    <tr><td>@T("Cash")</td><td>@Eur(o.Cash)</td></tr>
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private Career? _career;
+    private AirlineOverview? _overview;
+    private string _name = "", _pilot = "", _homeBase = "";
+    private string? _icao, _telephony;
+    private bool _formLoaded;
+
+    private string Icao => AirlineCodes.IsValidIcao(_icao?.Trim().ToUpperInvariant()) ? _icao!.Trim().ToUpperInvariant() : AirlineCodes.IcaoFromName(_name);
+    private string Telephony => string.IsNullOrWhiteSpace(_telephony) ? AirlineCodes.TelephonyFromName(_name) : _telephony.Trim().ToUpperInvariant();
+
+    protected override async Task LoadAsync()
+    {
+        _career = await Career.GetCareerAsync();
+        _overview = await Career.GetAirlineOverviewAsync();
+        if (_formLoaded) return;
+        (_name, _icao, _telephony, _pilot, _homeBase) = (_career.AirlineName, _career.AirlineIcao, _career.AirlineTelephony, _career.Name, _career.HomeBase);
+        _formLoaded = true;
+    }
+
+    private void FromName()
+    {
+        _icao = AirlineCodes.IcaoFromName(_name);
+        _telephony = AirlineCodes.TelephonyFromName(_name);
+    }
+
+    private Task Save() => Run(() => Career.UpdateAirlineAsync(_name, _icao, _telephony, _pilot, _homeBase), T("Saved."));
+}

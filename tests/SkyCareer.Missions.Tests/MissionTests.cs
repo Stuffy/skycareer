@@ -93,6 +93,12 @@ public class MissionTests
         // The load sheet's ZFW in thousands, with a decimal point whatever the culture.
         var withZfw = SimBriefClient.BuildDispatchUri(new DispatchRequest("EDDF", "EDDM", "A20N", 150, 2500, ZeroFuelWeightKg: 60879));
         Assert.Contains("manualzfw=60.879", withZfw.Query);
+
+        // The airline's ICAO code, flight number and ATC callsign.
+        var named = SimBriefClient.BuildDispatchUri(new DispatchRequest("EDDF", "EDDM", "A20N", 150, 2500, Airline: "SCA", FlightNumber: "1234", Callsign: "SCA1234"));
+        Assert.Contains("airline=SCA", named.Query);
+        Assert.Contains("fltnum=1234", named.Query);
+        Assert.Contains("callsign=SCA1234", named.Query);
     }
 
     [Fact]

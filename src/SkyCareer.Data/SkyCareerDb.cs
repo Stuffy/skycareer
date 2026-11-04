@@ -33,6 +33,8 @@ public sealed class SkyCareerDb(DbContextOptions<SkyCareerDb> options) : DbConte
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.AirlineName).HasMaxLength(100);
             e.Property(x => x.HomeBase).HasMaxLength(16);
+            e.Property(x => x.AirlineIcao).HasMaxLength(3);
+            e.Property(x => x.AirlineTelephony).HasMaxLength(30);
         });
 
         m.Entity<FleetAircraft>(e =>

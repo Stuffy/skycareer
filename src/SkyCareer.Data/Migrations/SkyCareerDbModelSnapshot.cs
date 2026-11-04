@@ -113,11 +113,16 @@ namespace SkyCareer.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("AirlineIcao")
+                        .HasMaxLength(3)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("AirlineName")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AirlineTelephony")
+                        .HasMaxLength(30)
                         .HasColumnType("TEXT");
 
                     b.Property<double>("BagWeightKg")
@@ -304,6 +309,9 @@ namespace SkyCareer.Data.Migrations
 
                     b.Property<double>("DistanceNm")
                         .HasColumnType("REAL");
+
+                    b.Property<int?>("FlightNumber")
+                        .HasColumnType("INTEGER");
 
                     b.Property<double>("FuelUsedKg")
                         .HasColumnType("REAL");
@@ -495,6 +503,9 @@ namespace SkyCareer.Data.Migrations
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("FlightNumber")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("FlightStartedAtUtc")
                         .HasColumnType("TEXT");

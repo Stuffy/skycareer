@@ -131,6 +131,70 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         return career;
     }
 
+    // ---------- Airline ----------
+
+    /// <summary>The airline's ICAO designator: the one set by the player or derived from the name.</summary>
+    public static string AirlineIcaoOf(Career career) =>
+        AirlineCodes.IsValidIcao(career.AirlineIcao) ? career.AirlineIcao! : AirlineCodes.IcaoFromName(career.AirlineName);
+
+    /// <summary>The airline's radiotelephony callsign: the one set by the player or derived from the name.</summary>
+    public static string AirlineTelephonyOf(Career career) =>
+        AirlineCodes.IsValidTelephony(career.AirlineTelephony) ? career.AirlineTelephony! : AirlineCodes.TelephonyFromName(career.AirlineName);
+
+    /// <summary>A job's flight number; jobs from before flight numbers get a stable one from their id.</summary>
+    public static int FlightNumberOf(MissionContract contract) =>
+        contract.FlightNumber is { } n && AirlineCodes.IsValidFlightNumber(n) ? n : 1000 + StableHash.Of(contract.Id) % 9000;
+
+    /// <summary>ATC callsign of a job, e.g. "SCA1234".</summary>
+    public static string CallsignOf(Career career, MissionContract contract) => AirlineCodes.Callsign(AirlineIcaoOf(career), FlightNumberOf(contract));
+
+    /// <summary>
+    /// Changes the airline profile. Empty ICAO or telephony = derived from the name. A new home base only applies to
+    /// aircraft acquired from now on.
+    /// </summary>
+    public async Task UpdateAirlineAsync(string airlineName, string? icao, string? telephony, string pilotName, string homeBase)
+    {
+        if (string.IsNullOrWhiteSpace(airlineName)) throw new CareerException(L.T("Please enter an airline name."));
+        if (string.IsNullOrWhiteSpace(pilotName)) throw new CareerException(L.T("Please enter a pilot name."));
+        icao = string.IsNullOrWhiteSpace(icao) ? null : icao.Trim().ToUpperInvariant();
+        if (icao is not null && !AirlineCodes.IsValidIcao(icao))
+            throw new CareerException(L.T("The ICAO code needs exactly three letters (A–Z)."));
+        telephony = string.IsNullOrWhiteSpace(telephony) ? null : string.Join(' ', telephony.Trim().ToUpperInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (telephony is not null && !AirlineCodes.IsValidTelephony(telephony))
+            throw new CareerException(L.T("The radio callsign needs 2–30 letters (A–Z) and spaces."));
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        var home = await db.Airports.FindAsync(homeBase.Trim().ToUpperInvariant())
+                   ?? throw new CareerException(L.F("Airport {0} not found. Has the airport data been imported?", homeBase));
+        career.AirlineName = airlineName.Trim();
+        career.AirlineIcao = icao;
+        career.AirlineTelephony = telephony;
+        career.Name = pilotName.Trim();
+        career.HomeBase = home.Ident;
+        await db.SaveChangesAsync();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Key figures of the airline for its page.</summary>
+    public async Task<AirlineOverview> GetAirlineOverviewAsync()
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        var fleet = await db.Fleet.Where(f => f.CareerId == career.Id).ToListAsync();
+        var flights = await db.Flights.Where(f => f.CareerId == career.Id).ToListAsync();
+        int onTime = flights.Count(f => f.Outcome == FlightOutcome.Completed);
+        int late = flights.Count(f => f.Outcome == FlightOutcome.Late);
+        return new AirlineOverview(
+            fleet.Count(f => f.Ownership == Ownership.Owned), fleet.Count(f => f.Ownership == Ownership.Leased),
+            fleet.Count(f => f.Ownership == Ownership.Rented),
+            flights.Count, flights.Sum(f => f.BlockHours), flights.Sum(f => f.DistanceNm),
+            onTime + late == 0 ? null : onTime / (double)(onTime + late),
+            flights.Count == 0 ? null : flights.Average(f => f.Score),
+            flights.Sum(f => f.Revenue), flights.Sum(f => f.Costs),
+            career.Reputation, StandardMissionGenerator.ReputationFactor(career.Reputation) - 1, career.Cash);
+    }
+
     /// <summary>The career's market seed; careers from before seeds derive it from their id (stored at the first search).</summary>
     public static int MarketSeedOf(Career career) => career.MarketSeed != 0 ? career.MarketSeed : Math.Max(1, StableHash.Of(career.Id));
 
@@ -561,12 +625,15 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
 
                 var contract = ToContract(offer, career, aircraft);
                 (contract.MarketStream, contract.MarketIndex) = (stream, stream is null ? null : index);
+                contract.FlightNumber = NewFlightNumber(career, type, offer, draw);
                 db.Contracts.Add(contract);
                 offers.Add(contract);
                 if (offer.Return is { } back)
                 {
                     var returnLeg = ToContract(back, career, aircraft);
                     (returnLeg.MarketStream, returnLeg.MarketIndex) = (contract.MarketStream, contract.MarketIndex);
+                    // The way back gets the next (even) number, as airlines do.
+                    returnLeg.FlightNumber = contract.FlightNumber + 1;
                     contract.PackageId = returnLeg.PackageId = Guid.NewGuid();
                     contract.PackageLeg = 1;
                     returnLeg.PackageLeg = 2;
@@ -762,6 +829,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             Score = s.Score.Total,
             Revenue = s.Revenue,
             Costs = s.Costs,
+            FlightNumber = FlightNumberOf(c),
             Outcome = s.Outcome,
             Notes = string.Join("\n", s.Notes),
             TrackFile = trackFile
@@ -1228,6 +1296,18 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         ExpiresAt = o.ExpiresAt.UtcDateTime,
         Deadline = o.Deadline.UtcDateTime
     };
+
+    /// <summary>
+    /// Odd flight number for a new outbound: scheduled flights (category "airline") keep one number per route, other jobs
+    /// draw one from 1000–9999 (reproducible through the market stream).
+    /// </summary>
+    private static int NewFlightNumber(Career career, MissionType type, MissionOffer offer, Random draw)
+    {
+        int number = type.Category == "airline"
+            ? 100 + StableHash.Of(MarketSeedOf(career), offer.Origin.Ident, offer.Destination.Ident) % 8900
+            : draw.Next(1000, AirlineCodes.MaxFlightNumber);
+        return number | 1;
+    }
 
     /// <summary>Key of the reproducible offer stream for an aircraft and search on the current game date.</summary>
     internal static string MarketStream(Career career, FleetAircraft aircraft, MissionSearch search)

@@ -12,6 +12,12 @@ All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://
   gives the same jobs after a restart or in another career with the same seed, and each further search continues with
   new jobs.
 - The job search filter, its sorting and whether it is expanded are saved with the career.
+- **Airline page:** a new menu entry for your airline. Change its name, set an ICAO code and radio callsign (or let them
+  be derived from the name), change pilot name and home base, and see key figures (fleet, flights, block hours,
+  punctuality, revenue, reputation bonus). The career details moved here from the settings.
+- **Flight numbers:** every job gets a flight number, shown as callsign (e.g. SCA1234) in the job list and the logbook.
+  Scheduled flights keep one number per route, return flights take the next even number. "Plan in SimBrief" sends the
+  airline code, flight number and callsign.
 
 ### Changed
 - **Reputation pays:** new jobs pay more the better your reputation, rising linearly to +50 % at reputation 100 (+5 % at
@@ -22,6 +28,13 @@ All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://
 - **Last GSX receipts:** after GSX deboarding, SkyCareer now waits up to 5 minutes before settling, so receipts GSX
   writes only minutes later (e.g. the crew bus) are part of the flight's costs. Starting an engine, moving the aircraft
   or "Settle now" still settles at once.
+- **Crew weights:** on aircraft without a seat station for the cabin crew (e.g. the Citation X), the cabin crew's weight
+  was spread over the pilot seats, so each pilot weighed about 270 lbs. It now goes to the baggage hold, as in the
+  SimBrief OFP, and stays there during GSX boarding and deboarding.
+- **Fuel after ending a flight in MSFS:** ending the flight before SkyCareer settled it reset the aircraft to its
+  defaults (e.g. 50 % fuel), and that value was stored as the fuel left over, so the next flight started with it. The
+  fuel left over and the MSFS wear are now taken when the aircraft is parked. When MSFS resets fuel and payload right
+  after the stored fuel was set at the start of a flight, SkyCareer sets it again.
 - **Fuel at the start of a flight:** the fuel restored from the last flight was overwritten with the planned block fuel
   right after the job was prepared, when GSX still showed a completed refuelling from earlier. SkyCareer now sets the
   planned block fuel only after it saw GSX refuel or board, and never over fuel that GSX, the EFB or the restore loaded.

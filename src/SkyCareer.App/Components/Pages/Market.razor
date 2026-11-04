@@ -59,7 +59,7 @@
 
     <MudPaper Class="@(collapsed ? "pa-3 mb-4" : "pa-4 mb-4")" Elevation="3">
         <MudStack Row="true" AlignItems="AlignItems.Center">
-            <MudText Typo="Typo.h6">@type.DisplayName: @c.Origin → @c.Destination</MudText>
+            <MudText Typo="Typo.h6">@type.DisplayName: @c.Origin → @c.Destination <span style="opacity:.7">· @Callsign(c)</span></MudText>
             <MudChip T="string" Size="Size.Small" Color="@(c.Status == ContractStatus.InProgress ? Color.Warning : tracking ? Color.Success : Color.Info)">@StatusText(c, tracking)</MudChip>
             @if (c.PackageLeg is { } leg)
             {
@@ -328,7 +328,7 @@
                         <td>@plane?.Registration<br /><MudText Typo="Typo.caption">@(plane is null ? "" : Career.ProfileName(plane.ProfileId))</MudText></td>
                         <td><span style="color:@ColorFor(t)">●</span> @t.DisplayName<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief</MudText></td>
                         <td>
-                            @o.Origin → @o.Destination
+                            @o.Origin → @o.Destination <MudText Typo="Typo.caption" Inline="true">@Callsign(o)</MudText>
                             @if (back is not null)
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt" Class="ml-1">@T("Round trip")</MudChip>
@@ -365,6 +365,10 @@
 
 @code {
     private const int PageSize = 50;
+    private string _airlineIcao = "";
+
+    /// <summary>ATC callsign of a job (airline ICAO + flight number), as sent to SimBrief.</summary>
+    private string Callsign(MissionContract c) => AirlineCodes.Callsign(_airlineIcao, CareerService.FlightNumberOf(c));
     private int _page;
     private int PageCount => (VisibleOffers.Count() + PageSize - 1) / PageSize;
     private List<MissionContract> _offers = [], _active = [];
@@ -488,6 +492,7 @@
     protected override async Task LoadAsync()
     {
         var career = await Career.GetCareerAsync();
+        _airlineIcao = CareerService.AirlineIcaoOf(career);
         _gameTime = career.GameTime;
         _reputation = career.Reputation;
         _passengerWeightKg = career.PassengerWeightKg;
@@ -760,8 +765,10 @@
     private void OpenSimBrief(MissionContract c, AircraftProfile p)
     {
         var load = SimBriefPayload.For(Career.BuildLoadSheet(c, p), _passengerWeightKg, _detailedLoad);
+        int flightNumber = CareerService.FlightNumberOf(c);
         var uri = SimBriefClient.BuildDispatchUri(new DispatchRequest(c.Origin, c.Destination, p.IcaoType, load.Passengers, load.CargoKg, ZeroFuelWeightKg: load.ZeroFuelWeightKg,
-            Airframe: p.SimBriefAirframe));
+            Airframe: p.SimBriefAirframe, Airline: _airlineIcao, FlightNumber: flightNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Callsign: AirlineCodes.Callsign(_airlineIcao, flightNumber)));
         Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
     }
 

@@ -366,6 +366,65 @@ public sealed class CareerServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Scheduled_flights_keep_one_flight_number_per_route_and_return_legs_take_the_next()
+    {
+        await NewCareer(Difficulty.Easy);
+        await _svc.AcquireAircraftAsync("a20n", Ownership.Rented);
+        var scheduled = new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } };
+        await _svc.SearchMarketAsync(scheduled);
+        await _svc.SearchMarketAsync(scheduled);
+        var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
+
+        Assert.All(offers, o => Assert.NotNull(o.FlightNumber));
+        var outbound = offers.Where(o => !o.IsReturnLeg).ToList();
+        Assert.All(outbound, o => Assert.Equal(1, o.FlightNumber!.Value % 2));
+        Assert.All(outbound.GroupBy(o => (o.Origin, o.Destination)), route => Assert.Single(route.Select(o => o.FlightNumber).Distinct()));
+        Assert.Contains(outbound.GroupBy(o => (o.Origin, o.Destination)), route => route.Count() > 1);
+        foreach (var back in offers.Where(o => o.IsReturnLeg))
+            Assert.Equal(offers.Single(o => o.PackageId == back.PackageId && !o.IsReturnLeg).FlightNumber + 1, back.FlightNumber);
+
+        // Other jobs draw a number from 1000–9999; it ends up in the logbook.
+        await _svc.SearchMarketAsync(CargoSearch with { MissionTypeIds = new HashSet<string> { "charter" } });
+        var charter = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.MissionTypeId == "charter" && !o.IsReturnLeg).ToList();
+        Assert.NotEmpty(charter);
+        Assert.All(charter, o => Assert.InRange(o.FlightNumber!.Value, 1000, 9999));
+        await _svc.AcceptAsync(charter[0].Id);
+        await _svc.DebugCompleteContractAsync(charter[0].Id);
+        Assert.Equal(charter[0].FlightNumber, (await _svc.GetFlightsAsync()).Single().FlightNumber);
+    }
+
+    [Fact]
+    public async Task Airline_profile_is_edited_and_codes_default_to_the_name()
+    {
+        var career = await NewCareer();
+        Assert.Equal("TAS", CareerService.AirlineIcaoOf(career));   // "Test Air"
+        Assert.Equal("TEST", CareerService.AirlineTelephonyOf(career));
+
+        await _svc.UpdateAirlineAsync("Sky Career Air", " sca ", "", "Jane", "eddm");
+        career = await _svc.GetCareerAsync();
+        Assert.Equal(("Sky Career Air", "SCA", null, "Jane", "EDDM"), (career.AirlineName, career.AirlineIcao, career.AirlineTelephony, career.Name, career.HomeBase));
+        Assert.Equal("SKY CAREER", CareerService.AirlineTelephonyOf(career));
+        Assert.Equal("SCA1234", CareerService.CallsignOf(career, new MissionContract { MissionTypeId = "x", Origin = "A", Destination = "B", FlightNumber = 1234 }));
+
+        await Assert.ThrowsAsync<CareerException>(() => _svc.UpdateAirlineAsync("Sky Career Air", "SC1", null, "Jane", "EDDM"));
+        await Assert.ThrowsAsync<CareerException>(() => _svc.UpdateAirlineAsync("Sky Career Air", null, "SKY-CAREER", "Jane", "EDDM"));
+        await Assert.ThrowsAsync<CareerException>(() => _svc.UpdateAirlineAsync("Sky Career Air", null, null, "Jane", "ZZZZ"));
+        await Assert.ThrowsAsync<CareerException>(() => _svc.UpdateAirlineAsync(" ", null, null, "Jane", "EDDM"));
+
+        // Key figures after a flight.
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(CargoSearch);
+        var job = (await OffersAsync()).First();
+        await _svc.AcceptAsync(job.Id);
+        await _svc.DebugCompleteContractAsync(job.Id);
+        var o = await _svc.GetAirlineOverviewAsync();
+        Assert.Equal((0, 0, 1, 1), (o.Owned, o.Leased, o.Rented, o.Flights));
+        Assert.True(o.Revenue > 0 && o.BlockHours > 0);
+        Assert.NotNull(o.OnTimeShare);
+        Assert.Equal(StandardMissionGenerator.ReputationFactor(o.Reputation) - 1, o.PayBonus);
+    }
+
+    [Fact]
     public async Task Return_flights_are_accepted_and_paid_as_a_package()
     {
         var (outbound, back) = await CharterPackageAsync();

@@ -24,6 +24,9 @@ airline career: accept jobs, build a fleet, keep costs under control and earn re
   range and runway requirements. Big cities and capitals are preferred destinations; military airfields are only open to
   military aircraft. Scheduled and charter flights are usually well booked, and the pay follows the load factor. Some jobs
   come as an outbound and return package ("Round trip") with a bonus when both legs are flown.
+- **Your airline** – name, ICAO code and radio callsign (derived from the name or set by you), pilot, home base and key
+  figures such as flights, block hours, punctuality and revenue. Every job has a flight number: scheduled flights keep one
+  per route, return flights take the next even number.
 - **Fleet and finances** – buy, lease or rent aircraft; fuel, fees, crew, maintenance and insurance are booked
   realistically. Aircraft can be repositioned by ferry flight. The remaining fuel stays in the aircraft and is set in the
   simulator for the next job; you only pay for what is uplifted. The wear MSFS 2024 reports during a flight (landing gear,
@@ -82,8 +85,8 @@ Game time only passes through flights and deliberate waiting (title bar) – bre
 ## Integrations
 
 ### SimBrief
-"Plan in SimBrief" opens the dispatch page with route, passengers, cargo and the exact zero fuel weight of the load
-sheet. SimBrief keeps the passenger count and plans exactly this ZFW, so fuel planning matches the flight whatever empty
+"Plan in SimBrief" opens the dispatch page with route, airline ICAO code, flight number and callsign (e.g. SCA1234),
+passengers, cargo and the exact zero fuel weight of the load sheet. SimBrief keeps the passenger count and plans exactly this ZFW, so fuel planning matches the flight whatever empty
 weight your SimBrief airframe has; it adjusts the freight in the OFP to make up the difference. SimBrief splits passengers
 and baggage with the weights of the selected airframe; with the same values under **Settings → Loading** (default: 175 lbs
 per passenger, 50 lbs per bag) the freight in the OFP matches the job as well.

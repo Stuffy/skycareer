@@ -27,7 +27,10 @@ public sealed class Career
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string Name { get; set; }
     public required string AirlineName { get; set; }
+    /// <summary>ICAO designator (3 letters) for callsigns and SimBrief; null = derived from the name (<see cref="AirlineCodes"/>).</summary>
     public string? AirlineIcao { get; set; }
+    /// <summary>Radiotelephony callsign ("SKY CAREER"); null = derived from the name.</summary>
+    public string? AirlineTelephony { get; set; }
     public required string HomeBase { get; set; }
     public Difficulty Difficulty { get; set; } = Difficulty.Normal;
     public decimal Cash { get; set; }
@@ -145,6 +148,8 @@ public sealed class MissionContract
     public Guid? PackageId { get; set; }
     /// <summary>1 = outbound, 2 = return leg of a package.</summary>
     public int? PackageLeg { get; set; }
+    /// <summary>Flight number (1–9999): fixed per route for scheduled flights, random otherwise, return legs +1.</summary>
+    public int? FlightNumber { get; set; }
     /// <summary>Market stream the offer was generated from (career seed, game date, origin, aircraft, search).</summary>
     public string? MarketStream { get; set; }
     /// <summary>Attempt number within <see cref="MarketStream"/>; the next search of the stream continues after the highest.</summary>
@@ -178,6 +183,8 @@ public sealed class FlightRecord
     public int Score { get; set; }
     public decimal Revenue { get; set; }
     public decimal Costs { get; set; }
+    /// <summary>The job's flight number (callsign = airline ICAO + number); null for flights from before 0.3.</summary>
+    public int? FlightNumber { get; set; }
     public FlightOutcome Outcome { get; set; }
     public string Notes { get; set; } = "";
     public string? TrackFile { get; set; }

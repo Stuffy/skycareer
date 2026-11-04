@@ -255,5 +255,9 @@
   "{0} is unavailable until {1:g} ({2}).": "{0} ist bis {1:g} nicht verfügbar ({2}).",
   "{0} until {1:dd.MM. HH:mm}": "{0} bis {1:dd.MM. HH:mm}",
   "{0} – repair recommended": "{0} – Reparatur empfohlen",
-  "“{0}” in the sim, {1} required. If this is the right type, add it to the profile's sim matching.": "Im Sim „{0}“, verlangt {1}. Falls das der richtige Typ ist: Sim-Erkennung im Profil ergänzen."
+  "“{0}” in the sim, {1} required. If this is the right type, add it to the profile's sim matching.": "Im Sim „{0}“, verlangt {1}. Falls das der richtige Typ ist: Sim-Erkennung im Profil ergänzen.",
+  "Please enter a pilot name.": "Bitte einen Pilotennamen eingeben.",
+  "Please enter an airline name.": "Bitte einen Airline-Namen eingeben.",
+  "The ICAO code needs exactly three letters (A–Z).": "Der ICAO-Code braucht genau drei Buchstaben (A–Z).",
+  "The radio callsign needs 2–30 letters (A–Z) and spaces.": "Der Funkrufname braucht 2–30 Buchstaben (A–Z) und Leerzeichen."
 }

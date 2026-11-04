@@ -23,7 +23,13 @@ else
                 <tr title="@f.Notes" id="@($"flight-{f.Id}")" style="@(f.Id == Flight ? "background:var(--mud-palette-action-default-hover)" : null)">
                     <td>@f.ArrivedGameTime.ToString("dd.MM.yy HH:mm")</td>
                     <td>@(Career.Content.MissionTypes.FirstOrDefault(m => m.Id == f.MissionTypeId)?.DisplayName ?? f.MissionTypeId)</td>
-                    <td>@f.Origin → @f.Destination@(f.ArrivedAt != f.Destination ? F(" (landed at {0})", f.ArrivedAt) : "")</td>
+                    <td>
+                        @f.Origin → @f.Destination@(f.ArrivedAt != f.Destination ? F(" (landed at {0})", f.ArrivedAt) : "")
+                        @if (f.FlightNumber is { } number)
+                        {
+                            <br /><MudText Typo="Typo.caption">@AirlineCodes.Callsign(_airlineIcao, number)</MudText>
+                        }
+                    </td>
                     <td>@(_registrations.GetValueOrDefault(f.AircraftId, "–"))</td>
                     <td>@f.BlockHours.ToString("N1") h</td>
                     <td>@f.TouchdownFpm.ToString("N0") fpm / @f.MaxGForce.ToString("N2") G</td>
@@ -79,8 +85,11 @@ else
         }
     }
 
+    private string _airlineIcao = "";
+
     protected override async Task LoadAsync()
     {
+        _airlineIcao = CareerService.AirlineIcaoOf(await Career.GetCareerAsync());
         _flights = await Career.GetFlightsAsync();
         _registrations = (await Career.GetFleetAsync()).ToDictionary(f => f.Id, f => f.Registration);
         _receipts = (await Career.GetGsxReceiptsAsync()).Where(r => r.ContractId is not null)

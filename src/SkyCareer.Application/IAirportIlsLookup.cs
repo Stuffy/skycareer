@@ -23,3 +23,7 @@ public interface IAirportIlsLookup
 /// <param name="IlsChecked">Airports newly checked for ILS in the simulator during this search.</param>
 /// <param name="IlsUnavailable">ILS was required but the simulator wasn't available, so only already known ILS airports were used.</param>
 public sealed record MarketSearchResult(int Created, int IlsChecked, bool IlsUnavailable);
+
+/// <summary>Key figures of the airline (fleet by ownership, flights, punctuality, money, reputation).</summary>
+public sealed record AirlineOverview(int Owned, int Leased, int Rented, int Flights, double BlockHours, double DistanceNm,
+    double? OnTimeShare, double? AverageScore, decimal Revenue, decimal Costs, int Reputation, decimal PayBonus, decimal Cash);

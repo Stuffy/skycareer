@@ -38,6 +38,11 @@ public sealed class FlightSession
     private Telemetry? _first, _last;
     private double _distanceNm, _maxG = 1, _minG = 1, _overspeedSec, _stallSec;
     private double? _fuelAtBlockOff;
+    /// <summary>
+    /// Fuel when the aircraft was confirmed parked. Ending the flight in MSFS resets the aircraft to its defaults (Citation X:
+    /// 50 % fuel, 2026-11-03) before the settlement, so the final fuel and burn come from block-on, not the last sample.
+    /// </summary>
+    private double? _fuelAtBlockOn;
     private readonly List<string> _notes = [];
     private DateTimeOffset? _restartedAt;
 
@@ -54,6 +59,7 @@ public sealed class FlightSession
         {
             // From block-off on, adding fuel is a violation: what's in the tanks now is what was bought for this flight.
             if (change.From == FlightPhase.Preflight) _fuelAtBlockOff ??= change.At.FuelKg;
+            if (change.To == FlightPhase.Arrived) _fuelAtBlockOn ??= change.At.FuelKg;
             if (change.To == FlightPhase.TakeoffRoll) Integrity.LockPayload(change.At.PayloadKg);
             else if (change.From == FlightPhase.TakeoffRoll && change.To == FlightPhase.TaxiOut) Integrity.UnlockPayload();
         };
@@ -169,7 +175,7 @@ public sealed class FlightSession
         Phases.LandingTime,
         Phases.BlockOn,
         _distanceNm,
-        _last is null ? 0 : Math.Max(0, (_fuelAtBlockOff ?? _first?.FuelKg ?? 0) - _last.FuelKg),
+        _last is null ? 0 : Math.Max(0, (_fuelAtBlockOff ?? _first?.FuelKg ?? 0) - (_fuelAtBlockOn ?? _last.FuelKg)),
         _maxG,
         _minG,
         (int)_overspeedSec,
@@ -181,6 +187,6 @@ public sealed class FlightSession
         Resumed,
         ManualPhaseChanges,
         _fuelAtBlockOff,
-        _last?.FuelKg ?? 0,
+        _fuelAtBlockOn ?? _last?.FuelKg ?? 0,
         _notes);
 }

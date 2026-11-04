@@ -36,6 +36,24 @@ public class FlightTrackingTests
     }
 
     [Fact]
+    public void Final_fuel_comes_from_block_on_when_the_sim_resets_the_aircraft_afterwards()
+    {
+        var session = Run(SyntheticFlight.Standard().Samples);
+        var parked = session.Summarize();
+        Assert.Equal(FlightPhase.Arrived, session.Phases.Phase);
+
+        // Ending the flight in MSFS before the settlement: 50 % fuel and other payload (Citation X, 2026-11-03).
+        var last = session.Samples[^1];
+        for (int i = 1; i <= 10; i++)
+            session.Process(last with { Timestamp = last.Timestamp.AddSeconds(i), FuelKg = 2933, PayloadKg = 123 });
+
+        var settled = session.Summarize();
+        Assert.Equal(parked.FinalFuelKg, settled.FinalFuelKg, 3);
+        Assert.Equal(parked.FuelUsedKg, settled.FuelUsedKg, 3);
+        Assert.NotEqual(2933, settled.FinalFuelKg);
+    }
+
+    [Fact]
     public void Touchdown_reports_rate_and_peak_g()
     {
         var session = Run(SyntheticFlight.Standard(touchdownFpm: -420, touchdownG: 1.65).Samples);

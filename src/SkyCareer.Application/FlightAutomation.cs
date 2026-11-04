@@ -79,6 +79,8 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     /// <summary>When the start wear was last tried per job, so a failing read is retried but not every tick.</summary>
     private readonly Dictionary<Guid, DateTime> _wearTried = [];
     private readonly HashSet<Guid> _wearFromResume = [];
+    /// <summary>The sim's wear read once the job's aircraft is parked, before ending the flight in MSFS can reset it.</summary>
+    private readonly Dictionary<Guid, AircraftWear> _wearAtArrival = [];
     /// <summary>Jobs settled from their journal alone (another aircraft is loaded): no GSX wait, no sim wear.</summary>
     private readonly HashSet<Guid> _offline = [];
     /// <summary>Journal ends of in-progress jobs that weren't picked up, so a journal is read once, not every tick.</summary>
@@ -215,6 +217,9 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             Waiting = null;
             return;
         }
+        if (phase == FlightPhase.Arrived && !_offline.Contains(job.Id) && !_wearAtArrival.ContainsKey(job.Id) && job.SimWearAtStart is not null
+            && await host.ReadWearAsync() is { } arrivalWear)
+            _wearAtArrival[job.Id] = arrivalWear;
         if (phase == FlightPhase.Arrived && !_offline.Contains(job.Id) && _settleNow != job.Id.ToString() && WaitForGroundServices(job, t)) return;
         _settleNow = null;
         Waiting = null;
@@ -331,7 +336,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             AppLog.Warn("Wear", $"No start wear stored for {job.Origin} → {job.Destination}; components stay unchanged");
             return null;
         }
-        if (await host.ReadWearAsync() is not { } end)
+        if ((_wearAtArrival.Remove(job.Id, out var parked) ? parked : await host.ReadWearAsync()) is not { } end)
         {
             AppLog.Warn("Wear", "MSFS wear not readable after the flight; components stay unchanged");
             return null;

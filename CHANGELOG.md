@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.1 – 2026-11-06
 
 ### Fixed
 - **Fuel after restarting MSFS:** when the next job was prepared right after parking and MSFS was closed before the

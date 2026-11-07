@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.4.0 – 2026-11-07
 
 ### Added
 - **Reputation for GSX services:** catering, cabin cleaning, potable water and lavatory service completed in GSX Pro

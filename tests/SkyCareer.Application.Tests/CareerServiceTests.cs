@@ -10,6 +10,7 @@ using SkyCareer.Integrations.Gsx;
 using SkyCareer.Missions;
 using SkyCareer.Missions.Departure;
 using SkyCareer.Missions.Generation;
+using SkyCareer.Missions.Settlement;
 using SkyCareer.Sim;
 using SkyCareer.Sim.Tracking;
 
@@ -905,6 +906,51 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.False(host.HasSession);
         Assert.Single(await _svc.GetContractsAsync(ContractStatus.Completed));
         Assert.Equal(job.Destination, (await _svc.GetFleetAsync()).Single().Location);
+    }
+
+    [Fact]
+    public async Task Gsx_services_at_liftoff_are_stored_but_earn_nothing_on_a_cargo_flight()
+    {
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        Assert.Equal(0, job.TotalPassengers);
+        automation.PreDepartureServices = id => id == job.Id ? [GroundService.Catering, GroundService.Cleaning] : [];
+
+        await FlyCaravanJobAsync(automation, host, job, parked);
+
+        var done = Assert.Single(await _svc.GetContractsAsync(ContractStatus.Completed));
+        Assert.Equal([GroundService.Catering, GroundService.Cleaning], done.GroundServiceList);
+        Assert.DoesNotContain(automation.LastSettlement!.Notes, n => n.Contains("GSX services"));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(3, 2)]
+    public async Task Gsx_services_before_departure_raise_the_reputation_of_a_passenger_flight(int services, int bonus)
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter" } }, rng: new Random(8));
+        var job = (await OffersAsync()).Where(o => o.TotalPassengers > 0).OrderBy(o => o.DistanceNm).First();
+        var dest = (await _svc.FindAirportAsync(job.Destination))!;
+        await _svc.AcceptAsync(job.Id);
+        await _svc.StartFlightAsync(job.Id, groundServices: Enum.GetValues<GroundService>().Take(services).ToList());
+
+        var stored = (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single();
+        Assert.Equal(services, stored.GroundServiceList.Count);
+        Assert.Equal(bonus, FlightSettlement.GroundServiceBonus(stored));
+
+        var s = await _svc.CompleteFlightAsync(job.Id, new FlightResult
+        {
+            BlockTime = TimeSpan.FromHours(job.DistanceNm / 175 + 0.3), AirTime = TimeSpan.FromHours(job.DistanceNm / 175),
+            DistanceFlownNm = job.DistanceNm, FuelUsedKg = job.DistanceNm, TouchdownFpm = -150, MaxGForce = 1.2,
+            FinalPosition = dest.Position, Parked = true
+        });
+
+        var baseRep = s.Outcome == FlightOutcome.Late ? -1 : 1 + (s.Score.Total >= 85 ? 1 : 0) + (s.Score.Total >= 95 ? 1 : 0);
+        Assert.Equal(baseRep + bonus, s.ReputationChange);
+        if (bonus > 0) Assert.Contains(s.Notes, n => n.Contains($"(+{bonus} reputation)"));
+        else Assert.DoesNotContain(s.Notes, n => n.Contains("GSX services"));
     }
 
     [Fact]

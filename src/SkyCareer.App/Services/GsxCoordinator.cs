@@ -24,6 +24,8 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
     private GsxDeboardingWatch _deboarding = new();
     /// <summary>Deboarding as far as the settlement is concerned (see <see cref="GsxDeboardingWatch"/>).</summary>
     private GsxServiceState _deboardingState;
+    /// <summary>Optional services (catering, cleaning, water, lavatory) completed while the job was prepared.</summary>
+    private GsxServiceWatch _services = new();
     /// <summary>A job to switch to once the deboarding of the current (departed) one is over.</summary>
     private (Guid Id, LoadSheet Sheet, bool Sync, bool Costs, bool Departed)? _next;
 
@@ -69,6 +71,7 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
             _sync = new GsxLoadSync(departed);
             _deboarding = new GsxDeboardingWatch();
             _deboardingState = GsxServiceState.Unknown;
+            _services = new GsxServiceWatch();
             State = null;
             Mismatch = LastAction = LastError = null;
             _cts = new CancellationTokenSource();
@@ -88,6 +91,12 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
             GsxServiceState.Requested or GsxServiceState.Performing => GroundServiceState.InProgress,
             _ => GroundServiceState.NotStarted
         };
+    }
+
+    /// <summary>GSX services completed before departure for this job (empty for any other); stored with the job at liftoff.</summary>
+    public IReadOnlyList<Domain.Career.GroundService> PreDepartureServices(Guid contractId)
+    {
+        lock (_lock) return ContractId == contractId ? [.. _services.Completed] : [];
     }
 
     public void SetSyncEnabled(bool enabled)
@@ -155,6 +164,8 @@ public sealed class GsxCoordinator(FlightMonitorService monitor) : IAsyncDisposa
         if (thisJob && monitor.Phase is >= FlightPhase.TakeoffRoll and not FlightPhase.Crashed) _departed = true;
         // Only after departure: a deboarding still shown at the origin belongs to the previous flight.
         _deboardingState = _departed ? _deboarding.Observe(state) : state.Deboarding;
+        if (thisJob && !_departed)
+            lock (_lock) _services.Observe(state);
         var sheet = _sheet;
         if (sheet is null) return;
         Mismatch = GsxLoadSync.PassengerMismatch(state, sheet.Passengers);

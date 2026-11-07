@@ -23,6 +23,10 @@ public sealed record GsxState
     public GsxServiceState Catering { get; init; }
     public GsxServiceState Departure { get; init; }
     public GsxServiceState Deice { get; init; }
+    /// <summary>Optional services from the second batch (<see cref="GsxClient.ServiceVariables"/>); Unknown when not published.</summary>
+    public GsxServiceState Cleaning { get; init; }
+    public GsxServiceState Water { get; init; }
+    public GsxServiceState Lavatory { get; init; }
     public int PassengersBoarded { get; init; }
     public int PassengersBoardingTotal { get; init; }
     public int PassengersDeboarded { get; init; }
@@ -64,7 +68,38 @@ public sealed class GsxClient(IAircraftInspector inspector)
         "L:FSDT_GSX_FUELHOSE_CONNECTED"
     ];
 
-    public async Task<GsxState> ReadAsync(CancellationToken ct = default) => FromValues(await inspector.ReadVariablesAsync(Variables, ct));
+    /// <summary>
+    /// Optional services in a second batch (the first holds 14 of 16 variables). The names follow the pattern of the others
+    /// and must be confirmed in the sim; unknown L:Vars read 0, so a wrong name only means the service is never seen.
+    /// </summary>
+    public static readonly string[] ServiceVariables =
+    [
+        "L:FSDT_GSX_CLEANING_STATE",
+        "L:FSDT_GSX_WATER_STATE",
+        "L:FSDT_GSX_LAVATORY_STATE"
+    ];
+
+    public async Task<GsxState> ReadAsync(CancellationToken ct = default)
+    {
+        var state = FromValues(await inspector.ReadVariablesAsync(Variables, ct));
+        if (!state.Detected) return state;
+        try
+        {
+            return WithServices(state, await inspector.ReadVariablesAsync(ServiceVariables, ct));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            // The optional services must never break the boarding sync.
+            return state;
+        }
+    }
+
+    public static GsxState WithServices(GsxState state, IReadOnlyList<double> v) => state with
+    {
+        Cleaning = State(v[0]),
+        Water = State(v[1]),
+        Lavatory = State(v[2])
+    };
 
     public static GsxState FromValues(IReadOnlyList<double> v) => new()
     {

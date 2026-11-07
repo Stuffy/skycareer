@@ -371,5 +371,7 @@
   "Late": "Verspätet",
   "Not at destination": "Nicht am Ziel",
   "Cancelled": "Annulliert",
-  "Scheduled": "Linie"
+  "Scheduled": "Linie",
+  "GSX services before departure: {0} (+{1} reputation)": "GSX-Services vor dem Abflug: {0} (+{1} Reputation)",
+  "GSX services before departure: {0} (no reputation bonus without passengers)": "GSX-Services vor dem Abflug: {0} (ohne Passagiere kein Reputationsbonus)"
 }

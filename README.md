@@ -107,6 +107,10 @@ amount (converted to euros) in the ledger. The model costs for fuel, handling an
 fuel uplifted without GSX is free. The receipts can be opened from Finances and the logbook and printed or saved as PDF
 from there. With GSX in use, the settlement waits for deboarding so its receipts belong to the flight.
 
+Catering, cabin cleaning, potable water and lavatory service completed in GSX before departure earn +1 reputation each,
+at most +2 per flight, on passenger flights that reach their destination. Only services requested for the current job
+count; the job card lists them.
+
 ### BeyondATC
 BeyondATC has no public interface. "Flight plan (.pln)" saves an MSFS flight plan to `Documents\SkyCareer\Flugplaene`,
 which BeyondATC (VFR › file import) and the EFB can load. For IFR flights BeyondATC uses the current SimBrief OFP directly.

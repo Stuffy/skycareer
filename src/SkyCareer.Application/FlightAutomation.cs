@@ -101,6 +101,9 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
     /// <summary>Tells whether the destination's ground services (GSX) are still busy; null = never wait.</summary>
     public Func<Guid, GroundServiceState>? GroundServices { get; set; }
 
+    /// <summary>GSX services (catering, cleaning, water, lavatory) completed before departure; stored with the job at liftoff.</summary>
+    public Func<Guid, IReadOnlyList<GroundService>>? PreDepartureServices { get; set; }
+
     /// <summary>Why the parked job isn't settled yet (waiting for GSX deboarding); null otherwise.</summary>
     public string? Waiting { get; private set; }
 
@@ -278,7 +281,10 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
 
         _notStarted.Remove(job.Id);
         host.DepartureIssues = check!.Penalised.Select(i => $"{i.Label} ({i.Detail})").ToList();
-        await career.StartFlightAsync(job.Id, host.DepartureIssues, host.Summarize()?.FuelAtBlockOffKg);
+        var services = PreDepartureServices?.Invoke(job.Id) ?? [];
+        await career.StartFlightAsync(job.Id, host.DepartureIssues, host.Summarize()?.FuelAtBlockOffKg, services);
+        if (services.Count > 0)
+            AppLog.Info("Flight", $"GSX services before departure: {string.Join(", ", services)}");
         host.Log(host.DepartureIssues.Count == 0
             ? L.F("Job {0} → {1} started", job.Origin, job.Destination)
             : L.F("Job started with {0} deviation(s): {1}", host.DepartureIssues.Count, string.Join("; ", host.DepartureIssues)));

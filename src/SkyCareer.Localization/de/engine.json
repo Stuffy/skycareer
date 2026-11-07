@@ -259,5 +259,9 @@
   "Please enter a pilot name.": "Bitte einen Pilotennamen eingeben.",
   "Please enter an airline name.": "Bitte einen Airline-Namen eingeben.",
   "The ICAO code needs exactly three letters (A–Z).": "Der ICAO-Code braucht genau drei Buchstaben (A–Z).",
-  "The radio callsign needs 2–30 letters (A–Z) and spaces.": "Der Funkrufname braucht 2–30 Buchstaben (A–Z) und Leerzeichen."
+  "The radio callsign needs 2–30 letters (A–Z) and spaces.": "Der Funkrufname braucht 2–30 Buchstaben (A–Z) und Leerzeichen.",
+  "Cabin cleaning": "Kabinenreinigung",
+  "Potable water": "Frischwasser",
+  "Lavatory service": "Toilettenservice",
+  "GSX services before departure: {0} (+{1} reputation).": "GSX-Services vor dem Abflug: {0} (+{1} Reputation)."
 }

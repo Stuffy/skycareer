@@ -516,6 +516,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<DateTime?>("FuelRestoredAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("GroundServices")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Infants")
                         .HasColumnType("INTEGER");
 

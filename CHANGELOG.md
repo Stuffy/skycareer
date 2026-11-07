@@ -2,6 +2,13 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **Reputation for GSX services:** catering, cabin cleaning, potable water and lavatory service completed in GSX Pro
+  before departure earn +1 reputation each (at most +2 per flight) on passenger flights that arrive at their destination.
+  The job card shows which services were counted, the settlement notes the bonus.
+
 ## 0.3.1 – 2026-11-06
 
 ### Fixed

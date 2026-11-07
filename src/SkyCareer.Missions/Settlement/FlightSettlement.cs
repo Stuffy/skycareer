@@ -51,6 +51,21 @@ public static class FlightSettlement
     public const decimal DepartureIssuePenalty = 0.10m;
     /// <summary>All rule violations of one flight together never cost more than this share of the payout.</summary>
     public const decimal MaxViolationPenalty = 0.20m;
+    /// <summary>Reputation per GSX service completed before departure on a passenger flight, at most <see cref="MaxGroundServiceReputation"/>.</summary>
+    public const int GroundServiceReputation = 1;
+    public const int MaxGroundServiceReputation = 2;
+
+    /// <summary>Reputation the GSX services before departure earn: only with passengers aboard.</summary>
+    public static int GroundServiceBonus(MissionContract c) =>
+        c.TotalPassengers > 0 ? Math.Min(MaxGroundServiceReputation, c.GroundServiceList.Count * GroundServiceReputation) : 0;
+
+    public static string GroundServiceText(GroundService service) => service switch
+    {
+        GroundService.Catering => L.T("Catering"),
+        GroundService.Cleaning => L.T("Cabin cleaning"),
+        GroundService.Water => L.T("Potable water"),
+        _ => L.T("Lavatory service")
+    };
 
     /// <summary>Payout share deducted once per kind of rule violation; time acceleration is only noted.</summary>
     public static decimal ViolationPenalty(ViolationType type) => type switch
@@ -139,6 +154,12 @@ public static class FlightSettlement
                     notes.Add(L.F("Not in order at liftoff: {0}", issue));
                 }
                 if (r.DepartureIssues.Count > 0) reputation -= 1;
+                if (GroundServiceBonus(c) is > 0 and var serviceBonus)
+                {
+                    reputation += serviceBonus;
+                    notes.Add(L.F("GSX services before departure: {0} (+{1} reputation).",
+                        string.Join(", ", c.GroundServiceList.Select(GroundServiceText)), serviceBonus));
+                }
                 foreach (var (type, share) in ViolationPenalties(r.Violations))
                     if (share > 0)
                         lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * share, 0), L.F("Rule violation: {0}", ViolationText(type))));

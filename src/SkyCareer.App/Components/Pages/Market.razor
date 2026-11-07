@@ -140,6 +140,10 @@
                 {
                     <MudText Typo="Typo.caption" Class="d-block mt-1">@T("Anything still red at liftoff costs 10 % of the payout each (at most 30 %).")</MudText>
                 }
+                @if (ServicesText(c, Gsx.PreDepartureServices(c.Id)) is { } servicesNow)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block mt-1">@servicesNow</MudText>
+                }
             </MudPaper>
         }
         @if (Departure.Automation.NotStarted.TryGetValue(c.Id, out var notStarted) && !tracking)
@@ -153,6 +157,10 @@
                 @if (Monitor.DepartureIssues.Count > 0)
                 {
                     <br /><span>@F("Deviations at liftoff: {0}", string.Join("; ", Monitor.DepartureIssues))</span>
+                }
+                @if (ServicesText(c, c.GroundServiceList) is { } servicesDone)
+                {
+                    <br /><span>@servicesDone</span>
                 }
             </MudAlert>
         }
@@ -369,6 +377,17 @@
 
     /// <summary>ATC callsign of a job (airline ICAO + flight number), as sent to SimBrief.</summary>
     private string Callsign(MissionContract c) => AirlineCodes.Callsign(_airlineIcao, CareerService.FlightNumberOf(c));
+
+    /// <summary>GSX services completed before departure and the reputation they earn (none without passengers).</summary>
+    private static string? ServicesText(MissionContract c, IReadOnlyList<GroundService> services)
+    {
+        if (services.Count == 0) return null;
+        string names = string.Join(", ", services.Select(FlightSettlement.GroundServiceText));
+        return c.TotalPassengers > 0
+            ? F("GSX services before departure: {0} (+{1} reputation)", names,
+                Math.Min(FlightSettlement.MaxGroundServiceReputation, services.Count * FlightSettlement.GroundServiceReputation))
+            : F("GSX services before departure: {0} (no reputation bonus without passengers)", names);
+    }
     private int _page;
     private int PageCount => (VisibleOffers.Count() + PageSize - 1) / PageSize;
     private List<MissionContract> _offers = [], _active = [];

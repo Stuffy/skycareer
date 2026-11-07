@@ -136,6 +136,8 @@ public sealed class MissionContract
     public DateTime? FlightStartedAtUtc { get; set; }
     /// <summary>Departure checks that were red at liftoff, one per line; each costs part of the payout at settlement.</summary>
     public string? DepartureIssues { get; set; }
+    /// <summary>GSX services completed before departure (<see cref="GroundServiceCodec"/> text), stored at liftoff; earn reputation.</summary>
+    public string? GroundServices { get; set; }
     /// <summary>When the aircraft's stored fuel was set in the sim for this job; it's done once so later uplift stays.</summary>
     public DateTime? FuelRestoredAtUtc { get; set; }
     /// <summary>The sim's wear components when the job was armed (<see cref="Aircraft.AircraftWear"/> text); the settlement uses the difference.</summary>
@@ -160,6 +162,7 @@ public sealed class MissionContract
     public int TotalPassengers => Adults + Children + Infants;
     public IReadOnlyList<string> DepartureIssueList =>
         string.IsNullOrEmpty(DepartureIssues) ? [] : DepartureIssues.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    public IReadOnlyList<GroundService> GroundServiceList => GroundServiceCodec.Parse(GroundServices);
 }
 
 public sealed class FlightRecord

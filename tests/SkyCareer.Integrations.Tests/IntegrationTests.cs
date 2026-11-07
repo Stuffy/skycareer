@@ -1,5 +1,6 @@
 using SkyCareer.Domain;
 using SkyCareer.Domain.Aircraft;
+using SkyCareer.Domain.Career;
 using SkyCareer.Domain.Loading;
 using SkyCareer.Domain.World;
 using SkyCareer.Integrations.BeyondAtc;
@@ -206,6 +207,48 @@ public class GsxCrewTests
         Assert.Equal(GsxServiceState.Completed, watch.Observe(idle));
         Assert.Equal(GsxServiceState.Completed, watch.Observe(idle with { Deboarding = GsxServiceState.Completed }));
         Assert.Equal(GsxServiceState.Unknown, watch.Observe(GsxState.NotRunning));
+    }
+
+    [Fact]
+    public void Gsx_services_count_only_when_seen_running_for_this_job()
+    {
+        var watch = new GsxServiceWatch();
+        // Catering still shows Completed from the last flight at sim start: not counted.
+        var idle = new GsxState { Boarding = GsxServiceState.Callable, Catering = GsxServiceState.Completed, Cleaning = GsxServiceState.Callable };
+        watch.Observe(idle);
+        Assert.Empty(watch.Completed);
+
+        // Cleaning requested, performed and completed.
+        watch.Observe(idle with { Cleaning = GsxServiceState.Requested });
+        watch.Observe(idle with { Cleaning = GsxServiceState.Performing });
+        watch.Observe(idle with { Cleaning = GsxServiceState.Completed });
+        Assert.Equal([GroundService.Cleaning], watch.Completed);
+
+        // Catering runs again and drops straight back to Callable (Completed not polled): counted, once.
+        watch.Observe(idle with { Catering = GsxServiceState.Performing });
+        watch.Observe(idle with { Catering = GsxServiceState.Callable });
+        watch.Observe(idle with { Catering = GsxServiceState.Performing });
+        watch.Observe(idle with { Catering = GsxServiceState.Completed });
+        Assert.Equal([GroundService.Cleaning, GroundService.Catering], watch.Completed);
+
+        // Water requested but cancelled (never performed): not counted; GSX gone: nothing changes.
+        watch.Observe(idle with { Water = GsxServiceState.Requested });
+        watch.Observe(idle with { Water = GsxServiceState.Callable });
+        watch.Observe(GsxState.NotRunning);
+        Assert.Equal(2, watch.Completed.Count);
+    }
+
+    [Fact]
+    public void Gsx_reads_the_optional_services_from_a_second_batch()
+    {
+        var state = GsxClient.WithServices(GsxClient.FromValues(new double[GsxClient.Variables.Length]), [6, 5, 0]);
+        Assert.Equal(GsxServiceState.Completed, state.Cleaning);
+        Assert.Equal(GsxServiceState.Performing, state.Water);
+        Assert.Equal(GsxServiceState.Unknown, state.Lavatory);
+        Assert.True(GsxClient.Variables.Length <= 16 && GsxClient.ServiceVariables.Length <= 16);
+        Assert.Equal("Catering,Cleaning", GroundServiceCodec.Serialize([GroundService.Cleaning, GroundService.Catering, GroundService.Cleaning]));
+        Assert.Equal([GroundService.Catering, GroundService.Lavatory], GroundServiceCodec.Parse("Catering, Lavatory,Unknown"));
+        Assert.Null(GroundServiceCodec.Serialize([]));
     }
 
     [Fact]

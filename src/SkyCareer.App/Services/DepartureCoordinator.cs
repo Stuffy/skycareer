@@ -23,7 +23,7 @@ public sealed class DepartureCoordinator : IDisposable
         _monitor = monitor;
         _career = career;
         _gsx = gsx;
-        Automation = new FlightAutomation(career, monitor) { GroundServices = gsx.GroundServices };
+        Automation = new FlightAutomation(career, monitor) { GroundServices = gsx.GroundServices, PreDepartureServices = gsx.PreDepartureServices };
         Automation.Armed += OnArmed;
         Automation.Resumed += OnResumed;
         Automation.Changed += () => Changed?.Invoke();

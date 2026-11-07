@@ -754,8 +754,12 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         Changed?.Invoke();
     }
 
-    /// <summary>Marks the job as flying (at liftoff) and stores the red departure checks for the settlement.</summary>
-    public async Task StartFlightAsync(Guid contractId, IReadOnlyList<string>? departureIssues = null, double? fuelAtBlockOffKg = null)
+    /// <summary>
+    /// Marks the job as flying (at liftoff) and stores the red departure checks and the GSX services completed before
+    /// departure for the settlement.
+    /// </summary>
+    public async Task StartFlightAsync(Guid contractId, IReadOnlyList<string>? departureIssues = null, double? fuelAtBlockOffKg = null,
+        IReadOnlyList<GroundService>? groundServices = null)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
@@ -768,6 +772,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         c.FlightStartedAtUtc = DateTime.UtcNow;
         c.FuelAtBlockOffKg = fuelAtBlockOffKg;
         c.DepartureIssues = departureIssues is { Count: > 0 } ? string.Join('\n', departureIssues) : null;
+        c.GroundServices = GroundServiceCodec.Serialize(groundServices);
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }

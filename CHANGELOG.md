@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.5.0 – 2026-11-15
 
 ### Added
 - **Navigation for bush and VFR flights:** every job card shows the course (magnetic while connected to MSFS), distance

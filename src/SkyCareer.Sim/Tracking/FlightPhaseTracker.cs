@@ -18,7 +18,7 @@ public enum FlightPhase
 public sealed record PhaseChange(FlightPhase From, FlightPhase To, Telemetry At);
 
 public sealed record TouchdownReport(DateTimeOffset Time, double VerticalSpeedFpm, double GForce, double GroundSpeedKt,
-    double Latitude, double Longitude, int Bounces);
+    double Latitude, double Longitude, int Bounces, Domain.Career.LandingConditions? Conditions = null);
 
 /// <summary>
 /// Derives the flight phase from a telemetry stream. Transitions require their condition to hold for a
@@ -256,7 +256,7 @@ public sealed class FlightPhaseTracker
         double vs = t.TouchdownVsFpm != 0 ? t.TouchdownVsFpm : _last?.VerticalSpeedFpm ?? t.VerticalSpeedFpm;
         double g = Math.Max(t.GForce, _last?.GForce ?? 1);
 
-        var report = new TouchdownReport(t.Timestamp, vs, g, t.GroundSpeedKt, t.Latitude, t.Longitude, 0);
+        var report = new TouchdownReport(t.Timestamp, vs, g, t.GroundSpeedKt, t.Latitude, t.Longitude, 0, t.Conditions);
         _touchdowns.Add(report);
         _pendingTouchdown = report;
         _touchdownAt = t.Timestamp;

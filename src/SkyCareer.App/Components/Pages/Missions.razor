@@ -29,7 +29,13 @@
             var result = Selected is null ? null : RequirementEvaluator.Evaluate(m, Selected);
             bool locked = m.MinReputation > _reputation;
             <tr>
-                <td><b>@m.DisplayName</b><br /><MudText Typo="Typo.caption">@m.DisplayDescription</MudText></td>
+                <td>
+                    <b>@m.DisplayName</b><br /><MudText Typo="Typo.caption">@m.DisplayDescription</MudText>
+                    @foreach (var rule in MissionTexts.SpecialRules(m))
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block" Color="Color.Warning">@rule</MudText>
+                    }
+                </td>
                 <td>@MissionTexts.Category(m.Category)</td>
                 <td>@m.Distance.MinNm.ToString("N0")–@m.Distance.MaxNm.ToString("N0") nm</td>
                 <td>@MissionTexts.Destinations(m.Destinations)</td>

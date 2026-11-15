@@ -77,6 +77,10 @@ window.skyMap = (() => {
                 dashArray: o.accepted ? null : '6 6'
             }).addTo(m.layers);
             line.bindTooltip(o.label, { sticky: true });
+            // Accepted jobs: the arrival radius (3 nm) the settlement checks the parking position against.
+            if (o.accepted) {
+                L.circle(o.to, { radius: 5556, color: o.color, weight: 1.5, opacity: 0.9, fillOpacity: 0.08, interactive: false }).addTo(m.layers);
+            }
             line.on('click', () => m.dotNetRef.invokeMethodAsync('OnOfferClicked', o.id));
             bounds.push(o.from, o.to);
 
@@ -113,6 +117,17 @@ window.skyMap = (() => {
             });
         }
 
+        // Regions in demand this week: a golden outline with a label. Neither takes clicks, so the jobs
+        // and pins inside stay clickable.
+        for (const e of (data.events || [])) {
+            L.rectangle([[e.south, e.west], [e.north, e.east]], {
+                color: '#ffc107', weight: 1.5, dashArray: '6 4', fillColor: '#ffc107', fillOpacity: 0.07, interactive: false
+            }).addTo(m.layers);
+            L.tooltip([e.north, (e.west + e.east) / 2], {
+                content: e.label, permanent: true, direction: 'top', offset: [0, 4], className: 'sc-region-label', interactive: false
+            }).addTo(m.layers);
+        }
+
         for (const f of data.fleet) {
             const marker = L.circleMarker([f.lat, f.lon], {
                 radius: 8,
@@ -142,6 +157,17 @@ window.skyMap = (() => {
         if (lat === null) {
             if (m.live) { m.live.remove(); m.live = null; }
             return;
+        }
+        // Flight path: a point every ~0.2 nm, restarted after a jump (new flight, teleport), at most 2000 points.
+        const here = L.latLng(lat, lon);
+        if (!m.trail) m.trail = L.polyline([], { color: '#ffeb3b', weight: 2, opacity: 0.8, interactive: false }).addTo(m.map);
+        const points = m.trail.getLatLngs();
+        const last = points.length ? points[points.length - 1] : null;
+        if (!last || last.distanceTo(here) > 50000) m.trail.setLatLngs([here]);
+        else if (last.distanceTo(here) > 370) {
+            points.push(here);
+            if (points.length > 2000) points.shift();
+            m.trail.setLatLngs(points);
         }
         if (!m.live) {
             m.live = L.circleMarker([lat, lon], { radius: 7, color: '#ffeb3b', weight: 3, fillColor: '#ff9800', fillOpacity: 1 }).addTo(m.map);

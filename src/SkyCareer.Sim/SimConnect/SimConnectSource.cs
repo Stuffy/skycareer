@@ -170,6 +170,17 @@ public sealed class SimConnectSource : IFlightDataSource, IAircraftLoader, IAirc
         Add("IS SLEW ACTIVE", "bool");
         Add("OVERSPEED WARNING", "bool");
         Add("STALL WARNING", "bool");
+        // Variation = true − magnetic heading, so its sign convention never matters.
+        Add("PLANE HEADING DEGREES MAGNETIC", "degrees");
+        Add("GPS GROUND TRUE TRACK", "degrees");
+        Add("PLANE HEADING DEGREES TRUE", "degrees");
+        Add("PLANE BANK DEGREES", "degrees");
+        Add("PLANE PITCH DEGREES", "degrees");
+        Add("AMBIENT WIND VELOCITY", "knots");
+        Add("AMBIENT WIND DIRECTION", "degrees");
+        Add("AMBIENT VISIBILITY", "meters");
+        Add("ZULU TIME", "seconds");
+        Add("ZULU DAY OF YEAR", "number");
         Add("TITLE", null!, SIMCONNECT_DATATYPE.STRING256);
         sc.RegisterDataDefineStruct<RawTelemetry>(Definition.Telemetry);
     }
@@ -443,6 +454,17 @@ public sealed class SimConnectSource : IFlightDataSource, IAircraftLoader, IAirc
             Crashed = _crashed,
             OverspeedWarning = r.Overspeed != 0,
             StallWarning = r.Stall != 0,
+            MagVar = Domain.World.Navigation.Offset(r.HeadingMagnetic, r.HeadingTrue),
+            TrackTrueDeg = Domain.World.Navigation.Normalize(r.TrackTrue),
+            HeadingTrueDeg = Domain.World.Navigation.Normalize(r.HeadingTrue),
+            BankDeg = r.Bank,
+            PitchDeg = r.Pitch,
+            WindSpeedKt = r.WindKt,
+            WindDirectionDeg = Domain.World.Navigation.Normalize(r.WindDirection),
+            VisibilityM = r.VisibilityM,
+            ZuluSeconds = r.ZuluSeconds,
+            // A day of 0 means the variable wasn't delivered; without it there is no day or night.
+            ZuluDayOfYear = r.ZuluDayOfYear >= 1 ? r.ZuluDayOfYear : null,
             AircraftTitle = r.Title ?? ""
         };
     }
@@ -551,6 +573,8 @@ public sealed class SimConnectSource : IFlightDataSource, IAircraftLoader, IAirc
         public double Latitude, Longitude, AltitudeFt, AltitudeAglFt, GroundSpeedKt, IasKt, VsFpm, GForce;
         public double OnGround, ParkingBrake, Eng1, Eng2, Eng3, Eng4;
         public double FuelLb, TotalWeightLb, EmptyWeightLb, TouchdownFps, SimRate, Slew, Overspeed, Stall;
+        public double HeadingMagnetic, TrackTrue, HeadingTrue;
+        public double Bank, Pitch, WindKt, WindDirection, VisibilityM, ZuluSeconds, ZuluDayOfYear;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string Title;
     }
 

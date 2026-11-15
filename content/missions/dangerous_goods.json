@@ -1,0 +1,18 @@
+{
+  "id": "dangerous_goods",
+  "name": "Dangerous goods",
+  "description": "Hazardous freight for experienced operators. Well paid, but G loads and fast descents beyond the limits are penalised.",
+  "texts": { "de": { "name": "Gefahrgut", "description": "Gefährliche Fracht für erfahrene Betreiber. Gut bezahlt, aber G-Lasten und schnelle Sinkflüge über den Grenzwerten kosten Abzüge." } },
+  "category": "cargo",
+  "requirements": { "requiredTags": ["cargo"], "minCargoKg": 300 },
+  "cargo": { "minKg": 300, "maxKg": 1200, "kinds": ["lithium_batteries", "chemicals", "compressed_gas", "medical_isotopes"] },
+  "distance": { "minNm": 60, "maxNm": 700 },
+  "destinations": { "sizeWeights": { "large": 3, "medium": 3 }, "cityWeight": 1 },
+  "pay": { "base": 1200, "perNm": 2, "perCargoKg": 1.8, "hourlyRateFactor": 1.5, "onTimeBonus": 0.1 },
+  "handling": { "maxGForce": 1.5, "maxSinkFpm": 2000, "penalty": 0.15, "reason": "dangerous" },
+  "scoring": { "gForceWeight": 2, "landingRateWeight": 2, "punctualityWeight": 1, "maxGForce": 1.5, "maxTouchdownFpm": 350 },
+  "simBrief": "optional",
+  "flightRules": "any",
+  "minReputation": 15,
+  "weight": 1
+}

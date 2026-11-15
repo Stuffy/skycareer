@@ -1069,6 +1069,83 @@ public sealed class CareerServiceTests : IAsyncLifetime
         Assert.False(host.HasSession);
     }
 
+    [Fact]
+    public async Task Airfields_are_checked_once_whether_the_sim_knows_them()
+    {
+        var lookup = new FakeIlsLookup(new() { ["EDDM"] = true });
+        var svc = new CareerService(_factory, new ContentStore(ContentLoader.Load(FindContentRoot())),
+            new MissionGeneratorRegistry([new StandardMissionGenerator()]), lookup);
+
+        Assert.Equal(2, await svc.CheckAirportsInSimAsync(["EDDM", "edgz", "XXXX"]));
+        var airports = await svc.GetAirportsAsync(["EDDM", "EDGZ", "EDDS"]);
+        Assert.True(airports["EDDM"].InSim);
+        Assert.False(airports["EDGZ"].InSim);
+        Assert.False(airports["EDGZ"].KnownToSim);
+        Assert.Null(airports["EDDS"].InSim);
+        Assert.True(airports["EDDS"].KnownToSim);   // not asked: an ICAO code is expected in the sim
+        Assert.Equal(0, await svc.CheckAirportsInSimAsync(["EDDM", "EDGZ"]));
+        Assert.Equal(["EDDM", "EDGZ"], lookup.Asked);
+    }
+
+    [Fact]
+    public async Task Passenger_comfort_and_comments_are_kept_in_the_logbook()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.RefreshMarketAsync(new Random(3));
+        var job = (await OffersAsync()).First(o => o.TotalPassengers > 0 && o.PackageId is null);
+        var dest = (await _svc.FindAirportAsync(job.Destination))!;
+        await _svc.AcceptAsync(job.Id);
+        await _svc.StartFlightAsync(job.Id);
+
+        var s = await _svc.CompleteFlightAsync(job.Id, new FlightResult
+        {
+            BlockTime = TimeSpan.FromMinutes(30), AirTime = TimeSpan.FromMinutes(20), FuelUsedKg = 60, TouchdownFpm = -100,
+            FinalPosition = dest.Position, Parked = true,
+            Comfort = new ComfortStats { AirborneSeconds = 1200, SustainedBankDeg = 15, SustainedSinkFpm = 700 }
+        });
+
+        Assert.Equal(100, s.Comfort!.Score);
+        var flight = (await _svc.GetFlightsAsync()).Single();
+        Assert.Equal(100, flight.Comfort);
+        Assert.Equal(s.PassengerComments, flight.PassengerComments!.Split('\n'));
+        Assert.Contains(await _svc.GetLedgerAsync(), l => l.Description.StartsWith("Passenger tip"));
+    }
+
+    [Fact]
+    public async Task A_strip_without_icao_code_is_reached_by_position()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.RefreshMarketAsync(new Random(3));
+        var job = (await OffersAsync()).First(o => o.PackageId is null);
+        await _svc.AcceptAsync(job.Id);
+        var strip = new GeoPosition(49.8, 8.2);
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.Airports.Add(new AirportRow
+            {
+                Ident = "DE-0815", Name = "Farm Strip", Latitude = strip.Latitude, Longitude = strip.Longitude, Size = AirportSize.Small,
+                LongestRunwayM = 600, Surfaces = "Grass", Country = "DE", ElevationFt = 400
+            });
+            var c = await db.Contracts.FindAsync(job.Id);
+            c!.Destination = "DE-0815";
+            await db.SaveChangesAsync();
+        }
+        await _svc.StartFlightAsync(job.Id);
+
+        var s = await _svc.CompleteFlightAsync(job.Id, new FlightResult
+        {
+            BlockTime = TimeSpan.FromMinutes(30), AirTime = TimeSpan.FromMinutes(20), FuelUsedKg = 60, TouchdownFpm = -150,
+            // Parked off the OurAirports reference point, but within the arrival radius.
+            FinalPosition = new GeoPosition(strip.Latitude + 0.02, strip.Longitude), Parked = true
+        });
+
+        Assert.Contains(s.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
+        Assert.Equal("DE-0815", s.FinalLocation);
+        Assert.Equal("DE-0815", (await _svc.GetFleetAsync()).Single().Location);
+    }
+
     private sealed class FakeIlsLookup(Dictionary<string, bool> known) : IAirportIlsLookup
     {
         public bool Available { get; init; } = true;

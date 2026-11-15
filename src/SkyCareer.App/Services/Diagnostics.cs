@@ -44,16 +44,5 @@ public sealed class Diagnostics(FlightMonitorService monitor, UpdateService upda
     }
 
     /// <summary>Copies the report to the Windows clipboard (via WPF, the WebView's clipboard API needs a user gesture).</summary>
-    public async Task CopyReportAsync()
-    {
-        string text = await ReportAsync();
-        try
-        {
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => System.Windows.Clipboard.SetText(text));
-        }
-        catch (System.Runtime.InteropServices.ExternalException ex)
-        {
-            throw new InvalidOperationException(L.T("The clipboard is busy right now – please try again."), ex);
-        }
-    }
+    public async Task CopyReportAsync() => await WindowsClipboard.SetTextAsync(await ReportAsync());
 }

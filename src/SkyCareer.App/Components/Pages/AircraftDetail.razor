@@ -241,6 +241,7 @@ else if (_missing)
         {
             _details = await Career.GetAircraftDetailsAsync(Id);
             _profile = Career.Profile(_details.Aircraft.ProfileId);
+            _location = await Career.FindAirportAsync(_details.Aircraft.Location);
             _missing = false;
         }
         catch (CareerException)
@@ -251,12 +252,16 @@ else if (_missing)
         }
     }
 
+    private Airport? _location;
+
     private IEnumerable<(string Label, string Value, bool Bad)> Overview(FleetAircraft f, AircraftProfile p)
     {
         yield return (T("Status"), FleetTexts.Ownership(f.Ownership), false);
         yield return (T("Location"), f.Location, false);
         yield return (T("Hours / cycles"), $"{f.AirframeHours:N1} h / {f.Cycles}", false);
         yield return (T("Fuel on board"), FleetTexts.Fuel(f, p), false);
+        if (_location is not null)
+            yield return (T("Fuel price here"), F("€{0:0.00}/kg", CostModel.FuelPricePerKg(_economy!, p.FuelType, _location, _gameTime)), false);
         yield return (T("Condition"), $"{f.Condition:N0} %", f.Condition < 70);
         yield return (T("Worst component"), f.Components.Worst is { } w ? $"{w.Component.Name} {w.Level:P0}" : "–", f.Components.WorstLevel < WearComponents.WarningLevel);
         yield return (T("Next check"), f.Ownership == Ownership.Rented ? T("incl.") : F("in {0:N0} h", Math.Max(0, FleetEconomics.CheckIntervalHours(p) - f.HoursSinceCheck)), false);

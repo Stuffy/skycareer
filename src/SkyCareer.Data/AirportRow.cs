@@ -25,13 +25,16 @@ public sealed class AirportRow
     public bool IsCapital { get; set; }
     public bool IsMilitary { get; set; }
 
-    public Airport ToDomain(bool? hasIls = null) => new(Ident, Name, new GeoPosition(Latitude, Longitude), Size, LongestRunwayM,
+    /// <param name="hasIls">ILS status learned from the sim.</param>
+    /// <param name="inSim">Whether the sim knew the airport; null when it hasn't been asked.</param>
+    public Airport ToDomain(bool? hasIls = null, bool? inSim = null) => new(Ident, Name, new GeoPosition(Latitude, Longitude), Size, LongestRunwayM,
         Surfaces.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Enum.Parse<RunwaySurface>).ToList(), Country, ElevationFt)
     {
         LongestPavedRunwayM = LongestPavedRunwayM,
         HasLightedRunway = HasLightedRunway,
         ScheduledService = ScheduledService,
         HasIls = hasIls,
+        InSim = inSim,
         City = City,
         CityPopulation = CityPopulation,
         IsCapital = IsCapital,
@@ -46,7 +49,7 @@ public sealed class AirportRow
 public sealed class AirportFacilityCacheRow
 {
     public required string Ident { get; set; }
-    /// <summary>Null when the sim didn't know the airport.</summary>
+    /// <summary>Null when the sim didn't know the airport (so a row with null means "not in the sim's database").</summary>
     public bool? HasIls { get; set; }
     /// <summary>Runway ends with ILS, e.g. "25C:IFCW 07C:IFCE".</summary>
     public string IlsRunways { get; set; } = "";

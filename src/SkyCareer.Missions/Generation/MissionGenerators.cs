@@ -21,6 +21,8 @@ public sealed record MissionOffer
     public required DateTimeOffset ExpiresAt { get; init; }
     public required Money Payout { get; init; }
     public required LoadSheet PlannedLoad { get; init; }
+    /// <summary>Demand event at the destination that raised the payout; null for none.</summary>
+    public DemandEvent? Demand { get; init; }
     /// <summary>The return leg (destination → origin) when the offer comes as a package; flown after this one.</summary>
     public MissionOffer? Return { get; init; }
 }
@@ -49,6 +51,11 @@ public sealed record GenerationContext(
     public bool VaryBaggage { get; init; }
     /// <summary>The career's reputation (0–100); raises the pay by <see cref="StandardMissionGenerator.ReputationFactor"/>.</summary>
     public int Reputation { get; init; }
+    /// <summary>This week's demand event at an airport (<see cref="DemandEvents.At"/>); null = no events.</summary>
+    public Func<Airport, DemandEvent?>? Demand { get; init; }
+
+    /// <summary>The event at <paramref name="airport"/> if it concerns this mission type.</summary>
+    public DemandEvent? DemandAt(Airport airport) => Demand?.Invoke(airport) is { } e && e.AppliesTo(Type) ? e : null;
 
     /// <summary>
     /// Destinations already used in the current search. Picking one of them again on purpose produces several jobs
@@ -118,7 +125,8 @@ public sealed class StandardMissionGenerator : IMissionGenerator
         double preferred = PreferredDistance(range, minNm, maxNm);
         var (dest, dist) = PickWeighted(candidates,
             c => Math.Pow(DistanceWeight(c.Dist, preferred), Math.Clamp(rule.DistanceInfluence, 0, 1))
-                 * DensityCompensation(c.Dist, preferred) * rule.WeightFor(c.Airport), rng);
+                 * DensityCompensation(c.Dist, preferred) * rule.WeightFor(c.Airport)
+                 * (ctx.DemandAt(c.Airport) is null ? 1 : DemandEvents.DestinationWeight), rng);
 
         var outbound = TryBuild(ctx, origin, dest, dist, now, search);
         if (outbound is null) return null;
@@ -158,7 +166,8 @@ public sealed class StandardMissionGenerator : IMissionGenerator
         }
         if (!sheet.IsWithinLimits || pax.Seated < paxMin || cargo.Kg < cargoMin) return null;
 
-        var payout = new Money(Math.Round(Payout(type, aircraft, dist, pax, cargo).Amount * ReputationFactor(ctx.Reputation), 0));
+        var demand = ctx.DemandAt(to);
+        var payout = new Money(Math.Round(Payout(type, aircraft, dist, pax, cargo).Amount * ReputationFactor(ctx.Reputation) * (demand?.PayFactor ?? 1), 0));
         if (search.PayoutMin is { } minPay && payout.Amount < minPay) return null;
 
         return new MissionOffer
@@ -172,9 +181,10 @@ public sealed class StandardMissionGenerator : IMissionGenerator
             Passengers = pax,
             Cargo = cargo,
             CargoKind = kind,
-            Deadline = start.AddHours(BlockHours(aircraft, dist) * 1.5 + 2),
+            Deadline = start.AddHours(BlockHours(aircraft, dist) * type.Timing.DeadlineFactor + type.Timing.DeadlineSlackHours),
             ExpiresAt = now.AddHours(type.OfferValidityHours),
             Payout = payout,
+            Demand = demand,
             PlannedLoad = sheet
         };
     }

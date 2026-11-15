@@ -2,6 +2,7 @@ using SkyCareer.Domain.Aircraft;
 using SkyCareer.Domain.Finance;
 using SkyCareer.Domain.Loading;
 using SkyCareer.Domain.World;
+using SkyCareer.Localization;
 
 namespace SkyCareer.Missions;
 
@@ -143,6 +144,71 @@ public sealed record ScoringRule
 }
 
 /// <summary>
+/// Limits a sensitive load sets on how the aircraft is flown (a patient, live animals, dangerous goods). Each limit that
+/// was exceeded for more than a moment (see <see cref="Domain.Career.ComfortStats"/>) costs <see cref="Penalty"/> of the
+/// payout, at most <see cref="MaxBreaches"/> times.
+/// </summary>
+public sealed record HandlingRule
+{
+    public const int MaxBreaches = 2;
+
+    public double? MaxGForce { get; init; }
+    public double? MaxBankDeg { get; init; }
+    /// <summary>Highest sink rate in ft/min (positive number).</summary>
+    public double? MaxSinkFpm { get; init; }
+    /// <summary>Payout share per exceeded limit.</summary>
+    public decimal Penalty { get; init; } = 0.10m;
+    /// <summary>Why: "patient", "livestock", "dangerous" or "fragile" (the default).</summary>
+    public string Reason { get; init; } = "fragile";
+
+    public bool HasLimits => MaxGForce is not null || MaxBankDeg is not null || MaxSinkFpm is not null;
+
+    public string ReasonText => Reason switch
+    {
+        "patient" => L.T("Patient on board"),
+        "livestock" => L.T("Live animals"),
+        "dangerous" => L.T("Dangerous goods"),
+        _ => L.T("Fragile load")
+    };
+
+    /// <summary>"max 1.3 G · bank 25° · sink 1,500 fpm".</summary>
+    public string LimitsText => string.Join(" · ", new[]
+    {
+        MaxGForce is { } g ? L.F("max {0:0.0} G", g) : null,
+        MaxBankDeg is { } b ? L.F("bank {0:N0}°", b) : null,
+        MaxSinkFpm is { } s ? L.F("sink {0:N0} fpm", s) : null
+    }.Where(x => x is not null));
+
+    /// <summary>The limits the flight exceeded, worded for the settlement ("bank 34° (max 25°)").</summary>
+    public IReadOnlyList<string> Breaches(Domain.Career.ComfortStats stats)
+    {
+        var breaches = new List<string>();
+        if (MaxGForce is { } g && stats.SustainedG > g) breaches.Add(L.F("{0:0.00} G (max {1:0.0} G)", stats.SustainedG, g));
+        if (MaxBankDeg is { } b && stats.SustainedBankDeg > b) breaches.Add(L.F("bank {0:N0}° (max {1:N0}°)", stats.SustainedBankDeg, b));
+        if (MaxSinkFpm is { } s && stats.SustainedSinkFpm > s) breaches.Add(L.F("sink rate {0:N0} fpm (max {1:N0} fpm)", stats.SustainedSinkFpm, s));
+        return breaches;
+    }
+}
+
+/// <summary>
+/// How tight the job's deadline is and what arriving early is worth. The deadline is the planned block time times
+/// <see cref="DeadlineFactor"/> plus <see cref="DeadlineSlackHours"/> after the offer was made.
+/// </summary>
+public sealed record TimingRule
+{
+    public double DeadlineFactor { get; init; } = 1.5;
+    public double DeadlineSlackHours { get; init; } = 2;
+    /// <summary>Payout share per minute the flight arrives before its deadline (0 = no early bonus).</summary>
+    public decimal PerMinuteEarly { get; init; }
+    /// <summary>Highest early bonus as a share of the payout.</summary>
+    public decimal MaxEarlyBonus { get; init; } = 0.15m;
+
+    /// <summary>Early bonus as a share of the payout for arriving <paramref name="early"/> before the deadline.</summary>
+    public decimal EarlyBonus(TimeSpan early) =>
+        PerMinuteEarly <= 0 || early <= TimeSpan.Zero ? 0 : Math.Min(MaxEarlyBonus, PerMinuteEarly * (decimal)Math.Floor(early.TotalMinutes));
+}
+
+/// <summary>
 /// A mission type as defined in content/missions/*.json. New types are added by dropping a JSON file;
 /// only types with new generation logic need a new <see cref="IMissionGenerator"/>.
 /// </summary>
@@ -156,9 +222,9 @@ public sealed record MissionType
     public IReadOnlyDictionary<string, MissionTypeText> Texts { get; init; } = new Dictionary<string, MissionTypeText>();
 
     /// <summary>Name in the current UI language (falls back to <see cref="Name"/>).</summary>
-    public string DisplayName => Texts.TryGetValue(Localization.L.Language, out var t) && !string.IsNullOrEmpty(t.Name) ? t.Name : Name;
+    public string DisplayName => Texts.TryGetValue(L.Language, out var t) && !string.IsNullOrEmpty(t.Name) ? t.Name : Name;
     public string DisplayDescription =>
-        Texts.TryGetValue(Localization.L.Language, out var t) && !string.IsNullOrEmpty(t.Description) ? t.Description : Description;
+        Texts.TryGetValue(L.Language, out var t) && !string.IsNullOrEmpty(t.Description) ? t.Description : Description;
     public string Category { get; init; } = "general";
     /// <summary>Name of the generator that builds concrete offers; "standard" covers airport-to-airport work.</summary>
     public string Generator { get; init; } = "standard";
@@ -171,6 +237,9 @@ public sealed record MissionType
     /// <summary>Offers may come with a return flight (null = never).</summary>
     public ReturnRule? ReturnFlight { get; init; }
     public ScoringRule Scoring { get; init; } = new();
+    /// <summary>Limits on how the load may be flown (null = none).</summary>
+    public HandlingRule? Handling { get; init; }
+    public TimingRule Timing { get; init; } = new();
     public SimBriefUsage SimBrief { get; init; } = SimBriefUsage.Optional;
     public FlightRulesRequirement FlightRules { get; init; } = FlightRulesRequirement.Any;
     /// <summary>Hours the offer stays on the market before expiring.</summary>

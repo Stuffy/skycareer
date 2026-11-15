@@ -3,6 +3,7 @@
 @inject FlightMonitorService Monitor
 @inject DepartureCoordinator Departure
 @inject AppSettings Settings
+@inject CareerService Career
 @using SkyCareer.Missions.Settlement
 
 <MudText Typo="Typo.h5" Class="mb-4">@T("Live flight")</MudText>
@@ -53,6 +54,31 @@
             <MudSpacer />
             <MudText>@T("Phase:") <b>@MissionTexts.Phase(Monitor.Phase)</b></MudText>
         </MudStack>
+        @if (DestinationOf(jobId) is { } dest && Monitor.Latest is { } now && (now.Latitude != 0 || now.Longitude != 0))
+        {
+            <NavInfo From="now.Position" Destination="dest" SpeedKt="now.GroundSpeedKt" MagVar="now.MagVar"
+                     TrackTrue="@(now.TrackTrueDeg ?? now.HeadingTrueDeg)" Live="true" Class="mt-2" />
+        }
+        @if (_navJob == jobId && _navType?.Handling is { HasLimits: true } handling && Monitor.Latest is { OnGround: false } flying)
+        {
+            double sink = Math.Max(0, -flying.VerticalSpeedFpm), bank = Math.Abs(flying.BankDeg ?? 0);
+            <MudText Typo="Typo.body2" Class="mt-2">
+                <MudIcon Icon="@Icons.Material.Filled.PriorityHigh" Size="Size.Small" Color="Color.Warning" Style="vertical-align:middle" />
+                <b>@handling.ReasonText:</b>
+                @if (handling.MaxGForce is { } maxG)
+                {
+                    <span class="@(flying.GForce > maxG ? "bad" : "ok")"> @flying.GForce.ToString("0.00") / @maxG.ToString("0.0") G</span>
+                }
+                @if (handling.MaxBankDeg is { } maxBank)
+                {
+                    <span class="@(bank > maxBank ? "bad" : "ok")"> · @F("bank {0:N0}° / {1:N0}°", bank, maxBank)</span>
+                }
+                @if (handling.MaxSinkFpm is { } maxSink)
+                {
+                    <span class="@(sink > maxSink ? "bad" : "ok")"> · @F("sink {0:N0} / {1:N0} fpm", sink, maxSink)</span>
+                }
+            </MudText>
+        }
         @if (Departure.Automation.Waiting is { } waiting)
         {
             <MudAlert Severity="Severity.Info" Class="mt-2" ContentAlignment="HorizontalAlignment.Left">
@@ -103,6 +129,22 @@
                         <tr><td>@T("Altitude / AGL")</td><td>@t.AltitudeFt.ToString("N0") ft / @t.AltitudeAglFt.ToString("N0") ft</td></tr>
                         <tr><td>GS / IAS</td><td>@t.GroundSpeedKt.ToString("N0") kt / @t.IndicatedAirspeedKt.ToString("N0") kt</td></tr>
                         <tr><td>V/S</td><td>@t.VerticalSpeedFpm.ToString("N0") fpm</td></tr>
+                        @if (t.BankDeg is { } bankNow)
+                        {
+                            <tr><td>@T("Bank / G")</td><td>@Math.Abs(bankNow).ToString("N0")° / @t.GForce.ToString("0.00") G</td></tr>
+                        }
+                        @if (t.Conditions is { } cond && (cond.WindSpeedKt is not null || cond.VisibilityM is not null || cond.Night is not null))
+                        {
+                            <tr>
+                                <td>@T("Conditions")</td>
+                                <td>
+                                    @(cond.Night switch { true => T("night"), false => T("day"), _ => "" })
+                                    @(cond.VisibilityM is { } vis ? F("· visibility {0:0.0} km", vis / 1000) : "")
+                                    @(cond.WindSpeedKt is { } wind && cond.WindDirectionDeg is { } dir ? F("· wind {0}°/{1:N0} kt", SkyCareer.Domain.World.Navigation.Degrees(dir), wind) : "")
+                                    @(cond.CrosswindKt is { } cross ? F("(crosswind {0:N0} kt)", cross) : "")
+                                </td>
+                            </tr>
+                        }
                         <tr><td>@T("Fuel")</td><td>@t.FuelKg.ToString("N0") kg</td></tr>
                         <tr><td>@T("Payload")</td><td>@t.PayloadKg.ToString("N0") kg</td></tr>
                         <tr><td>@T("Gross weight")</td><td>@t.TotalWeightKg.ToString("N0") kg</td></tr>
@@ -181,6 +223,40 @@
 @code {
     private string _replayPath = "";
     private string? _error;
+    private Guid? _navJob;
+    private Airport? _navDestination;
+    private MissionType? _navType;
+
+    /// <summary>The tracked job's destination for the direct-to line; loaded once per job.</summary>
+    private Airport? DestinationOf(Guid jobId)
+    {
+        if (_navJob != jobId)
+        {
+            _navJob = jobId;
+            _navDestination = null;
+            _navType = null;
+            _ = LoadDestinationAsync(jobId);
+        }
+        return _navDestination;
+    }
+
+    private async Task LoadDestinationAsync(Guid jobId)
+    {
+        try
+        {
+            var job = (await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress)).FirstOrDefault(c => c.Id == jobId);
+            if (job is null) return;
+            var airport = (await Career.GetAirportsAsync([job.Destination])).GetValueOrDefault(job.Destination);
+            if (_navJob != jobId) return;
+            _navDestination = airport;
+            _navType = Career.MissionType(job.MissionTypeId);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex) when (ex is CareerException or InvalidOperationException)
+        {
+            // No career or job (e.g. test tracking): no direct-to line.
+        }
+    }
 
     protected override void OnInitialized()
     {

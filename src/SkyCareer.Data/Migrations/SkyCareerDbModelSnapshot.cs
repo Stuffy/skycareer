@@ -293,6 +293,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<Guid>("CareerId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("Comfort")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("ContractId")
                         .HasColumnType("TEXT");
 
@@ -334,6 +337,9 @@ namespace SkyCareer.Data.Migrations
                     b.Property<string>("Outcome")
                         .IsRequired()
                         .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PassengerComments")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Revenue")
@@ -489,6 +495,9 @@ namespace SkyCareer.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("Deadline")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DemandEvent")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DepartureIssues")

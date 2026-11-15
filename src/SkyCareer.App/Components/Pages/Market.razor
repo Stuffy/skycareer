@@ -15,6 +15,7 @@
 @inject IAirportIlsLookup IlsLookup
 @using SkyCareer.Integrations.Gsx
 @using SkyCareer.Integrations.BeyondAtc
+@using SkyCareer.Missions.Generation
 
 <MudText Typo="Typo.h5" Class="mb-4">@T("Jobs")</MudText>
 
@@ -30,6 +31,20 @@
             @F("Landing {0} · smoothness {1} · punctuality {2}", s.Score.Landing, s.Score.Smoothness, s.Score.Punctuality) @(s.Score.SafetyPenalty > 0 ? F("· safety deduction −{0}", s.Score.SafetyPenalty) : "")
             · @F("Reputation {0}{1} · now at {2}", s.ReputationChange >= 0 ? "+" : "", s.ReputationChange, s.FinalLocation)
         </MudText>
+        @if (s.Comfort is { } comfort)
+        {
+            <MudPaper Outlined="true" Class="pa-2 mb-2">
+                <MudText Typo="Typo.body2">
+                    <MudIcon Icon="@Icons.Material.Filled.AirlineSeatReclineNormal" Size="Size.Small" Style="vertical-align:middle" />
+                    <b>@F("Passenger comfort {0}", comfort.Score)</b>
+                    · @F("G load {0} · turns {1} · descent {2} · landing {3}", comfort.GLoad, comfort.Bank, comfort.Descent, comfort.Landing)
+                </MudText>
+                @foreach (var comment in s.PassengerComments)
+                {
+                    <MudText Typo="Typo.body2" Style="font-style:italic;opacity:.85">“@comment”</MudText>
+                }
+            </MudPaper>
+        }
         @foreach (var n in s.Notes)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">@n</MudAlert>
@@ -67,6 +82,10 @@
                     @(leg == 1 ? T("Outbound 1/2") : T("Return flight 2/2"))
                 </MudChip>
             }
+            @if (DemandEvents.Label(c.DemandEvent) is { } demandLabel)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.TrendingUp">@demandLabel</MudChip>
+            }
             <MudSpacer />
             <MudText>@Eur(c.Payout)</MudText>
             @if (collapsible)
@@ -87,6 +106,16 @@
             @aircraft?.Registration (@profile?.Name) · @c.DistanceNm.ToString("N0") nm · @F("Deadline {0:dd.MM. HH:mm} UTC", c.Deadline)
             · @PaxText(c) @(c.CargoKg > 0 ? F("· Cargo {0:N0} kg ({1})", c.CargoKg, c.CargoKind) : "")
         </MudText>
+        @if (_airports.TryGetValue(c.Origin, out var navFrom) && _airports.TryGetValue(c.Destination, out var navTo))
+        {
+            <NavInfo From="navFrom.Position" Destination="navTo" SpeedKt="@(profile?.CruiseKtas ?? 0)" MagVar="LiveMagVar" Class="mb-2" />
+        }
+        @foreach (var rule in MissionTexts.SpecialRules(type))
+        {
+            <MudText Typo="Typo.body2" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.PriorityHigh" Size="Size.Small" Color="Color.Warning" Style="vertical-align:middle" /> @rule
+            </MudText>
+        }
 
         @if (sheet is not null)
         {
@@ -99,7 +128,15 @@
                     <br />@F("In tanks {0:N0} kg → uplift {1:N0} kg", inTank, Math.Max(0, sheet.Fuel.Block.Kg - inTank))
                     @(c.FuelRestoredAtUtc is null && c.Status == ContractStatus.Accepted ? T(" (set in the sim when the job is armed)") : "")
                 }
+                @if (FuelPrices(c, sheet.Aircraft) is { } prices)
+                {
+                    <br />@prices
+                }
             </MudText>
+        }
+        @if (c.Status == ContractStatus.Accepted && type.SimBrief != SimBriefUsage.None && OffDatabase(c))
+        {
+            <MudText Typo="Typo.caption" Class="d-block mb-2">@T("SimBrief needs airports with an ICAO code – fly this leg VFR by course and distance.")</MudText>
         }
         @if (c.OfpRoute is not null)
         {
@@ -266,10 +303,19 @@
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_searchStatus</MudAlert>
 }
 
+@if (_demand.Count > 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.TrendingUp">
+        <b>@T("In demand this week:")</b>
+        @string.Join(" · ", _demand.Select(d => F("{0} in the {1} region +{2:P0}", d.Event.Text, RegionName(d.Airport), d.Event.PayFactor - 1)))
+        <MudText Typo="Typo.caption" Class="d-block">@T("Matching jobs to any airfield in these regions come up more often and pay more until the week ends. The regions are outlined on the map.")</MudText>
+    </MudAlert>
+}
+
 @if (_fleet.Count > 0)
 {
     <MudPaper Class="pa-2 mb-4">
-        <MissionMap @ref="_map" Fleet="_fleetPoints" Routes="_routes" Live="_live" OnRouteSelected="SelectOffer"
+        <MissionMap @ref="_map" Fleet="_fleetPoints" Routes="_routes" Live="_live" Events="_eventPoints" OnRouteSelected="SelectOffer"
                     OnShow="ShowOffer" OnAccept="AcceptFromMap" />
         <MudStack Row="true" Spacing="3" Class="mt-2 px-2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
             @foreach (var (category, color) in CategoryColors)
@@ -334,14 +380,18 @@
                     <tr @onclick="() => SelectOffer(o.Id)" style="cursor:pointer; @(o.Id == _selected ? "background:rgba(255,255,255,0.08)" : "")" id="@($"offer-{o.Id:N}")">
                         @{ var plane = _fleet.FirstOrDefault(f => f.Id == o.AircraftId); var back = ReturnOf(o); }
                         <td>@plane?.Registration<br /><MudText Typo="Typo.caption">@(plane is null ? "" : Career.ProfileName(plane.ProfileId))</MudText></td>
-                        <td><span style="color:@ColorFor(t)">●</span> @t.DisplayName<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief</MudText></td>
+                        <td><span style="color:@ColorFor(t)">●</span> @t.DisplayName<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief@MissionTexts.SpecialRuleTags(t)</MudText></td>
                         <td>
                             @o.Origin → @o.Destination <MudText Typo="Typo.caption" Inline="true">@Callsign(o)</MudText>
                             @if (back is not null)
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt" Class="ml-1">@T("Round trip")</MudChip>
                             }
-                            <br /><MudText Typo="Typo.caption">@o.DistanceNm.ToString("N0") nm@(CityOf(o.Destination) is { Length: > 0 } city ? $" · {city}" : "")</MudText>
+                            @if (DemandEvents.Label(o.DemandEvent) is { } offerDemand)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.TrendingUp" Class="ml-1">@offerDemand</MudChip>
+                            }
+                            <br /><MudText Typo="Typo.caption">@o.DistanceNm.ToString("N0") nm@(CourseOf(o) is { } course ? $" · {course}" : "")@(CityOf(o.Destination) is { Length: > 0 } city ? $" · {city}" : "")</MudText>
                             @if (back is not null)
                             {
                                 <br /><MudText Typo="Typo.caption">@F("return: {0} pax · {1} · by {2:dd.MM. HH:mm}", back.TotalPassengers, Eur(back.Payout), back.Deadline)</MudText>
@@ -399,6 +449,20 @@
     private Dictionary<string, SkyCareer.Domain.World.Airport> _airports = [];
     private List<MissionMap.FleetPoint> _fleetPoints = [];
     private List<MissionMap.Route> _routes = [];
+    private List<MissionMap.EventRegion> _eventPoints = [];
+
+    /// <summary>A demand region is named after its most important city (or airport).</summary>
+    private static string RegionName(SkyCareer.Domain.World.Airport a) =>
+        MissionTexts.CityShort(a) is { Length: > 0 } city ? city : $"{a.Name} ({a.Ident})";
+    private IReadOnlyList<(SkyCareer.Domain.World.Airport Airport, DemandEvent Event)> _demand = [];
+    private EconomyTables _economy = EconomyTables.For(Difficulty.Normal);
+
+    /// <summary>Today's fuel price at both ends of a job, so carrying fuel along (tankering) can be weighed.</summary>
+    private string? FuelPrices(MissionContract c, AircraftProfile profile) =>
+        _airports.TryGetValue(c.Origin, out var from) && _airports.TryGetValue(c.Destination, out var to)
+            ? F("Fuel €{0:0.00}/kg at {1} · €{2:0.00}/kg at {3}", CostModel.FuelPricePerKg(_economy, profile.FuelType, from, _gameTime), from.Ident,
+                CostModel.FuelPricePerKg(_economy, profile.FuelType, to, _gameTime), to.Ident)
+            : null;
     private (double Lat, double Lon, string Label)? _live;
     private DateTime _lastLiveUpdate, _gameTime;
     private Guid? _selected;
@@ -471,9 +535,22 @@
         if (!_airports.TryGetValue(c.Origin, out var from) || !_airports.TryGetValue(c.Destination, out var to))
             throw new CareerException(T("Airport data for the job is missing."));
         var rules = type.FlightRules == FlightRulesRequirement.Vfr ? PlanRules.Vfr : PlanRules.Ifr;
-        var plan = PlnExporter.Build(from, to, rules, title: $"{type.DisplayName} {c.Origin}-{c.Destination}");
+        // MSFS only loads plans between airports it knows: a strip it doesn't know becomes a user waypoint next to the
+        // nearest airport it does know (else the other end of the job).
+        var originAnchor = from.KnownToSim ? null : await Career.NearestSimAirportAsync(from.Position) ?? (to.KnownToSim ? to : null);
+        var destinationAnchor = to.KnownToSim ? null : await Career.NearestSimAirportAsync(to.Position) ?? (from.KnownToSim ? from : null);
+        var plan = PlnExporter.Build(from, to, rules, title: $"{type.DisplayName} {c.Origin}-{c.Destination}",
+            originAnchor: originAnchor, destinationAnchor: destinationAnchor);
         var path = await PlnExporter.SaveAsync(plan, PlnExporter.DefaultDirectory, $"{c.Origin}-{c.Destination}");
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        if (destinationAnchor is not null)
+            Snackbar.Add(F("{0} is not in the MSFS database: the plan leads to user waypoint {1} and ends at {2}. Land at {1}, the leg to {2} is only there so MSFS loads the plan.",
+                to.Ident, PlnExporter.WaypointId(to), destinationAnchor.Ident), Severity.Info);
+        if (originAnchor is not null)
+            Snackbar.Add(F("{0} is not in the MSFS database: the plan starts at {2} and continues from user waypoint {1}.",
+                from.Ident, PlnExporter.WaypointId(from), originAnchor.Ident), Severity.Info);
+        if (!from.KnownToSim && originAnchor is null || !to.KnownToSim && destinationAnchor is null)
+            Snackbar.Add(T("No airport known to MSFS nearby – MSFS may not load this plan; navigate by course and distance."), Severity.Warning);
         Snackbar.Add(rules == PlanRules.Ifr
             ? T("Flight plan saved (direct route). For IFR with BeyondATC, better use the SimBrief OFP.")
             : T("Flight plan saved – load it in BeyondATC under VFR › file import or in the EFB."), Severity.Success);
@@ -517,6 +594,8 @@
         _passengerWeightKg = career.PassengerWeightKg;
         _detailedLoad = career.SimBriefDetailedLoad;
         _persistFuel = career.PersistFuel;
+        _economy = EconomyTables.For(career.Difficulty);
+        _demand = await Career.GetDemandEventsAsync();
         _fleet = await Career.GetFleetAsync();
         if (Filter.LoadedFor != career.Id)
         {
@@ -534,6 +613,7 @@
             .Concat(_offers.SelectMany(o => new[] { o.Origin, o.Destination }))
             .Concat(_active.SelectMany(o => new[] { o.Origin, o.Destination }));
         _airports = await Career.GetAirportsAsync(idents);
+        CheckAirportsInSim();
         _page = Math.Clamp(_page, 0, Math.Max(0, PageCount - 1));
         BuildMapData();
         await TrackGsxAsync();
@@ -592,6 +672,36 @@
             @title @(Filter.SortColumn == column ? (Filter.SortDescending ? "▼" : "▲") : "")
         </th>;
 
+    /// <summary>Magnetic variation at the aircraft while connected; job courses are shown magnetic with it, else true.</summary>
+    private double? LiveMagVar => Monitor.Connection == ConnectionState.Connected ? Monitor.Latest?.MagVar : null;
+
+    /// <summary>Initial course of a job ("045°T"/"047°M") for dead reckoning.</summary>
+    private string? CourseOf(MissionContract c) =>
+        _airports.TryGetValue(c.Origin, out var from) && _airports.TryGetValue(c.Destination, out var to)
+            ? SkyCareer.Domain.World.Navigation.DirectTo(from.Position, to.Position, 0, LiveMagVar).CourseText
+            : null;
+
+    /// <summary>A job leg whose origin or destination MSFS (and so SimBrief) doesn't know, e.g. a strip like "BR-2197".</summary>
+    private bool OffDatabase(MissionContract c) =>
+        _airports.TryGetValue(c.Origin, out var from) && !from.KnownToSim || _airports.TryGetValue(c.Destination, out var to) && !to.KnownToSim;
+
+    /// <summary>Idents already asked about once on this page, so a slow or failing sim isn't asked on every reload.</summary>
+    private readonly HashSet<string> _simAsked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Asks MSFS in the background whether it knows the accepted jobs' airports; a stored answer reloads the page.</summary>
+    private void CheckAirportsInSim()
+    {
+        if (!IlsLookup.Available) return;
+        var idents = _active.SelectMany(c => new[] { c.Origin, c.Destination })
+            .Where(i => _airports.TryGetValue(i, out var a) && a.InSim is null && _simAsked.Add(i)).ToList();
+        if (idents.Count == 0) return;
+        _ = Task.Run(async () =>
+        {
+            try { await Career.CheckAirportsInSimAsync(idents); }
+            catch (Exception ex) { AppLog.Warn("Airports", $"Could not ask the sim about {string.Join(", ", idents)}: {ex.Message}", ex); }
+        });
+    }
+
     /// <summary>Destination summary: longest runway, surface, lighting and ILS (✓ yes, – no, ? not yet checked in the sim).</summary>
     private string CityOf(string ident) => _airports.TryGetValue(ident, out var a) ? MissionTexts.CityShort(a) : "";
 
@@ -621,6 +731,10 @@
             .Select(g => new MissionMap.FleetPoint(_airports[g.Key].Position.Latitude, _airports[g.Key].Position.Longitude,
                 $"{g.Key}: {string.Join(", ", g.Select(f => f.Registration))}", g.Any(f => f.IsAvailable(_gameTime))))
             .ToList();
+
+        _eventPoints = _demand.Where(d => d.Event.Region is not null)
+            .Select(d => new MissionMap.EventRegion(d.Event.Region!.South, d.Event.Region.West, d.Event.Region.North, d.Event.Region.East,
+                $"{d.Event.Text} +{d.Event.PayFactor - 1:P0}")).ToList();
 
         _routes = VisibleOffers.Select(o => ToRoute(o, accepted: false))
             .Concat(_active.Select(o => ToRoute(o, accepted: true)))
@@ -677,7 +791,8 @@
         var steps = new List<PrepStep>();
         bool ofp = c.OfpBlockFuelKg is not null;
         bool loadOk = _loadCheck.TryGetValue(c.Id, out var check) && check.Count == 0;
-        if (type.SimBrief != SimBriefUsage.None && profile is not null)
+        // SimBrief only plans between airports with ICAO codes; strips the sim doesn't know are flown VFR.
+        if (type.SimBrief != SimBriefUsage.None && profile is not null && !OffDatabase(c))
         {
             steps.Add(new(T("Plan in SimBrief"), ofp, false, () => { OpenSimBrief(c, profile); return Task.CompletedTask; },
                 T("Opens SimBrief with the job's route, aircraft and load")));

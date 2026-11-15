@@ -1,0 +1,17 @@
+{
+  "id": "livestock",
+  "name": "Livestock transport",
+  "description": "Live animals in the hold. Fly gently: steep turns, fast descents and G loads stress the animals and cost part of the pay.",
+  "texts": { "de": { "name": "Tiertransport", "description": "Lebende Tiere im Frachtraum. Sanft fliegen: Steile Kurven, schnelle Sinkflüge und G-Lasten stressen die Tiere und kosten einen Teil der Bezahlung." } },
+  "category": "cargo",
+  "requirements": { "requiredTags": ["cargo"], "minCargoKg": 200 },
+  "cargo": { "minKg": 200, "maxKg": 1500, "kinds": ["cattle", "horses", "sheep", "poultry"] },
+  "distance": { "minNm": 40, "maxNm": 500 },
+  "destinations": { "sizeWeights": { "medium": 3, "small": 3 } },
+  "pay": { "base": 900, "perNm": 1.8, "perCargoKg": 1.6, "hourlyRateFactor": 1.3 },
+  "handling": { "maxGForce": 1.4, "maxBankDeg": 25, "maxSinkFpm": 1500, "reason": "livestock" },
+  "scoring": { "gForceWeight": 2, "landingRateWeight": 2, "punctualityWeight": 1, "maxGForce": 1.4, "maxTouchdownFpm": 350 },
+  "simBrief": "optional",
+  "flightRules": "any",
+  "weight": 1
+}

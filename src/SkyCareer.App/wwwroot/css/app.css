@@ -24,6 +24,11 @@ th.sc-sorted { color: var(--mud-palette-primary); }
     color: #111; font-weight: 700; font-size: 11px;
 }
 .leaflet-tooltip.sc-pin-count::before { display: none; }
+.leaflet-tooltip.sc-region-label {
+    background: transparent; border: none; box-shadow: none; padding: 0; pointer-events: none;
+    color: #ffc107; font-weight: 600; font-size: 11px; text-shadow: 0 0 3px #000, 0 0 3px #000;
+}
+.leaflet-tooltip.sc-region-label::before { display: none; }
 .sc-popup .leaflet-popup-content-wrapper, .sc-popup .leaflet-popup-tip { background: #2b2c36; color: rgba(255, 255, 255, 0.85); }
 .sc-popup .leaflet-popup-content { margin: 10px 12px; font-family: Roboto, "Segoe UI", sans-serif; }
 .sc-popup a.leaflet-popup-close-button { color: rgba(255, 255, 255, 0.6); }

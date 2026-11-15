@@ -19,7 +19,11 @@
     public sealed record Route(Guid Id, double[] From, double[] To, string Label, string Color, bool Accepted, bool Selected,
         string DestIdent, string DestName, string Title, IReadOnlyList<string> Details, string Payout);
 
+    /// <summary>A region with a demand event this week, drawn as an outlined area that doesn't take clicks.</summary>
+    public sealed record EventRegion(double South, double West, double North, double East, string Label);
+
     [Parameter] public IReadOnlyList<FleetPoint> Fleet { get; set; } = [];
+    [Parameter] public IReadOnlyList<EventRegion> Events { get; set; } = [];
     [Parameter] public IReadOnlyList<Route> Routes { get; set; } = [];
     /// <summary>Live aircraft position from the simulator; null hides the marker.</summary>
     [Parameter] public (double Lat, double Lon, string Label)? Live { get; set; }
@@ -32,7 +36,7 @@
     private DotNetObjectReference<MissionMap>? _ref;
     private bool _ready;
     private string? _error;
-    private object? _drawnFleet, _drawnRoutes;
+    private object? _drawnFleet, _drawnRoutes, _drawnEvents;
     private (double, double, string)? _drawnLive;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -48,13 +52,15 @@
             if (!_ready) return;
 
             // Only push data when the parameter instances changed; the page re-renders often (telemetry).
-            if (!ReferenceEquals(_drawnFleet, Fleet) || !ReferenceEquals(_drawnRoutes, Routes))
+            if (!ReferenceEquals(_drawnFleet, Fleet) || !ReferenceEquals(_drawnRoutes, Routes) || !ReferenceEquals(_drawnEvents, Events))
             {
                 _drawnFleet = Fleet;
                 _drawnRoutes = Routes;
+                _drawnEvents = Events;
                 await JS.InvokeVoidAsync("skyMap.update", _id, new
                 {
                     fleet = Fleet.Select(f => new { lat = f.Lat, lon = f.Lon, label = f.Label, available = f.Available }),
+                    events = Events.Select(e => new { south = e.South, west = e.West, north = e.North, east = e.East, label = e.Label }),
                     offers = Routes.Select(r => new
                     {
                         id = r.Id, from = r.From, to = r.To, label = r.Label, color = r.Color, accepted = r.Accepted, selected = r.Selected,

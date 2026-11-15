@@ -1,0 +1,73 @@
+@inject ISnackbar Snackbar
+
+@* Course, distance and time to a destination for dead reckoning, plus what is needed to find the field: elevation,
+   pattern altitude, runway and coordinates to enter as a user waypoint (strips like "BR-2197" aren't in the GPS). *@
+@if (Destination is { } dest)
+{
+    var nav = SkyCareer.Domain.World.Navigation.DirectTo(From, dest.Position, SpeedKt, MagVar, TrackTrue);
+    bool inside = Live && nav.DistanceNm <= SkyCareer.Domain.World.Navigation.ArrivalRadiusNm;
+    <MudText Typo="Typo.body2" Class="@Class">
+        <MudIcon Icon="@Icons.Material.Filled.Explore" Size="Size.Small" Style="vertical-align:middle" />
+        <b>@(Live ? F("Direct to {0}:", dest.Ident) : T("Course:"))</b>
+        <b>@nav.CourseText</b>@(nav.MagneticCourse is not null ? $" ({SkyCareer.Domain.World.Navigation.Degrees(nav.TrueCourse)}°T)" : "")
+        · @nav.DistanceNm.ToString(nav.DistanceNm < 10 ? "N1" : "N0") nm
+        · ETE @(nav.Ete is { } ete ? SkyCareer.Domain.World.Navigation.EteText(ete) : "–")@(Live ? "" : T(" (cruise, no wind)"))
+        @if (Live && nav.TrackOffset is { } offset && TrackTrue is { } track && SpeedKt >= SkyCareer.Domain.World.Navigation.MinGroundSpeedKt)
+        {
+            <span>
+                · @F("Track {0}", MagVar is { } v ? SkyCareer.Domain.World.Navigation.Degrees(track - v) + "°M" : SkyCareer.Domain.World.Navigation.Degrees(track) + "°T")
+                <span class="@(Math.Abs(offset) <= 5 ? "ok" : Math.Abs(offset) <= 20 ? "" : "bad")">
+                    (@(Math.Abs(offset) < 1 ? T("on course") : offset > 0 ? F("{0:N0}° right of course", offset) : F("{0:N0}° left of course", -offset)))
+                </span>
+            </span>
+        }
+        @if (inside)
+        {
+            <span class="ok"> · @T("within arrival radius")</span>
+        }
+        <br />
+        @F("Elevation {0:N0} ft · pattern {1:N0} ft", dest.ElevationFt, SkyCareer.Domain.World.Navigation.PatternAltitudeFt(dest.ElevationFt))
+        · @F("runway {0:N0} m {1}", dest.LongestRunwayM, Surface(dest))
+        · <span class="mono" title="@T("For a user waypoint in the GPS (GNS/G1000)")">@SkyCareer.Domain.World.Navigation.DegreesMinutes(dest.Position)</span>
+        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" Style="padding:2px"
+                       title="@F("Copy coordinates as {0} (search field of the MSFS world map / EFB)", SkyCareer.Domain.World.Navigation.Decimal(dest.Position))" OnClick="() => Copy(dest)" />
+        @if (!dest.KnownToSim)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                     title="@T("MSFS doesn't know this airfield: it can't be selected in the GPS or a flight plan. Navigate by course and distance or enter the coordinates as a user waypoint.")">
+                @T("not in MSFS database")
+            </MudChip>
+        }
+    </MudText>
+}
+
+@code {
+    /// <summary>Where the course starts: the origin before departure, the aircraft's position in flight.</summary>
+    [Parameter, EditorRequired] public GeoPosition From { get; set; }
+    [Parameter, EditorRequired] public Airport? Destination { get; set; }
+    /// <summary>Speed for the ETE: cruise TAS before departure, ground speed in flight.</summary>
+    [Parameter] public double SpeedKt { get; set; }
+    /// <summary>Magnetic variation (east positive); null shows true courses.</summary>
+    [Parameter] public double? MagVar { get; set; }
+    /// <summary>Current ground track (true) in flight; shows how far off course the aircraft is.</summary>
+    [Parameter] public double? TrackTrue { get; set; }
+    /// <summary>Direct-to from the aircraft's live position instead of the planned course.</summary>
+    [Parameter] public bool Live { get; set; }
+    [Parameter] public string Class { get; set; } = "";
+
+    private static string Surface(Airport a) =>
+        a.HasPavedRunway ? T("paved") : a.Surfaces.Contains(RunwaySurface.Water) ? T("water") : T("unpaved");
+
+    private async Task Copy(Airport a)
+    {
+        try
+        {
+            await WindowsClipboard.SetTextAsync(SkyCareer.Domain.World.Navigation.Decimal(a.Position));
+            Snackbar.Add(F("Coordinates of {0} copied.", a.Ident), Severity.Success);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+}

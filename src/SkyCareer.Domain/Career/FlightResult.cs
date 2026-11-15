@@ -28,6 +28,10 @@ public sealed record FlightResult
     public double TouchdownFpm { get; init; }
     public double MaxGForce { get; init; } = 1;
     public int Bounces { get; init; }
+    /// <summary>How the flight was flown in the air (bank, sink, G); null when nothing airborne was recorded.</summary>
+    public ComfortStats? Comfort { get; init; }
+    /// <summary>Night, visibility and crosswind at touchdown; null without a recorded touchdown.</summary>
+    public LandingConditions? LandingConditions { get; init; }
     public int OverspeedSeconds { get; init; }
     public int StallWarningSeconds { get; init; }
     public GeoPosition FinalPosition { get; init; }

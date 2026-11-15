@@ -55,7 +55,32 @@ public static class CostModel
         // Deterministic per airport and day (also across app restarts, so no string.GetHashCode) so the price
         // shown before the flight is the one charged after it.
         double swing = (new Random(StableSeed(airport.Ident, gameTime)).NextDouble() * 2 - 1) * t.FuelPriceVariation;
-        return Math.Round(basePrice * sizeFactor * (decimal)(1 + swing) * t.CostFactor, 3);
+        return Math.Round(basePrice * sizeFactor * FuelRegionFactor(airport) * (decimal)(1 + swing) * t.CostFactor, 3);
+    }
+
+    /// <summary>Fuel is this much dearer at a strip without an ICAO code: it has to be brought there.</summary>
+    public const decimal RemoteStripFuelFactor = 1.15m;
+
+    /// <summary>Price level of some countries (ISO code): oil producers and low-tax countries below 1, high-tax countries above.</summary>
+    private static readonly Dictionary<string, decimal> FuelCountryFactors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["SA"] = 0.75m, ["KW"] = 0.75m, ["QA"] = 0.78m, ["AE"] = 0.80m, ["IR"] = 0.75m, ["IQ"] = 0.80m, ["VE"] = 0.75m,
+        ["RU"] = 0.82m, ["KZ"] = 0.85m, ["DZ"] = 0.82m, ["NG"] = 0.88m, ["US"] = 0.88m, ["MX"] = 0.92m, ["BR"] = 1.00m,
+        ["CA"] = 0.95m, ["AU"] = 1.05m, ["JP"] = 1.12m, ["DE"] = 1.18m, ["FR"] = 1.20m, ["IT"] = 1.25m, ["GB"] = 1.22m,
+        ["CH"] = 1.28m, ["NO"] = 1.30m, ["SE"] = 1.22m, ["DK"] = 1.22m, ["NL"] = 1.20m, ["AT"] = 1.15m, ["ES"] = 1.12m,
+        ["IS"] = 1.30m, ["GL"] = 1.40m, ["NZ"] = 1.12m
+    };
+
+    /// <summary>
+    /// Regional fuel price level: a table for the well-known extremes, otherwise a stable 0.90–1.15 per country, times
+    /// <see cref="RemoteStripFuelFactor"/> at strips without an ICAO code. Makes tankering worth planning.
+    /// </summary>
+    public static decimal FuelRegionFactor(Airport airport)
+    {
+        decimal country = FuelCountryFactors.TryGetValue(airport.Country, out var known) ? known
+            : airport.Country.Length == 0 ? 1m
+            : 0.90m + StableHash.Of("fuel", airport.Country.ToUpperInvariant()) % 26 / 100m;
+        return country * (Airport.IsCodeLike(airport.Ident) ? 1m : RemoteStripFuelFactor);
     }
 
     private static int StableSeed(string ident, DateTime day)

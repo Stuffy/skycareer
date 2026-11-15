@@ -21,6 +21,8 @@ public static class FlightResultMapper
         TouchdownFpm = s.FinalTouchdown?.VerticalSpeedFpm ?? 0,
         MaxGForce = s.MaxGForce,
         Bounces = s.FinalTouchdown?.Bounces ?? 0,
+        Comfort = s.Comfort,
+        LandingConditions = s.FinalTouchdown?.Conditions,
         OverspeedSeconds = s.OverspeedSeconds,
         StallWarningSeconds = s.StallWarningSeconds,
         FinalPosition = new GeoPosition(s.FinalLatitude, s.FinalLongitude),

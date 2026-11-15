@@ -1,0 +1,19 @@
+{
+  "id": "organ_transport",
+  "name": "Organ transport",
+  "description": "Donor organ with a medical courier. Every minute counts: the deadline is tight and arriving early pays extra.",
+  "texts": { "de": { "name": "Organtransport", "description": "Spenderorgan mit medizinischem Kurier. Jede Minute zählt: Die Frist ist knapp, und frühes Ankommen wird extra bezahlt." } },
+  "category": "medical",
+  "requirements": { "anyOfTags": ["medevac", "business", "pressurized"] },
+  "passengers": { "min": 1, "max": 2, "childShare": 0, "infantShare": 0, "baggage": "handOnly" },
+  "cargo": { "minKg": 10, "maxKg": 40, "kinds": ["donor_organ", "blood_products"] },
+  "distance": { "minNm": 80, "maxNm": 900 },
+  "destinations": { "sizeWeights": { "large": 4, "medium": 3 }, "cityWeight": 2, "distanceInfluence": 0.5 },
+  "pay": { "base": 3000, "perNm": 4, "hourlyRateFactor": 1.8 },
+  "timing": { "deadlineFactor": 1.15, "deadlineSlackHours": 0.75, "perMinuteEarly": 0.004, "maxEarlyBonus": 0.2 },
+  "scoring": { "gForceWeight": 1, "landingRateWeight": 1, "punctualityWeight": 4, "maxTouchdownFpm": 400 },
+  "simBrief": "optional",
+  "flightRules": "any",
+  "offerValidityHours": 2,
+  "weight": 0.6
+}

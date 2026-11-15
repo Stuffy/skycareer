@@ -307,4 +307,33 @@ public class PlnTests
             Directory.Delete(dir, true);
         }
     }
+
+    [Fact]
+    public void Airfields_unknown_to_the_sim_become_user_waypoints()
+    {
+        var strip = new Airport("BR-2197", "Fazenda Strip", new GeoPosition(-12.5, -45.25), AirportSize.Small, 700, [RunwaySurface.Grass], "BR", 2400);
+        var plan = PlnExporter.Build(Eddf, strip, PlanRules.Vfr).Root!.Element("FlightPlan.FlightPlan")!;
+
+        Assert.Equal("BR2197", plan.Element("DestinationID")!.Value);
+        var waypoints = plan.Elements("ATCWaypoint").ToList();
+        Assert.Equal("Airport", waypoints[0].Element("ATCWaypointType")!.Value);
+        Assert.Equal("BR2197", waypoints[1].Attribute("id")!.Value);
+        Assert.Equal("User", waypoints[1].Element("ATCWaypointType")!.Value);
+        Assert.Null(waypoints[1].Element("ICAO"));
+        Assert.StartsWith("S12° 30' 0.00\",W45° 15'", waypoints[1].Element("WorldPosition")!.Value);
+
+        // MSFS only loads plans ending at an airport: with an anchor the strip becomes the waypoint before it.
+        var anchored = PlnExporter.Build(Eddf, strip, PlanRules.Vfr, destinationAnchor: Eddm).Root!.Element("FlightPlan.FlightPlan")!;
+        Assert.Equal("EDDM", anchored.Element("DestinationID")!.Value);
+        Assert.Equal(["EDDF", "BR2197", "EDDM"], anchored.Elements("ATCWaypoint").Select(w => w.Attribute("id")!.Value));
+        Assert.Equal(["Airport", "User", "Airport"], anchored.Elements("ATCWaypoint").Select(w => w.Element("ATCWaypointType")!.Value));
+        var fromStrip = PlnExporter.Build(strip, Eddm, PlanRules.Vfr, originAnchor: Eddf).Root!.Element("FlightPlan.FlightPlan")!;
+        Assert.Equal("EDDF", fromStrip.Element("DepartureID")!.Value);
+        Assert.Equal(["EDDF", "BR2197", "EDDM"], fromStrip.Elements("ATCWaypoint").Select(w => w.Attribute("id")!.Value));
+
+        // A strip the sim was asked about and knows keeps its airport record.
+        var known = PlnExporter.Build(Eddf, strip with { InSim = true }, PlanRules.Vfr).Root!.Element("FlightPlan.FlightPlan")!;
+        Assert.Equal("Airport", known.Elements("ATCWaypoint").Last().Element("ATCWaypointType")!.Value);
+        Assert.Equal("BR-2197", known.Element("DestinationID")!.Value);
+    }
 }

@@ -568,6 +568,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         int created = 0, ilsChecked = 0;
         bool ilsUnavailable = false;
         var masses = PassengerMassTable.ForCareer(career.PassengerWeightKg, career.BagWeightKg);
+        int demandSeed = MarketSeedOf(career);
 
         foreach (var aircraft in fleet.Where(f => f.IsAvailable(career.GameTime)))
         {
@@ -592,7 +593,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 var (checkedNow, unavailable) = await CheckIlsAsync(db, airports, origin, range, types, search, ilsCache, ct);
                 ilsChecked += checkedNow;
                 ilsUnavailable |= unavailable;
-                airports = airports.Select(a => ilsCache.TryGetValue(a.Ident, out var ils) ? a with { HasIls = ils } : a).ToList();
+                airports = airports.Select(a => ilsCache.TryGetValue(a.Ident, out var ils) ? a with { HasIls = ils, InSim = ils is not null } : a).ToList();
             }
 
             int added = 0;
@@ -615,7 +616,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 var ctxBase = new GenerationContext(type, profile, origin, airports, career.GameTime, draw)
                 {
                     Search = search, RecentDestinations = recent, Masses = masses, VaryBaggage = career.SimBriefDetailedLoad,
-                    Reputation = career.Reputation
+                    Reputation = career.Reputation, Demand = a => DemandEvents.At(demandSeed, career.GameTime, a)
                 };
                 var generator = generators.Get(type);
                 var offer = (needCapital ? generator.TryGenerate(ctxBase with { RequireCapital = true }) : null)
@@ -832,6 +833,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             TouchdownFpm = result.TouchdownFpm,
             MaxGForce = result.MaxGForce,
             Score = s.Score.Total,
+            Comfort = s.Comfort?.Score,
+            PassengerComments = s.PassengerComments.Count > 0 ? string.Join("\n", s.PassengerComments) : null,
             Revenue = s.Revenue,
             Costs = s.Costs,
             FlightNumber = FlightNumberOf(c),
@@ -1048,8 +1051,82 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         await using var db = await dbFactory.CreateDbContextAsync();
         var rows = await db.Airports.Where(a => keys.Contains(a.Ident)).ToListAsync();
         var ils = await db.AirportFacilities.Where(f => keys.Contains(f.Ident)).ToDictionaryAsync(f => f.Ident, f => f.HasIls);
-        return rows.ToDictionary(r => r.Ident, r => r.ToDomain(ils.GetValueOrDefault(r.Ident)), StringComparer.OrdinalIgnoreCase);
+        return rows.ToDictionary(r => r.Ident, r => FromRow(r, ils), StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Asks the simulator whether it knows the given airports (OurAirports strips like "BR-2197" often aren't in its
+    /// database) and stores the answer with the ILS data. Only airports not asked before; returns how many were checked.
+    /// </summary>
+    public async Task<int> CheckAirportsInSimAsync(IEnumerable<string> idents, CancellationToken ct = default)
+    {
+        if (ilsLookup is not { Available: true }) return 0;
+        var keys = idents.Select(i => i.ToUpperInvariant()).Distinct().ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var known = await db.AirportFacilities.Where(f => keys.Contains(f.Ident)).Select(f => f.Ident).ToListAsync(ct);
+        var existing = await db.Airports.Where(a => keys.Contains(a.Ident)).Select(a => a.Ident).ToListAsync(ct);
+        var unknown = existing.Except(known, StringComparer.OrdinalIgnoreCase).ToList();
+        if (unknown.Count == 0) return 0;
+        var results = await ilsLookup.CheckAsync(unknown, ct);
+        foreach (var (ident, info) in results)
+            db.AirportFacilities.Add(new AirportFacilityCacheRow
+            {
+                Ident = ident.ToUpperInvariant(), HasIls = info?.HasIls, IlsRunways = info?.IlsRunways ?? "", CheckedAtUtc = DateTime.UtcNow
+            });
+        await db.SaveChangesAsync(ct);
+        if (results.Count > 0) Changed?.Invoke();
+        return results.Count;
+    }
+
+    /// <summary>
+    /// This game week's demand events in the regions within <paramref name="radiusNm"/> of the fleet's locations, each
+    /// with the region's most important airport to name it by; the most important regions first (for the market page's
+    /// banner and map). Passenger events in regions without a medium or large airport are left out.
+    /// </summary>
+    public async Task<IReadOnlyList<(Airport Airport, DemandEvent Event)>> GetDemandEventsAsync(double radiusNm = 600, int max = 8)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var career = await RequireCareer(db);
+        int seed = MarketSeedOf(career);
+        var regions = new Dictionary<(int, int), (Airport Airport, DemandEvent Event)>();
+        var locations = await db.Fleet.Where(f => f.CareerId == career.Id).Select(f => f.Location).Distinct().ToListAsync();
+        foreach (var location in locations)
+        {
+            if (await db.Airports.FindAsync(location) is not { } row) continue;
+            foreach (var airport in await AirportsWithinAsync(db, new GeoPosition(row.Latitude, row.Longitude), radiusNm, 0))
+            {
+                if (DemandEvents.At(seed, career.GameTime, airport) is not { Region: { } region } e) continue;
+                if (e.ForPassengers && airport.Size is not (AirportSize.Medium or AirportSize.Large)) continue;
+                var key = (region.Row, region.Column);
+                if (!regions.TryGetValue(key, out var best) || Importance(airport) > Importance(best.Airport)) regions[key] = (airport, e);
+            }
+        }
+        return regions.Values.OrderByDescending(x => Importance(x.Airport)).ThenBy(x => x.Airport.Ident).Take(max).ToList();
+
+        static double Importance(Airport a) => DestinationRule.CityImportance(a) + (int)a.Size * 0.01;
+    }
+
+    /// <summary>
+    /// The nearest airport the sim knows (asked before, or with an ICAO-like ident), for flight plans to strips MSFS
+    /// doesn't know: MSFS only loads plans that end at an airport. Airports confirmed by the sim win over equally near ones.
+    /// </summary>
+    public async Task<Airport?> NearestSimAirportAsync(GeoPosition position, double maxNm = 100)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var cache = await LoadIlsCacheAsync(db, default);
+        var near = await AirportsWithinAsync(db, position, maxNm, 0, cache);
+        return near
+            .Select(a => (Airport: a, Distance: a.Position.DistanceNmTo(position)))
+            .Where(x => x.Airport.KnownToSim && x.Airport.Size is AirportSize.Small or AirportSize.Medium or AirportSize.Large
+                        && x.Distance is > 0.5 && x.Distance <= maxNm)
+            .OrderBy(x => x.Distance - (x.Airport.InSim == true ? 2 : 0))
+            .Select(x => x.Airport)
+            .FirstOrDefault();
+    }
+
+    /// <summary>An airport with what the sim told about it: a cache row means it was asked, a null ILS there that it didn't know the airport.</summary>
+    private static Airport FromRow(AirportRow row, IReadOnlyDictionary<string, bool?>? simCache) =>
+        simCache is not null && simCache.TryGetValue(row.Ident, out var ils) ? row.ToDomain(ils, inSim: ils is not null) : row.ToDomain();
 
     /// <summary>True if the airport data predates the lighting/scheduled-service/paved-length columns, the city matching or the military flag.</summary>
     public async Task<bool> AirportDataOutdatedAsync()
@@ -1299,7 +1376,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         Payout = o.Payout.Amount,
         OfferedAt = career.GameTime,
         ExpiresAt = o.ExpiresAt.UtcDateTime,
-        Deadline = o.Deadline.UtcDateTime
+        Deadline = o.Deadline.UtcDateTime,
+        DemandEvent = o.Demand?.Kind.ToString()
     };
 
     /// <summary>
@@ -1348,7 +1426,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             .ToListAsync(ct);
         // Longitude filtered in memory so boxes crossing the antimeridian still work.
         return rows.Where(a => dLon >= 180 || LonDiff(a.Longitude, center.Longitude) <= dLon)
-            .Select(a => a.ToDomain(ilsCache is not null && ilsCache.TryGetValue(a.Ident, out var ils) ? ils : null))
+            .Select(a => FromRow(a, ilsCache))
             .ToList();
     }
 
@@ -1361,7 +1439,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var row = await db.Airports.FindAsync(ident);
         if (row is null) return null;
         var ils = await db.AirportFacilities.FindAsync(ident);
-        return row.ToDomain(ils?.HasIls);
+        return ils is null ? row.ToDomain() : row.ToDomain(ils.HasIls, inSim: ils.HasIls is not null);
     }
 
     private static double LonDiff(double a, double b)

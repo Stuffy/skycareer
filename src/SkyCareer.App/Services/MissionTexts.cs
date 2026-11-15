@@ -91,6 +91,21 @@ public static class MissionTexts
         _ => L.T("No simulator data")
     };
 
+    /// <summary>The type's handling limits and early bonus in words; empty for ordinary types.</summary>
+    public static IReadOnlyList<string> SpecialRules(MissionType type)
+    {
+        var rules = new List<string>();
+        if (type.Handling is { HasLimits: true } h)
+            rules.Add(L.F("{0} – fly within {1}; each limit exceeded costs {2:P0} of the pay", h.ReasonText, h.LimitsText, h.Penalty));
+        if (type.Timing.PerMinuteEarly > 0)
+            rules.Add(L.F("Tight deadline – every minute early pays +{0:0.0#} % (up to +{1:P0})", type.Timing.PerMinuteEarly * 100, type.Timing.MaxEarlyBonus));
+        return rules;
+    }
+
+    /// <summary>Short markers for lists: " · handling limits · early bonus".</summary>
+    public static string SpecialRuleTags(MissionType type) =>
+        (type.Handling is { HasLimits: true } ? L.T(" · handling limits") : "") + (type.Timing.PerMinuteEarly > 0 ? L.T(" · early bonus") : "");
+
     /// <summary>Name for the job-search type filter, marking types the career can't get yet.</summary>
     public static string TypeOption(MissionType type, int reputation) =>
         type.MinReputation > reputation ? L.F("{0} (from reputation {1})", type.DisplayName, type.MinReputation) : type.DisplayName;

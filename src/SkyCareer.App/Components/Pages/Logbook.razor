@@ -16,7 +16,7 @@ else
         · @T("Result") @Eur(_flights.Sum(f => f.Revenue - f.Costs))
     </MudText>
     <MudSimpleTable Dense="true" Hover="true">
-        <thead><tr><th>@T("Arrival")</th><th>@T("Job")</th><th>@T("Route")</th><th>@T("Aircraft")</th><th>@T("Block")</th><th>@T("Landing")</th><th>@T("Score")</th><th>@T("Result")</th><th>@T("Status")</th><th>GSX</th></tr></thead>
+        <thead><tr><th>@T("Arrival")</th><th>@T("Job")</th><th>@T("Route")</th><th>@T("Aircraft")</th><th>@T("Block")</th><th>@T("Landing")</th><th>@T("Score")</th><th>@T("Comfort")</th><th>@T("Result")</th><th>@T("Status")</th><th>GSX</th></tr></thead>
         <tbody>
             @foreach (var f in _flights)
             {
@@ -34,6 +34,7 @@ else
                     <td>@f.BlockHours.ToString("N1") h</td>
                     <td>@f.TouchdownFpm.ToString("N0") fpm / @f.MaxGForce.ToString("N2") G</td>
                     <td>@f.Score</td>
+                    <td title="@f.PassengerComments">@(f.Comfort?.ToString() ?? "–")</td>
                     <td class="@(f.Revenue - f.Costs < 0 ? "bad" : "ok")">@Eur(f.Revenue - f.Costs)</td>
                     <td>@f.Outcome</td>
                     <td>
@@ -47,7 +48,7 @@ else
                 @if (_open.Contains(f.Id) && _receipts.TryGetValue(f.ContractId, out var shown))
                 {
                     <tr>
-                        <td colspan="10" style="background:var(--mud-palette-background-gray)">
+                        <td colspan="11" style="background:var(--mud-palette-background-gray)">
                             @foreach (var r in shown)
                             {
                                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">

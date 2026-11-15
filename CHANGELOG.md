@@ -2,6 +2,37 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **Navigation for bush and VFR flights:** every job card shows the course (magnetic while connected to MSFS), distance
+  and time en route, the destination's elevation, pattern altitude and runway, and its coordinates (for a user waypoint
+  in the GPS, and with a copy button in the decimal format the MSFS world map search takes). Live flight shows a direct-to line from the current position with distance, time,
+  your track and how far it is off course. The map draws the 3 nm arrival radius around accepted jobs' destinations and
+  the flight path flown.
+
+- **Passenger comfort:** passenger flights are rated for how they were flown (G load, steep turns, fast descents,
+  landing) and the passengers comment on the flight in the settlement. Comfort replaces the old "smoothness" part of
+  the score, and a very comfortable flight earns a tip of up to 5 % of the pay. The logbook keeps the rating.
+- **Sensitive loads and tight deadlines:** mission types can set handling limits (G, bank, sink rate) that cost part of
+  the pay when exceeded, and pay a bonus for every minute before a tight deadline. New mission types: organ transport,
+  livestock transport and dangerous goods; air ambulance flights now have limits for the patient. Live flight shows
+  the current values against the limits.
+- **Bonuses for demanding landings:** a decent landing at night, in visibility below 5 km or with 10 kt crosswind or
+  more pays 5 % extra each. Live flight shows wind, visibility and day or night.
+- **Demand events:** every game week some regions (about 90 × 90 nm) are in demand (trade fair, festival, sports final,
+  holiday rush, relief supplies, harvest). Matching jobs to any airfield in the region come up more often and pay
+  25–30 % more; the job market lists the week's events and outlines the regions on the map. Existing careers see different offers than before the update.
+- **Regional fuel prices:** fuel is cheaper in oil-producing countries, dearer in high-tax countries and at strips
+  without an ICAO code. The job card shows the price at both ends of the flight, so tankering can be planned.
+
+### Fixed
+- **Airfields MSFS doesn't know:** small strips such as "BR-2197" are not in the simulator's database. The flight plan
+  (.pln) now leads to them as a user waypoint with their coordinates and ends at the nearest airport MSFS knows (MSFS
+  only loads plans between airports), the job card
+  marks them "not in MSFS database", and SimBrief planning is hidden for such legs. Departure and arrival were already
+  detected by position and work as before.
+
 ## 0.4.0 – 2026-11-07
 
 ### Added

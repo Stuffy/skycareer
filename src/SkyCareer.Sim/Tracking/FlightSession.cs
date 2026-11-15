@@ -22,7 +22,8 @@ public sealed record FlightSummary(
     int ManualPhaseChanges = 0,
     double? FuelAtBlockOffKg = null,
     double FinalFuelKg = 0,
-    IReadOnlyList<string>? Notes = null)
+    IReadOnlyList<string>? Notes = null,
+    Domain.Career.ComfortStats? Comfort = null)
 {
     public TimeSpan? BlockTime => BlockOn - BlockOff;
     public TimeSpan? AirTime => LandingTime - TakeoffTime;
@@ -44,6 +45,7 @@ public sealed class FlightSession
     /// </summary>
     private double? _fuelAtBlockOn;
     private readonly List<string> _notes = [];
+    private readonly ComfortTracker _comfort = new();
     private DateTimeOffset? _restartedAt;
 
     /// <summary>A pause in the samples longer than this after an app restart is treated as a gap without data.</summary>
@@ -140,6 +142,8 @@ public sealed class FlightSession
             if (t.OverspeedWarning) _overspeedSec += dt;
             if (t.StallWarning && !t.OnGround) _stallSec += dt;
         }
+        if (_last is { } before2 && !t.OnGround && !t.Paused && !t.Slew)
+            _comfort.Add(t, Math.Clamp((t.Timestamp - before2.Timestamp).TotalSeconds, 0, 5));
         if (!t.OnGround || Phases.Phase == FlightPhase.Rollout)
         {
             _maxG = Math.Max(_maxG, t.GForce);
@@ -188,5 +192,6 @@ public sealed class FlightSession
         ManualPhaseChanges,
         _fuelAtBlockOff,
         _fuelAtBlockOn ?? _last?.FuelKg ?? 0,
-        _notes);
+        _notes,
+        _comfort.Stats);
 }

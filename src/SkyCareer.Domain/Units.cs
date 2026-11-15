@@ -47,5 +47,14 @@ public readonly record struct GeoPosition(double Latitude, double Longitude)
         return 2 * EarthRadiusNm * Math.Asin(Math.Min(1, Math.Sqrt(a)));
     }
 
+    /// <summary>Great-circle initial true course to <paramref name="other"/> in degrees (0–360).</summary>
+    public double InitialCourseTo(GeoPosition other)
+    {
+        double lat1 = ToRad(Latitude), lat2 = ToRad(other.Latitude), dLon = ToRad(other.Longitude - Longitude);
+        double y = Math.Sin(dLon) * Math.Cos(lat2);
+        double x = Math.Cos(lat1) * Math.Sin(lat2) - Math.Sin(lat1) * Math.Cos(lat2) * Math.Cos(dLon);
+        return (Math.Atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 }

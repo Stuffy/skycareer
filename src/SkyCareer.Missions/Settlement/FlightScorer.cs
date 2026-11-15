@@ -7,14 +7,21 @@ public sealed record FlightScore(int Total, int Landing, int Smoothness, int Pun
 /// <summary>Scores a flight 0–100 using the mission type's weights, so e.g. VIP and ambulance flights punish rough flying harder.</summary>
 public static class FlightScorer
 {
-    public static FlightScore Score(ScoringRule rule, FlightResult r, TimeSpan lateBy)
+    /// <summary>Landing 0–100: full marks up to half the type's maximum touchdown rate, minus 10 per bounce.</summary>
+    public static double Landing(ScoringRule rule, FlightResult r)
     {
         double maxFpm = Math.Max(50, rule.MaxTouchdownFpm);
         double fpm = Math.Abs(r.TouchdownFpm);
         double landing = fpm <= maxFpm * 0.5 ? 100 : 100 * (1 - (fpm - maxFpm * 0.5) / (maxFpm * 1.5));
-        landing = Math.Clamp(landing - r.Bounces * 10, 0, 100);
+        return Math.Clamp(landing - r.Bounces * 10, 0, 100);
+    }
 
-        double smooth = r.MaxGForce <= rule.MaxGForce ? 100 : 100 - (r.MaxGForce - rule.MaxGForce) * 200;
+    /// <param name="comfort">Passenger comfort of the flight; when given, its in-flight part is the smoothness instead of the peak G alone.</param>
+    public static FlightScore Score(ScoringRule rule, FlightResult r, TimeSpan lateBy, ComfortRating? comfort = null)
+    {
+        double landing = Landing(rule, r);
+
+        double smooth = comfort?.InFlight ?? (r.MaxGForce <= rule.MaxGForce ? 100 : 100 - (r.MaxGForce - rule.MaxGForce) * 200);
         smooth = Math.Clamp(smooth, 0, 100);
 
         double punctuality = lateBy <= TimeSpan.Zero ? 100 : Math.Clamp(100 - lateBy.TotalMinutes / 15 * 10, 0, 100);

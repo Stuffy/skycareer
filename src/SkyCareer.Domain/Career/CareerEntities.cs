@@ -152,6 +152,8 @@ public sealed class MissionContract
     public int? PackageLeg { get; set; }
     /// <summary>Flight number (1–9999): fixed per route for scheduled flights, random otherwise, return legs +1.</summary>
     public int? FlightNumber { get; set; }
+    /// <summary>Demand event at the destination that raised the payout (the event kind's name); null for none.</summary>
+    public string? DemandEvent { get; set; }
     /// <summary>Market stream the offer was generated from (career seed, game date, origin, aircraft, search).</summary>
     public string? MarketStream { get; set; }
     /// <summary>Attempt number within <see cref="MarketStream"/>; the next search of the stream continues after the highest.</summary>
@@ -184,6 +186,10 @@ public sealed class FlightRecord
     public double TouchdownFpm { get; set; }
     public double MaxGForce { get; set; }
     public int Score { get; set; }
+    /// <summary>Passenger comfort 0–100; null on flights without passengers or from before 0.5.</summary>
+    public int? Comfort { get; set; }
+    /// <summary>What the passengers said, one comment per line (in the language of the settlement).</summary>
+    public string? PassengerComments { get; set; }
     public decimal Revenue { get; set; }
     public decimal Costs { get; set; }
     /// <summary>The job's flight number (callsign = airline ICAO + number); null for flights from before 0.3.</summary>

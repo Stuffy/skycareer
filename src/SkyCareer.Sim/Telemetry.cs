@@ -32,6 +32,31 @@ public sealed record Telemetry
     public bool OverspeedWarning { get; init; }
     public bool StallWarning { get; init; }
     public string AircraftTitle { get; init; } = "";
+    /// <summary>Magnetic variation at the aircraft, degrees, east positive (magnetic = true − variation); null in old recordings.</summary>
+    public double? MagVar { get; init; }
+    /// <summary>Ground track, degrees true; null in old recordings.</summary>
+    public double? TrackTrueDeg { get; init; }
+    /// <summary>Heading, degrees true; null in old recordings.</summary>
+    public double? HeadingTrueDeg { get; init; }
+    /// <summary>Bank angle in degrees (sign = direction); null in old recordings.</summary>
+    public double? BankDeg { get; init; }
+    public double? PitchDeg { get; init; }
+    /// <summary>Ambient wind at the aircraft: speed in knots and the true direction it blows from.</summary>
+    public double? WindSpeedKt { get; init; }
+    public double? WindDirectionDeg { get; init; }
+    /// <summary>Ambient visibility in metres.</summary>
+    public double? VisibilityM { get; init; }
+    /// <summary>The sim's UTC time (seconds since midnight) and day of the year: the sim's date, not the real one.</summary>
+    public double? ZuluSeconds { get; init; }
+    public double? ZuluDayOfYear { get; init; }
+
+    /// <summary>What a landing right now would be flown in (night, visibility, crosswind); null fields where data is missing.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Domain.Career.LandingConditions Conditions => new(
+        ZuluSeconds is { } s && ZuluDayOfYear is { } d ? Domain.World.SolarPosition.IsNight(Position, d, s) : null,
+        VisibilityM,
+        WindSpeedKt is { } w && WindDirectionDeg is { } dir && HeadingTrueDeg is { } h ? Domain.World.Navigation.CrosswindKt(dir, w, h) : null,
+        WindSpeedKt, WindDirectionDeg);
 
     public GeoPosition Position => new(Latitude, Longitude);
 }

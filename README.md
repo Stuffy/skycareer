@@ -41,7 +41,15 @@ airline career: accept jobs, build a fleet, keep costs under control and earn re
 - **Scoring and integrity** – landing, punctuality and handling feed into score and reputation; a better reputation
   unlocks mission types and raises the pay of new jobs (up to +50 % at reputation 100). Slew, time acceleration,
   in-flight refuelling and position jumps are detected and cost part of the pay, but never void the flight.
+- **Passenger comfort and special loads** – passengers rate how the flight was flown and comment on it; a very
+  comfortable flight earns a tip. Patients, live animals and dangerous goods set limits on G load, bank and sink rate,
+  organ transports pay for every minute saved.
+- **A living world** – weekly demand events make some destinations pay more, fuel prices differ by country, and landings
+  at night, in poor visibility or with a strong crosswind pay a bonus.
 - **Crash-safe** – flights in progress are recorded and resumed automatically after an app restart.
+- **Navigation** – course, distance and time en route on every job, a live direct-to on the live flight page and the
+  destination's coordinates for a GPS user waypoint, so bush strips that aren't in the MSFS database can be flown by
+  dead reckoning.
 - **Integrations** – SimBrief (planning and OFP check), GSX Pro (boarding and deboarding in sync, settlement after
   deboarding, GSX receipts as costs) and BeyondATC (flight plan export).
 - **Languages** – English and German; the app follows the Windows display language and can be switched under
@@ -114,6 +122,9 @@ count; the job card lists them.
 ### BeyondATC
 BeyondATC has no public interface. "Flight plan (.pln)" saves an MSFS flight plan to `Documents\SkyCareer\Flugplaene`,
 which BeyondATC (VFR › file import) and the EFB can load. For IFR flights BeyondATC uses the current SimBrief OFP directly.
+Airfields MSFS doesn't know (small strips like "BR-2197") become a user waypoint with their coordinates, followed by the
+nearest airport MSFS knows as the formal destination (MSFS only loads plans between airports); SimBrief
+can't plan such legs.
 
 ## Custom aircraft profiles
 

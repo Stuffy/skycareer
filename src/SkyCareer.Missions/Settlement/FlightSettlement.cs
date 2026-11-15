@@ -34,6 +34,11 @@ public sealed record SettlementResult(
     int ReputationChange,
     IReadOnlyList<string> Notes)
 {
+    /// <summary>Passenger comfort of the flight; null on flights without passengers or without flight data.</summary>
+    public ComfortRating? Comfort { get; init; }
+    /// <summary>What the passengers said about the flight (in the language of the settlement).</summary>
+    public IReadOnlyList<string> PassengerComments { get; init; } = [];
+
     public decimal Revenue => Lines.Where(l => l.Amount > 0).Sum(l => l.Amount);
     public decimal Costs => -Lines.Where(l => l.Amount < 0).Sum(l => l.Amount);
     public decimal Profit => Lines.Sum(l => l.Amount);
@@ -46,7 +51,7 @@ public sealed record SettlementResult(
 public static class FlightSettlement
 {
     /// <summary>Aircraft must stop within this distance of the destination's reference point.</summary>
-    public const double ArrivalRadiusNm = 3;
+    public const double ArrivalRadiusNm = Navigation.ArrivalRadiusNm;
     /// <summary>Payout share deducted per departure check that was red at liftoff, capped at three.</summary>
     public const decimal DepartureIssuePenalty = 0.10m;
     /// <summary>All rule violations of one flight together never cost more than this share of the payout.</summary>
@@ -54,6 +59,30 @@ public static class FlightSettlement
     /// <summary>Reputation per GSX service completed before departure on a passenger flight, at most <see cref="MaxGroundServiceReputation"/>.</summary>
     public const int GroundServiceReputation = 1;
     public const int MaxGroundServiceReputation = 2;
+
+    /// <summary>Passenger comfort from which the passengers tip, and the tip's share of the payout at that score and at 100.</summary>
+    public const int TipFromComfort = 90;
+    public const decimal MinTipShare = 0.02m, MaxTipShare = 0.05m;
+    /// <summary>Payout share for a landing at night, in poor visibility or with a strong crosswind; they add up.</summary>
+    public const decimal ConditionBonusShare = 0.05m;
+    public const double LowVisibilityM = 5000, StrongCrosswindKt = 10;
+
+    /// <summary>The tip passengers leave for a very comfortable flight, as a share of the payout (0 below <see cref="TipFromComfort"/>).</summary>
+    public static decimal TipShare(int comfort) => comfort < TipFromComfort ? 0
+        : MinTipShare + (MaxTipShare - MinTipShare) * Math.Min(100 - TipFromComfort, comfort - TipFromComfort) / (100 - TipFromComfort);
+
+    /// <summary>The demanding conditions a landing was flown in, each worth <see cref="ConditionBonusShare"/> of the payout.</summary>
+    public static IReadOnlyList<string> ConditionBonuses(LandingConditions? conditions)
+    {
+        var bonuses = new List<string>();
+        if (conditions is null) return bonuses;
+        if (conditions.Night == true) bonuses.Add(L.T("Night landing bonus"));
+        if (conditions.VisibilityM is { } visibility and < LowVisibilityM)
+            bonuses.Add(L.F("Low visibility bonus ({0:0.0} km)", visibility / 1000));
+        if (conditions.CrosswindKt is { } crosswind and >= StrongCrosswindKt)
+            bonuses.Add(L.F("Crosswind landing bonus ({0:N0} kt)", crosswind));
+        return bonuses;
+    }
 
     /// <summary>Reputation the GSX services before departure earn: only with passengers aboard.</summary>
     public static int GroundServiceBonus(MissionContract c) =>
@@ -125,9 +154,12 @@ public static class FlightSettlement
             _ => FlightOutcome.Completed
         };
 
+        // Passengers judge the whole flight, not just its peak G.
+        var comfort = outcome != FlightOutcome.Crashed && c.TotalPassengers > 0 && r.Comfort is { } flown
+            ? PassengerComfort.Rate(r, i.Type.Scoring, flown) : null;
         var score = outcome is FlightOutcome.Crashed
             ? new FlightScore(0, 0, 0, 0, 0)
-            : FlightScorer.Score(i.Type.Scoring, r, lateBy);
+            : FlightScorer.Score(i.Type.Scoring, r, lateBy, comfort);
 
         // Revenue
         int reputation;
@@ -140,6 +172,20 @@ public static class FlightSettlement
                     lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * i.Type.Pay.OnTimeBonus, 0), L.T("On-time bonus")));
                 if (i.PackageBonus > 0)
                     lines.Add(new(LedgerCategory.Bonus, Math.Round(i.PackageBonus, 0), L.T("Return flight bonus")));
+                if (outcome == FlightOutcome.Completed && i.Type.Timing.EarlyBonus(-lateBy) is > 0 and var early)
+                    lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * early, 0), L.F("Early arrival bonus ({0:N0} min)", -lateBy.TotalMinutes)));
+                if (comfort is not null && TipShare(comfort.Score) is > 0 and var tip)
+                    lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * tip, 0), L.F("Passenger tip (comfort {0})", comfort.Score)));
+                // A demanding landing only pays when it was a decent one.
+                if (Math.Abs(r.TouchdownFpm) <= i.Type.Scoring.MaxTouchdownFpm)
+                    foreach (var bonus in ConditionBonuses(r.LandingConditions))
+                        lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * ConditionBonusShare, 0), bonus));
+                if (i.Type.Handling is { } handling && r.Comfort is { } handled)
+                    foreach (var breach in handling.Breaches(handled).Take(HandlingRule.MaxBreaches))
+                    {
+                        lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * handling.Penalty, 0), $"{handling.ReasonText}: {breach}"));
+                        notes.Add(L.F("Handling limit exceeded ({0}): {1}", handling.ReasonText, breach));
+                    }
                 if (outcome == FlightOutcome.Late)
                 {
                     lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * 0.25m, 0), L.F("Late arrival {0:N0} min", lateBy.TotalMinutes)));
@@ -227,7 +273,11 @@ public static class FlightSettlement
         if (Math.Abs(r.TouchdownFpm) > 600) notes.Add(L.F("Hard landing ({0:N0} fpm) – inspection recommended.", r.TouchdownFpm));
 
         return new SettlementResult(outcome, score, lines, landedAt.Ident, arrivalTime, blockHours, airHours,
-            conditionLoss, reputation, notes);
+            conditionLoss, reputation, notes)
+        {
+            Comfort = comfort,
+            PassengerComments = comfort is null ? [] : PassengerComfort.Comments(comfort, lateBy, c.GroundServiceList, c.Id)
+        };
     }
 
     private static void AddCost(List<CostLine> lines, LedgerCategory category, decimal cost, string description)

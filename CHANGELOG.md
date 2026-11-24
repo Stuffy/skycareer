@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.6.0 – 2026-11-24
 
 ### Added
 - **Jobs with several stops:** bush supply, cargo feeder and the new mail run sometimes come as a run over 3–4 stops

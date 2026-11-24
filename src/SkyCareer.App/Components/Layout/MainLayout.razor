@@ -29,6 +29,7 @@ else
             <MudNavMenu>
                 <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Assignment">@T("Jobs")</MudNavLink>
                 <MudNavLink Href="airline" Icon="@Icons.Material.Filled.Business">@T("Airline")</MudNavLink>
+                <MudNavLink Href="clients" Icon="@Icons.Material.Filled.Handshake">@T("Clients")</MudNavLink>
                 <MudNavLink Href="fleet" Icon="@Icons.Material.Filled.AirplanemodeActive">@T("Fleet")</MudNavLink>
                 <MudNavLink Href="finance" Icon="@Icons.Material.Filled.AccountBalance">@T("Finances")</MudNavLink>
                 <MudNavLink Href="logbook" Icon="@Icons.Material.Filled.MenuBook">@T("Logbook")</MudNavLink>
@@ -53,6 +54,7 @@ else
         <MudMainContent>
             <div class="pa-4">
                 <UpdateBanner />
+                <InFlightEventPanel />
                 <ErrorBoundary @ref="_errorBoundary">
                     <ChildContent>
                         @Body

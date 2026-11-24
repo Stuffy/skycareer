@@ -2,6 +2,7 @@
   "id": "h145",
   "name": "Airbus H145",
   "icaoType": "EC45",
+  "deliveryAirport": "EDMA",
   "simMatch": ["H145", "EC145"],
   "operatingEmptyKg": 1919,
   "maxZeroFuelKg": 3800,

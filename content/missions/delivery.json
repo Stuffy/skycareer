@@ -1,0 +1,26 @@
+{
+  "id": "delivery",
+  "name": "Delivery flight",
+  "description": "Pick up a newly bought aircraft at the factory and fly it to the home base. Not offered on the market – it comes with the purchase.",
+  "texts": {
+    "de": {
+      "name": "Überführungsflug",
+      "description": "Ein neu gekauftes Flugzeug im Werk abholen und zur Heimatbasis fliegen. Nicht auf dem Markt – kommt mit dem Kauf."
+    }
+  },
+  "category": "ferry",
+  "distance": {
+    "minNm": 1,
+    "maxNm": 20000
+  },
+  "pay": {
+    "base": 0
+  },
+  "scoring": {
+    "landingRateWeight": 1,
+    "punctualityWeight": 0.2
+  },
+  "simBrief": "optional",
+  "flightRules": "any",
+  "weight": 0
+}

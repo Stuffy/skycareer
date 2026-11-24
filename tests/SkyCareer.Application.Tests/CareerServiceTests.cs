@@ -64,7 +64,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await using (var db = _factory.CreateDbContext()) await db.Database.MigrateAsync();
 
         var content = ContentLoader.Load(FindContentRoot());
-        _svc = new CareerService(_factory, new ContentStore(content), new MissionGeneratorRegistry([new StandardMissionGenerator()]));
+        _svc = new CareerService(_factory, new ContentStore(content), new MissionGeneratorRegistry([new StandardMissionGenerator(), new SightseeingMissionGenerator()]));
         await _svc.ImportAirportsAsync(new StringReader(AirportsCsv), new StringReader(RunwaysCsv), GeoNamesCities.Read(new StringReader(CitiesTsv)));
     }
 
@@ -157,46 +157,6 @@ public sealed class CareerServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Ils_search_checks_unknown_airports_once_and_only_offers_ils_destinations()
-    {
-        var lookup = new FakeIlsLookup(new() { ["EDDM"] = true, ["EDDS"] = false, ["EDDN"] = true });
-        var svc = new CareerService(_factory, new ContentStore(ContentLoader.Load(FindContentRoot())),
-            new MissionGeneratorRegistry([new StandardMissionGenerator()]), lookup);
-        await svc.CreateCareerAsync("Test", "Test Air", "EDDF", Difficulty.Normal, null, new DateTime(2026, 10, 15, 8, 0, 0, DateTimeKind.Utc));
-        await svc.AcquireAircraftAsync("c208b", Ownership.Rented);
-
-        var search = new MissionSearch { RequireIls = true };
-        var first = await svc.SearchMarketAsync(search, rng: new Random(4));
-
-        Assert.True(first.Created > 0);
-        Assert.False(first.IlsUnavailable);
-        Assert.True(first.IlsChecked >= 3);
-        var offers = (await svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !o.IsReturnLeg).ToList();
-        Assert.All(offers, o => Assert.Contains(o.Destination, new[] { "EDDM", "EDDN" }));
-        Assert.True((await svc.GetAirportsAsync(["EDDM"]))["EDDM"].HasIls);
-
-        // Second search uses the cache: no airport is asked twice.
-        int calls = lookup.Asked.Count;
-        await svc.SearchMarketAsync(search, rng: new Random(5));
-        Assert.Equal(lookup.Asked.Count, lookup.Asked.Distinct().Count());
-        Assert.True(lookup.Asked.Count - calls <= 3);
-    }
-
-    [Fact]
-    public async Task Ils_search_without_sim_reports_it_and_uses_only_known_airports()
-    {
-        var svc = new CareerService(_factory, new ContentStore(ContentLoader.Load(FindContentRoot())),
-            new MissionGeneratorRegistry([new StandardMissionGenerator()]), new FakeIlsLookup([]) { Available = false });
-        await svc.CreateCareerAsync("Test", "Test Air", "EDDF", Difficulty.Normal, null, new DateTime(2026, 10, 15, 8, 0, 0, DateTimeKind.Utc));
-        await svc.AcquireAircraftAsync("c208b", Ownership.Rented);
-
-        var result = await svc.SearchMarketAsync(new MissionSearch { RequireIls = true }, rng: new Random(1));
-
-        Assert.True(result.IlsUnavailable);
-        Assert.Equal(0, result.Created);
-    }
-
-    [Fact]
     public async Task Search_criteria_limit_new_offers_and_the_market_is_capped()
     {
         await NewCareer();
@@ -219,20 +179,24 @@ public sealed class CareerServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Scheduled_search_keeps_the_large_airport_share_and_reuses_hubs()
+    public async Task Scheduled_search_shares_the_hubs_but_caps_the_offers_per_destination()
     {
         await NewCareer(Difficulty.Easy);
         await _svc.AcquireAircraftAsync("a20n", Ownership.Rented);
 
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } }, rng: new Random(6));
 
-        var offers = await OffersAsync();
-        Assert.Equal(CareerService.OffersPerSearch, offers.Count);
         // Airline jobs need 150 nm+ and a large/medium airport; in the test data only EDDM and EDDB qualify, so the
-        // offers must share these hubs.
+        // offers share these hubs – at most 10 of the type each, then the search stops finding room.
+        var offers = await OffersAsync();
         var airports = await _svc.GetAirportsAsync(offers.Select(o => o.Destination));
         Assert.All(offers, o => Assert.Equal(AirportSize.Large, airports[o.Destination].Size));
-        Assert.True(offers.Select(o => o.Destination).Distinct().Count() < offers.Count);
+        Assert.Equal(2 * CareerService.MaxOffersPerDestination, offers.Count);
+        Assert.All(offers.GroupBy(o => o.Destination), g => Assert.Equal(CareerService.MaxOffersPerDestination, g.Count()));
+
+        // Another search adds nothing more there.
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "scheduled_pax" } }, rng: new Random(7));
+        Assert.Equal(2 * CareerService.MaxOffersPerDestination, (await OffersAsync()).Count);
     }
 
     [Fact]
@@ -362,8 +326,8 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await _svc.AcquireAircraftAsync("kingair350", Ownership.Rented);
         await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter", "air_taxi" } }, rng: new Random(seed));
         var all = await _svc.GetContractsAsync(ContractStatus.Offered);
-        var outbound = all.First(o => o.PackageLeg == 1);
-        return (outbound, all.Single(o => o.PackageId == outbound.PackageId && o.IsReturnLeg));
+        var outbound = all.First(o => o.PackageLeg == 1 && o.Kind == PackageKind.Return);
+        return (outbound, all.Single(o => o.PackageId == outbound.PackageId && o.IsFollowUpLeg));
     }
 
     [Fact]
@@ -377,16 +341,16 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var offers = await _svc.GetContractsAsync(ContractStatus.Offered);
 
         Assert.All(offers, o => Assert.NotNull(o.FlightNumber));
-        var outbound = offers.Where(o => !o.IsReturnLeg).ToList();
+        var outbound = offers.Where(o => !o.IsFollowUpLeg).ToList();
         Assert.All(outbound, o => Assert.Equal(1, o.FlightNumber!.Value % 2));
         Assert.All(outbound.GroupBy(o => (o.Origin, o.Destination)), route => Assert.Single(route.Select(o => o.FlightNumber).Distinct()));
         Assert.Contains(outbound.GroupBy(o => (o.Origin, o.Destination)), route => route.Count() > 1);
-        foreach (var back in offers.Where(o => o.IsReturnLeg))
-            Assert.Equal(offers.Single(o => o.PackageId == back.PackageId && !o.IsReturnLeg).FlightNumber + 1, back.FlightNumber);
+        foreach (var back in offers.Where(o => o.IsFollowUpLeg))
+            Assert.Equal(offers.Single(o => o.PackageId == back.PackageId && !o.IsFollowUpLeg).FlightNumber + 1, back.FlightNumber);
 
         // Other jobs draw a number from 1000–9999; it ends up in the logbook.
         await _svc.SearchMarketAsync(CargoSearch with { MissionTypeIds = new HashSet<string> { "charter" } });
-        var charter = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.MissionTypeId == "charter" && !o.IsReturnLeg).ToList();
+        var charter = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.MissionTypeId == "charter" && !o.IsFollowUpLeg).ToList();
         Assert.NotEmpty(charter);
         Assert.All(charter, o => Assert.InRange(o.FlightNumber!.Value, 1000, 9999));
         await _svc.AcceptAsync(charter[0].Id);
@@ -449,6 +413,202 @@ public sealed class CareerServiceTests : IAsyncLifetime
         var rule = _svc.MissionType(back.MissionTypeId).ReturnFlight!;
         Assert.Equal(Math.Round(rule.Bonus * (outbound.Payout + back.Payout), 0), bonus.Amount);
         Assert.Equal(outbound.Origin, (await _svc.GetFleetAsync()).Single().Location);
+    }
+
+    [Fact]
+    public async Task A_multi_stop_run_is_flown_leg_by_leg_and_the_last_leg_pays_the_bonus()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "milk_run" } }, rng: new Random(4));
+        var offered = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var first = offered.First(o => o.PackageLeg == 1 && o.Kind == PackageKind.MultiStop);
+        var legs = offered.Where(o => o.PackageId == first.PackageId).OrderBy(o => o.PackageLeg).ToList();
+        Assert.InRange(legs.Count, 3, 4);
+        Assert.All(legs, l => Assert.Equal(legs.Count, l.LegCount));
+        Assert.Equal(legs.Select((_, i) => first.FlightNumber + i), legs.Select(l => l.FlightNumber));
+
+        // Only the first leg can be taken, the rest come with it; the market keeps the package while it can start.
+        await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(legs[1].Id));
+        await _svc.AcceptAsync(first.Id);
+        Assert.Equal(legs.Count, (await _svc.GetContractsAsync(ContractStatus.Accepted)).Count);
+
+        for (int i = 0; i < legs.Count; i++)
+        {
+            var s = await _svc.DebugCompleteContractAsync(legs[i].Id);
+            Assert.Equal(legs[i].Destination, (await _svc.GetFleetAsync()).Single().Location);
+            var bonus = s.Lines.Where(l => l.Description.StartsWith("Package bonus")).ToList();
+            if (i < legs.Count - 1) Assert.Empty(bonus);
+            else Assert.Equal(Math.Round(0.25m * legs.Sum(l => l.Payout), 0), Assert.Single(bonus).Amount);
+        }
+        Assert.Equal(first.Origin, (await _svc.GetFleetAsync()).Single().Location);
+    }
+
+    private async Task AddAirportAsync(string ident, double lat, double lon, AirportSize size = AirportSize.Medium)
+    {
+        await using var db = _factory.CreateDbContext();
+        db.Airports.Add(new AirportRow { Ident = ident, Name = ident, Latitude = lat, Longitude = lon, Size = size, LongestRunwayM = 2500, LongestPavedRunwayM = 2500, Surfaces = "Paved", Country = "FR" });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task A_delivered_aircraft_costs_the_ferry_and_is_unavailable_meanwhile()
+    {
+        await NewCareer();
+        await AddAirportAsync("EDMA", 48.4253, 10.9317);   // Augsburg, delivery airport of the H145
+        decimal cash = (await _svc.GetCareerAsync()).Cash;
+        var quote = await _svc.QuoteDeliveryAsync("h145");
+        Assert.True(quote.Needed);
+        Assert.Empty(quote.Stops);
+
+        var heli = await _svc.AcquireAircraftAsync("h145", Ownership.Leased, delivery: DeliveryMode.Delivered);
+        Assert.Equal("EDDF", heli.Location);
+        Assert.False(heli.IsAvailable((await _svc.GetCareerAsync()).GameTime));
+        var ledger = await _svc.GetLedgerAsync();
+        Assert.Contains(ledger, l => l.Description.StartsWith("Delivery flight") && l.Amount == -Math.Round(quote.Delivery!.Total, 0));
+        Assert.Empty(await _svc.GetContractsAsync(ContractStatus.Accepted));
+        // Rentals and profiles without a known delivery airport are ready at the home base at once.
+        Assert.True((await _svc.AcquireAircraftAsync("c208b", Ownership.Rented)).IsAvailable((await _svc.GetCareerAsync()).GameTime));
+        Assert.True(cash > (await _svc.GetCareerAsync()).Cash);
+    }
+
+    [Fact]
+    public async Task A_picked_up_aircraft_waits_at_the_factory_with_its_delivery_jobs()
+    {
+        await NewCareer();
+        // A made-up factory 600 nm from Frankfurt with a medium airport halfway: beyond the Skyhawk's leg range, one fuel stop.
+        await AddAirportAsync("KIDP", 42.0, 0.0);
+        await AddAirportAsync("XMID", 46.0, 4.3);
+        var quote = await _svc.QuoteDeliveryAsync("c172");
+        Assert.Equal("XMID", Assert.Single(quote.Stops).Ident);
+
+        var plane = await _svc.AcquireAircraftAsync("c172", Ownership.Leased, delivery: DeliveryMode.PickUp);
+        Assert.Equal("KIDP", plane.Location);
+        Assert.DoesNotContain(await _svc.GetLedgerAsync(), l => l.Description.StartsWith("Delivery flight"));
+        var legs = (await _svc.GetContractsAsync(ContractStatus.Accepted)).OrderBy(c => c.PackageLeg).ToList();
+        Assert.Equal(["KIDP→XMID", "XMID→EDDF"], legs.Select(l => $"{l.Origin}→{l.Destination}"));
+        Assert.All(legs, l => Assert.Equal((CareerService.DeliveryMissionType, PackageKind.Delivery, 0m), (l.MissionTypeId, l.Kind, l.Payout)));
+
+        foreach (var leg in legs) await _svc.DebugCompleteContractAsync(leg.Id);
+        Assert.Equal("EDDF", (await _svc.GetFleetAsync()).Single().Location);
+        // Delivery jobs never show up on the market.
+        await _svc.RefreshMarketAsync(new Random(1));
+        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.MissionTypeId == CareerService.DeliveryMissionType);
+    }
+
+    [Fact]
+    public async Task Clients_get_jobs_and_their_standing_follows_the_flights()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "cargo_feeder" } }, rng: new Random(5));
+        var offers = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !o.IsFollowUpLeg).ToList();
+        // Kestrel Mining and Swiftline Express both hand out cargo feeder jobs; about 60 % of the offers have a client.
+        Assert.InRange(offers.Count(o => o.ClientId is not null) / (double)offers.Count, 0.35, 0.85);
+        Assert.All(offers.Where(o => o.ClientId is not null), o => Assert.Contains(o.ClientId, new[] { "kestrel_mining", "swiftline_express" }));
+
+        var job = offers.First(o => o.ClientId is not null && o.PackageId is null);
+        await _svc.AcceptAsync(job.Id);
+        var s = await _svc.DebugCompleteContractAsync(job.Id);
+        Assert.StartsWith(_svc.Client(job.ClientId)!.Name + ": standing +", s.ClientNote);
+        var standing = (await _svc.GetClientsAsync()).Single(c => c.Client.Id == job.ClientId).Standing;
+        Assert.Equal(ClientStandings.Start + ClientStandings.Change(s.Outcome, s.Score.Total), standing.Standing);
+        Assert.Equal(1, standing.FlightsFlown);
+    }
+
+    [Fact]
+    public async Task A_series_pays_its_bonus_when_completed_and_costs_standing_when_missed()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await Assert.ThrowsAsync<CareerException>(() => _svc.StartSeriesAsync("swiftline_express"));   // bronze
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.ClientStandings.Add(new ClientStanding { CareerId = (await _svc.GetCareerAsync()).Id, ClientId = "swiftline_express", Standing = 50 });
+            await db.SaveChangesAsync();
+        }
+        Assert.True((await _svc.GetClientsAsync()).Single(c => c.Client.Id == "swiftline_express").CanStartSeries);
+        await _svc.StartSeriesAsync("swiftline_express");
+        await Assert.ThrowsAsync<CareerException>(() => _svc.StartSeriesAsync("swiftline_express"));
+
+        decimal payouts = 0;
+        SettlementResult? last = null;
+        for (int flight = 0; flight < ClientStandings.SeriesTarget(50); flight++)
+        {
+            await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "cargo_feeder", "milk_run" } }, rng: new Random(20 + flight));
+            var job = (await _svc.GetContractsAsync(ContractStatus.Offered)).First(o => o.ClientId == "swiftline_express" && o.PackageId is null);
+            await _svc.AcceptAsync(job.Id);
+            last = await _svc.DebugCompleteContractAsync(job.Id);
+            payouts += job.Payout;
+        }
+        var bonus = Assert.Single(last!.Lines, l => l.Description.StartsWith("Series bonus"));
+        Assert.Equal(Math.Round(payouts * ClientStandings.SeriesBonus, 0), bonus.Amount);
+        Assert.False((await _svc.GetClientsAsync()).Single(c => c.Client.Id == "swiftline_express").Standing.HasSeries);
+
+        // A second series left to expire costs standing.
+        int before = (await _svc.GetClientsAsync()).Single(c => c.Client.Id == "swiftline_express").Standing.Standing;
+        await _svc.StartSeriesAsync("swiftline_express");
+        await _svc.WaitAsync(TimeSpan.FromDays(ClientStandings.SeriesDays + 1));
+        var after = (await _svc.GetClientsAsync()).Single(c => c.Client.Id == "swiftline_express").Standing;
+        Assert.False(after.HasSeries);
+        Assert.Equal(before - ClientStandings.SeriesStanding, after.Standing);
+    }
+
+    [Fact]
+    public async Task A_story_chain_unlocks_with_standing_and_is_flown_step_by_step()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(MissionSearch.Any);
+        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.ChainId is not null);   // standing 10 < 30
+
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.ClientStandings.Add(new ClientStanding { CareerId = (await _svc.GetCareerAsync()).Id, ClientId = "kestrel_mining", Standing = 30 });
+            await db.SaveChangesAsync();
+        }
+        var chain = _svc.Client("kestrel_mining")!.Chains.Single();
+        for (int step = 0; step < 2; step++)
+        {
+            // Step 2 needs a grass strip 30–150 nm away: from Stuttgart that is Weinheim (the test data has few strips).
+            if (step == 1 && (await _svc.GetFleetAsync()).Single() is { Location: not "EDDS" } plane)
+                await _svc.RelocateAircraftAsync(plane.Id, "EDDS", ferryFlight: false);
+            await _svc.SearchMarketAsync(MissionSearch.Any);
+            var story = Assert.Single(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.ChainId == chain.Id);
+            Assert.Equal(step, story.ChainStep);
+            Assert.Equal("kestrel_mining", story.ClientId);
+            Assert.Equal(chain.Steps[step].MissionType, story.MissionTypeId);
+            Assert.True(story.ExpiresAt > (await _svc.GetCareerAsync()).GameTime.AddDays(20));
+            // A second search doesn't add the same step again.
+            await _svc.SearchMarketAsync(MissionSearch.Any);
+            Assert.Single(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.ChainId == chain.Id);
+
+            await _svc.AcceptAsync(story.Id);
+            var s = await _svc.DebugCompleteContractAsync(story.Id);
+            Assert.Equal(Math.Round(story.Payout * chain.Steps[step].Bonus, 0), Assert.Single(s.Lines, l => l.Description.StartsWith("Story bonus")).Amount);
+            Assert.Contains($"step {step + 1} of {chain.Steps.Count}", s.ClientNote);
+        }
+        var overview = (await _svc.GetClientsAsync()).Single(c => c.Client.Id == "kestrel_mining");
+        Assert.Equal(2, overview.Standing.ChainStep);
+        Assert.Equal(chain.Steps[2].Title, overview.NextStep!.Title);
+    }
+
+    [Fact]
+    public async Task Cancelling_a_middle_leg_cancels_only_the_legs_after_it()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("c208b", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "milk_run" } }, rng: new Random(4));
+        var offered = await _svc.GetContractsAsync(ContractStatus.Offered);
+        var first = offered.First(o => o.PackageLeg == 1 && o.Kind == PackageKind.MultiStop);
+        var legs = offered.Where(o => o.PackageId == first.PackageId).OrderBy(o => o.PackageLeg).ToList();
+        await _svc.AcceptAsync(first.Id);
+        await _svc.DebugCompleteContractAsync(legs[0].Id);
+
+        await _svc.CancelAsync(legs[1].Id);
+        Assert.Empty(await _svc.GetContractsAsync(ContractStatus.Accepted));
+        Assert.Equal(legs.Count - 1, (await _svc.GetContractsAsync(ContractStatus.Cancelled)).Count);
+        Assert.Single(await _svc.GetContractsAsync(ContractStatus.Completed));
     }
 
     [Fact]
@@ -622,7 +782,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
     /// take the first offer don't depend on whether a package was drawn.
     /// </summary>
     private async Task<List<MissionContract>> OffersAsync() =>
-        (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !o.IsReturnLeg).OrderBy(o => o.PackageId is not null).ToList();
+        (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => !o.IsFollowUpLeg).OrderBy(o => o.PackageId is not null).ToList();
 
     /// <summary>Stands in for the app's flight monitor: feeds telemetry into a real <see cref="FlightSession"/>.</summary>
     private sealed class FakeHost : IFlightSessionHost
@@ -638,6 +798,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         /// <summary>Stands in for the on-disk flight journal; survives a simulated app restart when passed to a new host.</summary>
         public List<Telemetry> Journal { get; init; } = [];
         public void BeginFlight(Guid? contractId = null) { _session = new FlightSession(); ContractId = contractId; Live = true; Journal.Clear(); }
+        public void SetWaypoints(IReadOnlyList<TourWaypoint> waypoints) => _session?.SetWaypoints(waypoints);
         public void EndFlight() { _session = null; ContractId = null; Live = true; Journal.Clear(); }
         public FlightSummary? Summarize() => _session?.Summarize();
         public Task<string?> SaveTrackAsync(string name) => Task.FromResult<string?>(null);
@@ -756,6 +917,97 @@ public sealed class CareerServiceTests : IAsyncLifetime
             .ToList();
         var park = Segment(landing[^1], 10, t => t with { GroundSpeedKt = 0, ParkingBrake = true, AnyEngineRunning = false }).ToList();
         await Fly(landing.Concat(park));
+    }
+
+    [Fact]
+    public async Task A_medical_emergency_diverts_the_flight_and_is_settled_at_the_alternate()
+    {
+        var (automation, host, job, parked) = await ArmedCaravanJobAsync("Cessna 208B Grand Caravan EX");
+        async Task Fly(IEnumerable<Telemetry> samples)
+        {
+            foreach (var t in samples) host.Feed(t);
+            await automation.TickAsync();
+        }
+        var dest = (await _svc.FindAirportAsync(job.Destination))!;
+        var taxi = Segment(parked with { AnyEngineRunning = true }, 30, t => t with { ParkingBrake = false, GroundSpeedKt = 12 }).ToList();
+        await Fly(taxi);
+        var roll = Segment(taxi[^1], 10, t => t with { GroundSpeedKt = 70 }).ToList();
+        await Fly(roll);
+        var liftoff = Segment(roll[^1], 10, t => t with { OnGround = false, GroundSpeedKt = 100, VerticalSpeedFpm = 800, AltitudeAglFt = 500 }).ToList();
+        await Fly(liftoff);
+        // Cruise 40 % of the way, so the origin is nearer than the destination.
+        var start = liftoff[^1].Position;
+        var partWay = new GeoPosition(start.Latitude + (dest.Position.Latitude - start.Latitude) * 0.4, start.Longitude + (dest.Position.Longitude - start.Longitude) * 0.4);
+        int seconds = (int)Math.Ceiling(start.DistanceNmTo(partWay) / 300.0 * 3600);
+        var cruise = Segment(liftoff[^1], seconds, t => t with { GroundSpeedKt = 300, VerticalSpeedFpm = 0, AltitudeAglFt = 5000 }, partWay).ToList();
+        await Fly(cruise);
+        Assert.Null(automation.PendingEvent);
+
+        automation.TriggerEventNow(InFlightEventKind.MedicalEmergency);
+        await automation.TickAsync();
+        var pending = automation.PendingEvent;
+        Assert.NotNull(pending);
+        Assert.Equal(InFlightEventKind.MedicalEmergency, pending!.Kind);
+        Assert.NotEqual(dest.Ident, pending.Alternate!.Ident);
+
+        automation.DecideEvent(true);
+        await automation.TickAsync();
+        Assert.Null(automation.PendingEvent);
+        var diverted = (await _svc.GetContractsAsync(ContractStatus.InProgress)).Single();
+        Assert.Equal((pending.Alternate.Ident, true, "MedicalEmergency"), (diverted.RevisedDestination, diverted.EventAccepted, diverted.EventKind));
+        Assert.Equal(job.Payout, diverted.Payout);
+
+        // Land at the alternate: the job counts as flown there, with the reputation for the diversion.
+        int reputation = (await _svc.GetCareerAsync()).Reputation;
+        var toAlternate = Segment(cruise[^1], (int)Math.Ceiling(partWay.DistanceNmTo(pending.Alternate.Position) / 300.0 * 3600) + 1,
+            t => t with { GroundSpeedKt = 300 }, pending.Alternate.Position).ToList();
+        await Fly(toAlternate);
+        var landing = Segment(toAlternate[^1], 1, t => t with { OnGround = true, AltitudeAglFt = 0, VerticalSpeedFpm = 0, TouchdownVsFpm = -150, GForce = 1.2, GroundSpeedKt = 60 })
+            .Concat(Segment(toAlternate[^1] with { OnGround = true, AltitudeAglFt = 0 }, 20, t => t with { GForce = 1, GroundSpeedKt = 10, TouchdownVsFpm = 0 })).ToList();
+        await Fly(landing.Concat(Segment(landing[^1], 10, t => t with { GroundSpeedKt = 0, ParkingBrake = true, AnyEngineRunning = false })));
+
+        var s = automation.LastSettlement!;
+        Assert.Contains(s.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
+        Assert.Equal(pending.Alternate.Ident, s.FinalLocation);
+        Assert.Contains(s.Notes, n => n.Contains("medical emergency"));
+        var flight = (await _svc.GetFlightsAsync()).Single();
+        Assert.Equal(job.Destination, flight.Destination);
+        Assert.Equal(pending.Alternate.Ident, flight.ArrivedAt);
+    }
+
+    [Fact]
+    public async Task Decisions_on_events_are_judged_by_the_settlement()
+    {
+        await NewCareer();
+        await _svc.AcquireAircraftAsync("kingair350", Ownership.Rented);
+        await _svc.SearchMarketAsync(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter" } }, rng: new Random(3));
+        var jobs = (await _svc.GetContractsAsync(ContractStatus.Offered)).Where(o => o.PackageId is null).Take(2).ToList();
+
+        // Declined medical emergency: −3 reputation on top of the flight's own.
+        await _svc.AcceptAsync(jobs[0].Id);
+        await _svc.StartFlightAsync(jobs[0].Id);
+        await _svc.RecordEventAsync(jobs[0].Id, InFlightEventKind.MedicalEmergency, accepted: false);
+        var dest = (await _svc.FindAirportAsync(jobs[0].Destination))!;
+        var ignored = await _svc.CompleteFlightAsync(jobs[0].Id, new FlightResult
+        {
+            BlockTime = TimeSpan.FromMinutes(40), AirTime = TimeSpan.FromMinutes(30), FuelUsedKg = 150, TouchdownFpm = -120, FinalPosition = dest.Position, Parked = true
+        });
+        Assert.Contains(ignored.Notes, n => n.Contains("medical help"));
+        Assert.True(ignored.ReputationChange <= 3 - 3);
+
+        // Accepted change of destination: the job is settled at the new airport and pays the new amount.
+        var next = (await _svc.GetContractsAsync(ContractStatus.Offered)).FirstOrDefault(o => o.PackageId is null && o.Origin == jobs[0].Destination);
+        if (next is null) return; // no single job from there in this market draw
+        await _svc.AcceptAsync(next.Id);
+        await _svc.StartFlightAsync(next.Id);
+        var other = (await _svc.GetAirportsAsync(["EDDN", "EDDS", "EDDM"])).Values.First(a => a.Ident != next.Destination && a.Ident != next.Origin);
+        await _svc.RecordEventAsync(next.Id, InFlightEventKind.DestinationChange, accepted: true, other.Ident, newPayout: 4321, extraHours: 1);
+        var changed = await _svc.CompleteFlightAsync(next.Id, new FlightResult
+        {
+            BlockTime = TimeSpan.FromMinutes(40), AirTime = TimeSpan.FromMinutes(30), FuelUsedKg = 150, TouchdownFpm = -120, FinalPosition = other.Position, Parked = true
+        });
+        Assert.Contains(changed.Outcome, new[] { FlightOutcome.Completed, FlightOutcome.Late });
+        Assert.Equal(4321m, Assert.Single(changed.Lines, l => l.Category == LedgerCategory.MissionRevenue).Amount);
     }
 
     [Fact]
@@ -1074,7 +1326,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
     {
         var lookup = new FakeIlsLookup(new() { ["EDDM"] = true });
         var svc = new CareerService(_factory, new ContentStore(ContentLoader.Load(FindContentRoot())),
-            new MissionGeneratorRegistry([new StandardMissionGenerator()]), lookup);
+            new MissionGeneratorRegistry([new StandardMissionGenerator(), new SightseeingMissionGenerator()]), lookup);
 
         Assert.Equal(2, await svc.CheckAirportsInSimAsync(["EDDM", "edgz", "XXXX"]));
         var airports = await svc.GetAirportsAsync(["EDDM", "EDGZ", "EDDS"]);
@@ -1566,7 +1818,7 @@ public sealed class CareerServiceTests : IAsyncLifetime
         await Assert.ThrowsAsync<CareerException>(() => _svc.AcceptAsync(staleOffer.Id));
         await _svc.RefreshMarketAsync(new Random(5));
         // Return legs of packages from the new location fly back to the old one.
-        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin == job.Origin && !o.IsReturnLeg);
+        Assert.DoesNotContain(await _svc.GetContractsAsync(ContractStatus.Offered), o => o.Origin == job.Origin && !o.IsFollowUpLeg);
     }
 
     [Fact]

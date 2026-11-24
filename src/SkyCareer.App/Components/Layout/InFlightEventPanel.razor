@@ -1,0 +1,26 @@
+@implements IDisposable
+@inject DepartureCoordinator Departure
+
+@* An event during the flight, shown above every page until the crew decides (or the time runs out). *@
+@if (Departure.Automation.PendingEvent is { } e)
+{
+    var left = e.DecideByUtc - DateTime.UtcNow;
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mb-4" Icon="@Icons.Material.Filled.NotificationImportant">
+        <MudText Typo="Typo.h6">@e.Title</MudText>
+        <MudText Typo="Typo.body1" Class="mb-2">@e.Message</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="() => Departure.Automation.DecideEvent(true)">@e.AcceptText</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Dark" OnClick="() => Departure.Automation.DecideEvent(false)">@e.DeclineText</MudButton>
+            <MudSpacer />
+            <MudText Typo="Typo.caption">@F("Without an answer the flight continues as planned in {0:N0} min.", Math.Max(0, Math.Ceiling(left.TotalMinutes)))</MudText>
+        </MudStack>
+    </MudAlert>
+}
+
+@code {
+    protected override void OnInitialized() => Departure.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Departure.Changed -= OnChanged;
+}

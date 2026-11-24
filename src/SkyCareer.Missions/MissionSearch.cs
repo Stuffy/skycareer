@@ -16,13 +16,16 @@ public sealed record MissionSearch
     public int? PaxMax { get; init; }
     public double? CargoMinKg { get; init; }
     public decimal? PayoutMin { get; init; }
+    /// <summary>Pay per planned block hour (€/h), so short and long jobs compare fairly.</summary>
+    public decimal? PayPerHourMin { get; init; }
 
     // Destination airport
     public bool RequirePaved { get; init; }
     public double? MinRunwayM { get; init; }
     public bool RequireLighted { get; init; }
-    public bool RequireIls { get; init; }
     public bool ScheduledServiceOnly { get; init; }
+    /// <summary>Only destinations MSFS knows (<see cref="Airport.KnownToSim"/>): no strips the GPS and flight plans can't find.</summary>
+    public bool KnownToSimOnly { get; init; }
     public IReadOnlySet<AirportSize> Sizes { get; init; } = new HashSet<AirportSize>();
 
     public static MissionSearch Any { get; } = new();
@@ -32,10 +35,14 @@ public sealed record MissionSearch
         string.Join(",", MissionTypeIds.Order(StringComparer.Ordinal)),
         string.Join(",", Sizes.Order()),
         FormattableString.Invariant($"{DistanceMinNm}/{DistanceMaxNm}/{PaxMin}/{PaxMax}/{CargoMinKg}/{PayoutMin}/{MinRunwayM}"),
-        $"{RequirePaved}/{RequireLighted}/{RequireIls}/{ScheduledServiceOnly}");
+        // "False" stands where the former ILS filter was, so markets searched before keep their streams.
+        $"{RequirePaved}/{RequireLighted}/False/{ScheduledServiceOnly}")
+        // Criteria added later only appear when set, for the same reason.
+        + (PayPerHourMin is { } perHour ? FormattableString.Invariant($";pph={perHour}") : "")
+        + (KnownToSimOnly ? ";msfs" : "");
 
     public bool HasDestinationCriteria =>
-        RequirePaved || MinRunwayM is > 0 || RequireLighted || RequireIls || ScheduledServiceOnly || Sizes.Count > 0;
+        RequirePaved || MinRunwayM is > 0 || RequireLighted || ScheduledServiceOnly || KnownToSimOnly || Sizes.Count > 0;
 
     public bool AcceptsType(MissionType type) => MissionTypeIds.Count == 0 || MissionTypeIds.Contains(type.Id);
 
@@ -48,10 +55,14 @@ public sealed record MissionSearch
         double usableLength = RequirePaved ? a.LongestPavedRunwayM : a.LongestRunwayM;
         if (MinRunwayM is { } minLen && usableLength < minLen) return false;
         if (RequireLighted && !a.HasLightedRunway) return false;
-        if (RequireIls && a.HasIls != true) return false;
         if (ScheduledServiceOnly && !a.ScheduledService) return false;
+        if (KnownToSimOnly && !a.KnownToSim) return false;
         return Sizes.Count == 0 || Sizes.Contains(a.Size);
     }
+
+    /// <summary>Whether <paramref name="payout"/> over <paramref name="blockHours"/> reaches <see cref="PayPerHourMin"/>.</summary>
+    public bool AcceptsPayPerHour(decimal payout, double blockHours) =>
+        PayPerHourMin is not { } min || blockHours <= 0 || payout / (decimal)blockHours >= min;
 
     /// <summary>List filter for existing offers. Without destination data, destination criteria count as not met.</summary>
     public bool Matches(MissionContract c, Airport? destination)

@@ -46,6 +46,10 @@
             <MudItem xs="6" md="2"><MudNumericField T="int?" @bind-Value="Filter.PaxMax" @bind-Value:after="Changed" Label="@T("Passengers max")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.CargoMinKg" @bind-Value:after="Changed" Label="@T("Cargo min (kg)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField T="decimal?" @bind-Value="Filter.PayoutMin" @bind-Value:after="Changed" Label="@T("Payout min (€)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2">
+                <MudNumericField T="decimal?" @bind-Value="Filter.PayPerHourMin" @bind-Value:after="Changed" Label="@T("Pay per block hour min (€)")" Min="0" Step="100"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" HelperText="@T("Planned block time at cruise speed")" />
+            </MudItem>
             <MudItem xs="6" md="2"><MudNumericField T="double?" @bind-Value="Filter.MinRunwayM" @bind-Value:after="Changed" Label="@T("Destination runway min (m)")" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" /></MudItem>
             <MudItem xs="6" md="2">
                 <MudSelect T="AirportSize" MultiSelection="true" @bind-SelectedValues="Filter.Sizes" @bind-SelectedValues:after="Changed"
@@ -63,9 +67,28 @@
                     <MudCheckBox T="bool" @bind-Value="Filter.RequirePaved" @bind-Value:after="Changed" Label="@T("Paved runway")" Dense="true" />
                     <MudCheckBox T="bool" @bind-Value="Filter.RequireLighted" @bind-Value:after="Changed" Label="@T("Lighted runway")" Dense="true" />
                     <MudCheckBox T="bool" @bind-Value="Filter.ScheduledServiceOnly" @bind-Value:after="Changed" Label="@T("Scheduled service only")" Dense="true" />
-                    <MudTooltip Text="@(IlsAvailable ? T("ILS data comes from the sim; unknown destinations are queried during the search.") : T("Only known ILS airports – start MSFS for new queries."))">
-                        <MudCheckBox T="bool" @bind-Value="Filter.RequireIls" @bind-Value:after="Changed" Label="@(IlsAvailable ? T("ILS at destination") : T("ILS at destination (sim not connected)"))" Dense="true" />
+                    <MudTooltip Text="@T("Hides strips without an ICAO code that MSFS doesn't know – they can't be loaded in the GPS or a flight plan.")">
+                        <MudCheckBox T="bool" @bind-Value="Filter.KnownToSimOnly" @bind-Value:after="Changed" Label="@T("Only airfields known to MSFS")" Dense="true" />
                     </MudTooltip>
+                </MudStack>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" @bind-Value="Filter.ClientId" @bind-Value:after="Changed" Label="@T("Client (list only)")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Clearable="true" ToStringFunc="ClientLabel">
+                    <MudSelectItem T="string" Value="@MarketFilter.NoClient">@T("Jobs without a client")</MudSelectItem>
+                    @foreach (var c in Career.Content.Clients)
+                    {
+                        <MudSelectItem T="string" Value="@c.Id">@c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="8">
+                <MudStack Row="true" Spacing="4" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Style="height:100%">
+                    <MudCheckBox T="bool" @bind-Value="Filter.StoryOnly" @bind-Value:after="Changed" Label="@T("Story jobs only")" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.PackagesOnly" @bind-Value:after="Changed" Label="@T("Packages only (return, multi-stop)")" Dense="true" />
+                    <MudCheckBox T="bool" @bind-Value="Filter.DemandOnly" @bind-Value:after="Changed" Label="@T("Demand bonus only")" Dense="true" />
+                    <MudText Typo="Typo.caption">@T("These filter the list only, not the job search.")</MudText>
                 </MudStack>
             </MudItem>
         </MudGrid>
@@ -83,7 +106,6 @@
     [Parameter, EditorRequired] public MarketFilter Filter { get; set; } = null!;
     [Parameter] public IReadOnlyList<FleetAircraft> Fleet { get; set; } = [];
     [Parameter] public IReadOnlyList<MissionType> MissionTypes { get; set; } = [];
-    [Parameter] public bool IlsAvailable { get; set; }
     /// <summary>Current career reputation; types above it are marked as not yet available.</summary>
     [Parameter] public int Reputation { get; set; }
     [Parameter] public bool AirportDataOutdated { get; set; }
@@ -110,6 +132,13 @@
 
     private string AircraftLabel(Guid? id) =>
         Fleet.FirstOrDefault(f => f.Id == id) is { } f ? $"{f.Registration} · {Career.ProfileName(f.ProfileId)} ({f.Location})" : "";
+
+    private string ClientLabel(string? id) => id switch
+    {
+        null => "",
+        MarketFilter.NoClient => T("Jobs without a client"),
+        _ => Career.Client(id)?.Name ?? id
+    };
 
     private string TypeName(string id) =>
         MissionTypes.FirstOrDefault(t => t.Id == id) is { } t ? MissionTexts.TypeOption(t, Reputation) : id;

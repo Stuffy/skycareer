@@ -16,6 +16,7 @@ public sealed class SkyCareerDb(DbContextOptions<SkyCareerDb> options) : DbConte
     public DbSet<FlightRecord> Flights => Set<FlightRecord>();
     public DbSet<LedgerEntry> Ledger => Set<LedgerEntry>();
     public DbSet<GsxReceiptRecord> GsxReceipts => Set<GsxReceiptRecord>();
+    public DbSet<ClientStanding> ClientStandings => Set<ClientStanding>();
     public DbSet<AirportRow> Airports => Set<AirportRow>();
     public DbSet<AirportFacilityCacheRow> AirportFacilities => Set<AirportFacilityCacheRow>();
 
@@ -49,6 +50,7 @@ public sealed class SkyCareerDb(DbContextOptions<SkyCareerDb> options) : DbConte
             e.HasIndex(x => new { x.CareerId, x.Status });
             e.HasIndex(x => new { x.CareerId, x.MarketStream });
             e.Property(x => x.MarketStream).HasMaxLength(32);
+            e.Ignore(x => x.WaypointList);
             e.HasOne<Career>().WithMany().HasForeignKey(x => x.CareerId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -69,6 +71,14 @@ public sealed class SkyCareerDb(DbContextOptions<SkyCareerDb> options) : DbConte
             e.HasIndex(x => new { x.CareerId, x.ReceiptId }).IsUnique();
             e.Property(x => x.ReceiptId).HasMaxLength(64);
             e.Property(x => x.Icao).HasMaxLength(16);
+            e.HasOne<Career>().WithMany().HasForeignKey(x => x.CareerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        m.Entity<ClientStanding>(e =>
+        {
+            e.HasIndex(x => new { x.CareerId, x.ClientId }).IsUnique();
+            e.Property(x => x.ClientId).HasMaxLength(64);
+            e.Property(x => x.ChainId).HasMaxLength(64);
             e.HasOne<Career>().WithMany().HasForeignKey(x => x.CareerId).OnDelete(DeleteBehavior.Cascade);
         });
 

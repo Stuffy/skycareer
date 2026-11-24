@@ -1,0 +1,53 @@
+{
+  "id": "pipeline_patrol",
+  "name": "Pipeline patrol",
+  "description": "Low-level inspection of pipelines and power lines between the waypoints – below 1,000 ft above ground – and back to base.",
+  "texts": {
+    "de": {
+      "name": "Leitungsbefliegung",
+      "description": "Inspektion von Pipelines und Stromtrassen zwischen den Wegpunkten im Tiefflug – unter 1.000 ft über Grund – und zurück zur Basis."
+    }
+  },
+  "category": "bush",
+  "generator": "sightseeing",
+  "requirements": {
+    "anyOfTags": [
+      "unpaved_ok",
+      "utility"
+    ],
+    "forbiddenTags": [
+      "jet",
+      "airliner"
+    ],
+    "maxMtowKg": 6000
+  },
+  "passengers": {
+    "min": 0,
+    "max": 1,
+    "childShare": 0,
+    "infantShare": 0,
+    "baggage": "handOnly"
+  },
+  "distance": {
+    "minNm": 10,
+    "maxNm": 50
+  },
+  "tour": {
+    "minWaypoints": 3,
+    "maxWaypoints": 4,
+    "minAglFt": 300,
+    "maxAglFt": 1000
+  },
+  "pay": {
+    "base": 500,
+    "perNm": 2.5,
+    "hourlyRateFactor": 1.5
+  },
+  "scoring": {
+    "landingRateWeight": 0.5,
+    "punctualityWeight": 0.5
+  },
+  "simBrief": "none",
+  "flightRules": "vfr",
+  "weight": 0.8
+}

@@ -191,6 +191,58 @@ namespace SkyCareer.Data.Migrations
                     b.ToTable("Careers");
                 });
 
+            modelBuilder.Entity("SkyCareer.Domain.Career.ClientStanding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CareerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChainId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ChainStep")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletedChains")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FlightsFlown")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("SeriesEndsAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SeriesFlown")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SeriesPayouts")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SeriesTarget")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Standing")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CareerId", "ClientId")
+                        .IsUnique();
+
+                    b.ToTable("ClientStandings");
+                });
+
             modelBuilder.Entity("SkyCareer.Domain.Career.FleetAircraft", b =>
                 {
                     b.Property<Guid>("Id")
@@ -491,8 +543,17 @@ namespace SkyCareer.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ChainId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ChainStep")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Children")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ClientId")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("Deadline")
                         .HasColumnType("TEXT");
@@ -509,6 +570,12 @@ namespace SkyCareer.Data.Migrations
 
                     b.Property<double>("DistanceNm")
                         .HasColumnType("REAL");
+
+                    b.Property<bool?>("EventAccepted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EventKind")
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("TEXT");
@@ -558,10 +625,19 @@ namespace SkyCareer.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PackageBonusShare")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("PackageId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PackageKind")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("PackageLeg")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PackageLegs")
                         .HasColumnType("INTEGER");
 
                     b.Property<double>("PassengerMassKg")
@@ -574,12 +650,18 @@ namespace SkyCareer.Data.Migrations
                     b.Property<double>("PlannedBlockFuelKg")
                         .HasColumnType("REAL");
 
+                    b.Property<string>("RevisedDestination")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SimWearAtStart")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Waypoints")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -589,6 +671,15 @@ namespace SkyCareer.Data.Migrations
                     b.HasIndex("CareerId", "Status");
 
                     b.ToTable("Contracts");
+                });
+
+            modelBuilder.Entity("SkyCareer.Domain.Career.ClientStanding", b =>
+                {
+                    b.HasOne("SkyCareer.Domain.Career.Career", null)
+                        .WithMany()
+                        .HasForeignKey("CareerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SkyCareer.Domain.Career.FleetAircraft", b =>

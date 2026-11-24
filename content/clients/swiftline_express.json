@@ -1,0 +1,14 @@
+{
+  "id": "swiftline_express",
+  "name": "Swiftline Express",
+  "description": "Express parcel network – mail runs, feeder flights and night freight.",
+  "texts": {
+    "de": {
+      "description": "Expresspaketdienst – Postrunden, Zubringerflüge und Nachtfracht."
+    }
+  },
+  "missionTypes": [
+    "cargo_feeder",
+    "milk_run"
+  ]
+}

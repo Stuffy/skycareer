@@ -20,8 +20,9 @@ public static class PlnExporter
 {
     /// <param name="originAnchor">Airport the sim knows near an unknown origin (departure of the plan).</param>
     /// <param name="destinationAnchor">Airport the sim knows near an unknown destination (end of the plan).</param>
+    /// <param name="via">Waypoints of a round trip, written as user waypoints between departure and destination.</param>
     public static XDocument Build(Airport origin, Airport destination, PlanRules rules, int? cruiseAltitudeFt = null, string? title = null,
-        Airport? originAnchor = null, Airport? destinationAnchor = null)
+        Airport? originAnchor = null, Airport? destinationAnchor = null, IReadOnlyList<TourWaypoint>? via = null)
     {
         int altitude = cruiseAltitudeFt ?? CruiseAltitude(origin.Position, destination.Position, rules);
         string fpType = rules == PlanRules.Vfr ? "VFR" : "IFR";
@@ -44,8 +45,14 @@ public static class PlnExporter
             new XElement("AppVersion",
                 new XElement("AppVersionMajor", "11"),
                 new XElement("AppVersionBuild", "282174")));
-        foreach (var point in new[] { first, origin, destination, last }.Distinct())
-            plan.Add(Waypoint(point));
+        foreach (var point in new[] { first, origin }.Distinct()) plan.Add(Waypoint(point));
+        foreach (var w in via ?? [])
+            plan.Add(new XElement("ATCWaypoint",
+                new XAttribute("id", w.Ident),
+                new XElement("ATCWaypointType", "User"),
+                new XElement("WorldPosition", Lla(w.Position, Math.Max(altitude, w.MaxAglFt ?? 0)))));
+        // A round trip starts and ends at the same airport: it appears again as the last waypoint.
+        foreach (var point in new[] { destination, last }.Distinct()) plan.Add(Waypoint(point));
 
         return new XDocument(new XDeclaration("1.0", "UTF-8", null),
             new XElement("SimBase.Document",

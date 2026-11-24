@@ -41,6 +41,23 @@ public sealed record PaxRule(int Min, int Max, double ChildShare = 0.05, double 
 /// <summary>Chance that an offer comes as an outbound + return package, and the bonus share on both payouts when both are flown.</summary>
 public sealed record ReturnRule(double Chance, decimal Bonus = 0.1m);
 
+/// <summary>
+/// Chance that an offer comes as a run over several stops (A → B → C …), each leg with its own load; the bonus share on
+/// all payouts is paid with the last leg when every leg was flown. <see cref="ReturnToOrigin"/> ends the run back at A.
+/// </summary>
+public sealed record MultiStopRule(double Chance)
+{
+    /// <summary>Number of legs including the first, 2–4.</summary>
+    public int MinLegs { get; init; } = 3;
+    public int MaxLegs { get; init; } = 4;
+    public double MinLegNm { get; init; } = 20;
+    public double MaxLegNm { get; init; } = 150;
+    public decimal Bonus { get; init; } = 0.15m;
+    public bool ReturnToOrigin { get; init; }
+    /// <summary>The same group travels on every leg (a roadshow): passengers, bags and cargo of the first leg throughout.</summary>
+    public bool SameLoad { get; init; }
+}
+
 public sealed record CargoRule(double MinKg, double MaxKg, IReadOnlyList<string> Kinds);
 
 public sealed record DistanceRule(double MinNm, double MaxNm);
@@ -144,6 +161,18 @@ public sealed record ScoringRule
 }
 
 /// <summary>
+/// Waypoints of a round trip (generator "sightseeing"): how many, and the height band above ground in which they have
+/// to be passed (sightseeing: low enough to see something; survey: a fixed height).
+/// </summary>
+public sealed record TourRule
+{
+    public int MinWaypoints { get; init; } = 2;
+    public int MaxWaypoints { get; init; } = 4;
+    public double? MinAglFt { get; init; }
+    public double? MaxAglFt { get; init; }
+}
+
+/// <summary>
 /// Limits a sensitive load sets on how the aircraft is flown (a patient, live animals, dangerous goods). Each limit that
 /// was exceeded for more than a moment (see <see cref="Domain.Career.ComfortStats"/>) costs <see cref="Penalty"/> of the
 /// payout, at most <see cref="MaxBreaches"/> times.
@@ -236,10 +265,14 @@ public sealed record MissionType
     public PayRule Pay { get; init; } = new();
     /// <summary>Offers may come with a return flight (null = never).</summary>
     public ReturnRule? ReturnFlight { get; init; }
+    /// <summary>Offers may come as a run over several stops (null = never).</summary>
+    public MultiStopRule? MultiStop { get; init; }
     public ScoringRule Scoring { get; init; } = new();
     /// <summary>Limits on how the load may be flown (null = none).</summary>
     public HandlingRule? Handling { get; init; }
     public TimingRule Timing { get; init; } = new();
+    /// <summary>Waypoints of a round trip (sightseeing and survey types).</summary>
+    public TourRule? Tour { get; init; }
     public SimBriefUsage SimBrief { get; init; } = SimBriefUsage.Optional;
     public FlightRulesRequirement FlightRules { get; init; } = FlightRulesRequirement.Any;
     /// <summary>Hours the offer stays on the market before expiring.</summary>

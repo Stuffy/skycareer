@@ -3,6 +3,7 @@
   "id": "a20n",
   "name": "Airbus A320neo",
   "icaoType": "A20N",
+  "deliveryAirport": "LFBO",
   "simMatch": ["A320neo", "A20N"],
   "operatingEmptyKg": 42600,
   "maxZeroFuelKg": 64300,

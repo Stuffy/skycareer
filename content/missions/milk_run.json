@@ -1,0 +1,17 @@
+{
+  "id": "milk_run",
+  "name": "Mail run",
+  "description": "Mail and express parcels around the small airfields of the region and back home – several short legs in one job.",
+  "texts": { "de": { "name": "Postrunde", "description": "Post und Expresspakete reihum zu den kleinen Flugplätzen der Region und zurück – mehrere kurze Legs in einem Auftrag." } },
+  "category": "cargo",
+  "requirements": { "requiredTags": ["cargo"], "forbiddenTags": ["jet"], "maxMtowKg": 9000 },
+  "cargo": { "minKg": 80, "maxKg": 600, "kinds": ["mail", "express"] },
+  "distance": { "minNm": 15, "maxNm": 120 },
+  "destinations": { "sizeWeights": { "small": 3, "medium": 2, "large": 0.3 } },
+  "pay": { "base": 350, "perNm": 1.6, "perCargoKg": 0.9, "hourlyRateFactor": 1.2, "onTimeBonus": 0.1 },
+  "multiStop": { "chance": 1, "minLegs": 3, "maxLegs": 4, "minLegNm": 15, "maxLegNm": 90, "bonus": 0.25, "returnToOrigin": true },
+  "scoring": { "landingRateWeight": 0.5, "punctualityWeight": 2 },
+  "simBrief": "none",
+  "flightRules": "vfr",
+  "weight": 1
+}

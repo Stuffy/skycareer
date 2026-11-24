@@ -31,6 +31,10 @@
             @F("Landing {0} · smoothness {1} · punctuality {2}", s.Score.Landing, s.Score.Smoothness, s.Score.Punctuality) @(s.Score.SafetyPenalty > 0 ? F("· safety deduction −{0}", s.Score.SafetyPenalty) : "")
             · @F("Reputation {0}{1} · now at {2}", s.ReputationChange >= 0 ? "+" : "", s.ReputationChange, s.FinalLocation)
         </MudText>
+        @if (s.ClientNote is { } clientNote)
+        {
+            <MudText Typo="Typo.body2" Class="mb-2"><MudIcon Icon="@Icons.Material.Filled.Handshake" Size="Size.Small" Style="vertical-align:middle" /> @clientNote</MudText>
+        }
         @if (s.Comfort is { } comfort)
         {
             <MudPaper Outlined="true" Class="pa-2 mb-2">
@@ -74,17 +78,26 @@
 
     <MudPaper Class="@(collapsed ? "pa-3 mb-4" : "pa-4 mb-4")" Elevation="3">
         <MudStack Row="true" AlignItems="AlignItems.Center">
-            <MudText Typo="Typo.h6">@type.DisplayName: @c.Origin → @c.Destination <span style="opacity:.7">· @Callsign(c)</span></MudText>
+            <MudText Typo="Typo.h6">
+                @type.DisplayName: @c.Origin → @(c.RevisedDestination is { } revised ? $"{revised} ({F("instead of {0}", c.Destination)})" : c.Destination)
+                <span style="opacity:.7">· @Callsign(c)</span>
+            </MudText>
             <MudChip T="string" Size="Size.Small" Color="@(c.Status == ContractStatus.InProgress ? Color.Warning : tracking ? Color.Success : Color.Info)">@StatusText(c, tracking)</MudChip>
             @if (c.PackageLeg is { } leg)
             {
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt">
-                    @(leg == 1 ? T("Outbound 1/2") : T("Return flight 2/2"))
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                         Icon="@(c.Kind == PackageKind.Return ? Icons.Material.Filled.SyncAlt : Icons.Material.Filled.Route)">
+                    @LegText(c, leg)
                 </MudChip>
             }
             @if (DemandEvents.Label(c.DemandEvent) is { } demandLabel)
             {
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.TrendingUp">@demandLabel</MudChip>
+            }
+            @if (Career.Client(c.ClientId) is { } jobClient)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@(c.ChainId is null ? Icons.Material.Filled.Handshake : Icons.Material.Filled.AutoStories)"
+                         Color="@(c.ChainId is null ? Color.Default : Color.Warning)">@jobClient.Name</MudChip>
             }
             <MudSpacer />
             <MudText>@Eur(c.Payout)</MudText>
@@ -97,7 +110,7 @@
         @if (collapsed)
         {
             <MudText Typo="Typo.body2">
-                @c.DistanceNm.ToString("N0") nm · @F("Deadline {0:dd.MM. HH:mm} UTC", c.Deadline) · @PaxText(c) · @F("starts after the outbound flight at {0}", c.Origin)
+                @c.DistanceNm.ToString("N0") nm · @F("Deadline {0:dd.MM. HH:mm} UTC", c.Deadline) · @PaxText(c) · @F("starts after the previous leg at {0}", c.Origin)
             </MudText>
         }
         else
@@ -106,9 +119,27 @@
             @aircraft?.Registration (@profile?.Name) · @c.DistanceNm.ToString("N0") nm · @F("Deadline {0:dd.MM. HH:mm} UTC", c.Deadline)
             · @PaxText(c) @(c.CargoKg > 0 ? F("· Cargo {0:N0} kg ({1})", c.CargoKg, c.CargoKind) : "")
         </MudText>
-        @if (_airports.TryGetValue(c.Origin, out var navFrom) && _airports.TryGetValue(c.Destination, out var navTo))
+        @if (_airports.TryGetValue(c.Origin, out var navFrom) && _airports.TryGetValue(c.EffectiveDestination, out var navTo))
         {
             <NavInfo From="navFrom.Position" Destination="navTo" SpeedKt="@(profile?.CruiseKtas ?? 0)" MagVar="LiveMagVar" Class="mb-2" />
+        }
+        @if (c.IsTour)
+        {
+            <MudText Typo="Typo.body2" Class="mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Style="vertical-align:middle" />
+                <b>@T("Waypoints:")</b> @string.Join(" → ", c.WaypointList.Select(w => w.Name).Prepend(c.Origin).Append(c.Destination))
+                @(TourBand(c.WaypointList) is { } band ? $" · {band}" : "")
+            </MudText>
+        }
+        @if (Career.StoryStepOf(c) is { } story && Career.StoryChainOf(c) is { } storyChain)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Filled.AutoStories" Class="mb-2">
+                <b>@F("{0} – step {1}/{2}: {3}", storyChain.DisplayTitle, c.ChainStep + 1, storyChain.Steps.Count, story.DisplayTitle)</b><br />@story.DisplayBriefing
+                @if (story.Bonus > 0)
+                {
+                    <br /><span>@F("Story bonus +{0:P0} when flown.", story.Bonus)</span>
+                }
+            </MudAlert>
         }
         @foreach (var rule in MissionTexts.SpecialRules(type))
         {
@@ -296,7 +327,7 @@
     </MudPaper>
 }
 
-<MarketFilterPanel Filter="Filter" Fleet="_fleet" MissionTypes="Career.Content.MissionTypes" IlsAvailable="IlsLookup.Available" Reputation="_reputation"
+<MarketFilterPanel Filter="Filter" Fleet="_fleet" MissionTypes="Career.Content.MissionTypes" Reputation="_reputation"
                    AirportDataOutdated="_airportDataOutdated" Busy="Busy" OnSearch="Search" OnFilterChanged="FilterChanged" />
 @if (_searchStatus is not null)
 {
@@ -378,23 +409,39 @@
                 {
                     var t = Career.MissionType(o.MissionTypeId);
                     <tr @onclick="() => SelectOffer(o.Id)" style="cursor:pointer; @(o.Id == _selected ? "background:rgba(255,255,255,0.08)" : "")" id="@($"offer-{o.Id:N}")">
-                        @{ var plane = _fleet.FirstOrDefault(f => f.Id == o.AircraftId); var back = ReturnOf(o); }
+                        @{ var plane = _fleet.FirstOrDefault(f => f.Id == o.AircraftId); var later = FollowUpsOf(o); var back = later.FirstOrDefault(); }
                         <td>@plane?.Registration<br /><MudText Typo="Typo.caption">@(plane is null ? "" : Career.ProfileName(plane.ProfileId))</MudText></td>
-                        <td><span style="color:@ColorFor(t)">●</span> @t.DisplayName<br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief@MissionTexts.SpecialRuleTags(t)</MudText></td>
                         <td>
-                            @o.Origin → @o.Destination <MudText Typo="Typo.caption" Inline="true">@Callsign(o)</MudText>
+                            <span style="color:@ColorFor(t)">●</span> @t.DisplayName
+                            @if (Career.Client(o.ClientId) is { } offerClient)
+                            {
+                                <br /><MudText Typo="Typo.caption" Inline="true" Color="@(o.ChainId is null ? Color.Default : Color.Warning)">
+                                    @(o.ChainId is null ? offerClient.Name : F("{0} – story: {1}", offerClient.Name, Career.StoryStepOf(o)?.DisplayTitle ?? ""))
+                                </MudText>
+                            }
+                            <br /><MudText Typo="Typo.caption">@t.FlightRules · SimBrief @t.SimBrief@MissionTexts.SpecialRuleTags(t)</MudText>
+                        </td>
+                        <td>
+                            @RouteText(o, later) <MudText Typo="Typo.caption" Inline="true">@Callsign(o)</MudText>
                             @if (back is not null)
                             {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Icon="@Icons.Material.Filled.SyncAlt" Class="ml-1">@T("Round trip")</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Class="ml-1"
+                                         Icon="@(o.Kind == PackageKind.Return ? Icons.Material.Filled.SyncAlt : Icons.Material.Filled.Route)">
+                                    @(o.Kind == PackageKind.Return ? T("Round trip") : IsRoadshow(o) ? F("Roadshow · {0} legs", o.LegCount) : F("{0} legs", o.LegCount))
+                                </MudChip>
                             }
                             @if (DemandEvents.Label(o.DemandEvent) is { } offerDemand)
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.TrendingUp" Class="ml-1">@offerDemand</MudChip>
                             }
                             <br /><MudText Typo="Typo.caption">@o.DistanceNm.ToString("N0") nm@(CourseOf(o) is { } course ? $" · {course}" : "")@(CityOf(o.Destination) is { Length: > 0 } city ? $" · {city}" : "")</MudText>
-                            @if (back is not null)
+                            @if (back is not null && o.Kind == PackageKind.Return)
                             {
                                 <br /><MudText Typo="Typo.caption">@F("return: {0} pax · {1} · by {2:dd.MM. HH:mm}", back.TotalPassengers, Eur(back.Payout), back.Deadline)</MudText>
+                            }
+                            else if (back is not null)
+                            {
+                                <br /><MudText Typo="Typo.caption">@F("{0:N0} nm in total · last leg by {1:dd.MM. HH:mm}", later.Sum(l => l.DistanceNm) + o.DistanceNm, later[^1].Deadline)@(IsRoadshow(o) ? T(" · the same group on every leg") : "")</MudText>
                             }
                         </td>
                         <td>@DestinationInfo(o.Destination)</td>
@@ -404,12 +451,18 @@
                         <td>@o.ExpiresAt.ToString("dd.MM. HH:mm")</td>
                         <td>
                             <b>@Eur(OfferValue(o))</b>
+                            @if (BlockHoursOf(o) is > 0 and var hours)
+                            {
+                                <br /><MudText Typo="Typo.caption">@F("{0}/h", Eur(Math.Round(OfferValue(o) / (decimal)hours, 0)))</MudText>
+                            }
                             @if (back is not null)
                             {
-                                <br /><MudText Typo="Typo.caption">@F("incl. return flight and {0} bonus", Eur(PackageBonus(o, back)))</MudText>
+                                <br /><MudText Typo="Typo.caption">@(o.Kind == PackageKind.Return
+                                    ? F("incl. return flight and {0} bonus", Eur(PackageBonus(o, later)))
+                                    : F("all {0} legs incl. {1} bonus", o.LegCount, Eur(PackageBonus(o, later))))</MudText>
                             }
                         </td>
-                        <td @onclick:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Accept(o)">@(back is null ? T("Accept") : T("Accept both"))</MudButton></td>
+                        <td @onclick:stopPropagation="true"><MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="Busy" OnClick="() => Accept(o)">@(back is null ? T("Accept") : later.Count == 1 ? T("Accept both") : T("Accept all"))</MudButton></td>
                     </tr>
                 }
             </tbody>
@@ -540,7 +593,7 @@
         var originAnchor = from.KnownToSim ? null : await Career.NearestSimAirportAsync(from.Position) ?? (to.KnownToSim ? to : null);
         var destinationAnchor = to.KnownToSim ? null : await Career.NearestSimAirportAsync(to.Position) ?? (from.KnownToSim ? from : null);
         var plan = PlnExporter.Build(from, to, rules, title: $"{type.DisplayName} {c.Origin}-{c.Destination}",
-            originAnchor: originAnchor, destinationAnchor: destinationAnchor);
+            originAnchor: originAnchor, destinationAnchor: destinationAnchor, via: c.WaypointList);
         var path = await PlnExporter.SaveAsync(plan, PlnExporter.DefaultDirectory, $"{c.Origin}-{c.Destination}");
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
         if (destinationAnchor is not null)
@@ -605,13 +658,13 @@
         _offers = await Career.GetContractsAsync(ContractStatus.Offered);
         // A package's return leg waits below its outbound.
         _active = (await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress))
-            .OrderBy(c => c.Status != ContractStatus.InProgress).ThenBy(c => c.IsReturnLeg).ToList();
+            .OrderBy(c => c.Status != ContractStatus.InProgress).ThenBy(c => c.IsFollowUpLeg).ToList();
         if (Filter.AircraftId is { } f && _fleet.All(a => a.Id != f)) Filter.AircraftId = null;
         _airportDataOutdated = await Career.AirportDataOutdatedAsync();
 
         var idents = _fleet.Select(a => a.Location)
             .Concat(_offers.SelectMany(o => new[] { o.Origin, o.Destination }))
-            .Concat(_active.SelectMany(o => new[] { o.Origin, o.Destination }));
+            .Concat(_active.SelectMany(o => new[] { o.Origin, o.Destination, o.EffectiveDestination }));
         _airports = await Career.GetAirportsAsync(idents);
         CheckAirportsInSim();
         _page = Math.Clamp(_page, 0, Math.Max(0, PageCount - 1));
@@ -625,9 +678,11 @@
         get
         {
             var search = Filter.ToSearch();
-            return _offers.Where(o => !o.IsReturnLeg && (Filter.AircraftId is not { } id || o.AircraftId == id) &&
+            return _offers.Where(o => !o.IsFollowUpLeg && (Filter.AircraftId is not { } id || o.AircraftId == id) &&
                                       _fleet.Any(f => f.Id == o.AircraftId && f.Location == o.Origin) &&
-                                      search.Matches(o, _airports.GetValueOrDefault(o.Destination)));
+                                      search.Matches(o, _airports.GetValueOrDefault(o.Destination)) &&
+                                      Filter.MatchesKind(o, o.PackageId is not null) &&
+                                      (search.PayPerHourMin is null || search.AcceptsPayPerHour(OfferValue(o), BlockHoursOf(o))));
         }
     }
 
@@ -647,7 +702,9 @@
                 OfferColumn.Expires => o => o.ExpiresAt,
                 _ => o => OfferValue(o)
             };
-            return Filter.SortDescending ? VisibleOffers.OrderByDescending(key) : VisibleOffers.OrderBy(key);
+            // Story jobs of clients stay on top, whatever the sort.
+            var sorted = Filter.SortDescending ? VisibleOffers.OrderBy(o => o.ChainId is null).ThenByDescending(key) : VisibleOffers.OrderBy(o => o.ChainId is null).ThenBy(key);
+            return sorted;
         }
     }
 
@@ -736,17 +793,19 @@
             .Select(d => new MissionMap.EventRegion(d.Event.Region!.South, d.Event.Region.West, d.Event.Region.North, d.Event.Region.East,
                 $"{d.Event.Text} +{d.Event.PayFactor - 1:P0}")).ToList();
 
-        _routes = VisibleOffers.Select(o => ToRoute(o, accepted: false))
+        // A multi-stop offer draws all its legs; clicking any of them selects the package's first leg.
+        // The selected multi-stop offer shows all its legs; others only their first destination.
+        _routes = VisibleOffers.SelectMany(o => (o.Kind == PackageKind.Return || o.Id != _selected ? [o] : FollowUpsOf(o).Prepend(o)).Select(leg => ToRoute(leg, accepted: false, o.Id)))
             .Concat(_active.Select(o => ToRoute(o, accepted: true)))
             .OfType<MissionMap.Route>()
             .ToList();
     }
 
-    private MissionMap.Route? ToRoute(MissionContract c, bool accepted)
+    private MissionMap.Route? ToRoute(MissionContract c, bool accepted, Guid? offerId = null)
     {
         if (!_airports.TryGetValue(c.Origin, out var from) || !_airports.TryGetValue(c.Destination, out var to)) return null;
         var type = Career.MissionType(c.MissionTypeId);
-        string label = $"{type.DisplayName}: {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm · {Eur(c.Payout)}{(c.PackageId is not null ? T(" (round trip)") : "")}{(accepted ? T(" (accepted)") : "")}";
+        string label = $"{type.DisplayName}: {c.Origin} → {c.Destination} · {c.DistanceNm:N0} nm · {Eur(c.Payout)}{(c.PackageId is null ? "" : c.Kind == PackageKind.Return ? T(" (round trip)") : F(" (leg {0}/{1})", c.PackageLeg, c.LegCount))}{(accepted ? T(" (accepted)") : "")}";
         string registration = _fleet.FirstOrDefault(f => f.Id == c.AircraftId) is { } plane
             ? $"{plane.Registration} ({Career.ProfileName(plane.ProfileId)})" : "";
         var details = new List<string>
@@ -755,9 +814,13 @@
             $"{PaxText(c)}{(c.CargoKg > 0 ? F(" · Cargo {0:N0} kg {1}", c.CargoKg, c.CargoKind) : "")} · {F("Block fuel {0:N0} kg", c.PlannedBlockFuelKg)}",
             $"{F("Deadline {0:dd.MM. HH:mm}", c.Deadline)}{(accepted ? "" : F(" · valid until {0:dd.MM. HH:mm}", c.ExpiresAt))}"
         };
-        return new MissionMap.Route(c.Id, [from.Position.Latitude, from.Position.Longitude], [to.Position.Latitude, to.Position.Longitude],
-            label, ColorFor(type), accepted, c.Id == _selected, to.Ident,
-            MissionTexts.City(to) is { Length: > 0 } city ? $"{to.Name} ({city})" : to.Name, type.DisplayName, details, Eur(c.Payout));
+        var id = offerId ?? c.Id;
+        double[][]? path = c.IsTour
+            ? [[from.Position.Latitude, from.Position.Longitude], .. c.WaypointList.Select(w => new[] { w.Position.Latitude, w.Position.Longitude }), [to.Position.Latitude, to.Position.Longitude]]
+            : null;
+        return new MissionMap.Route(id, [from.Position.Latitude, from.Position.Longitude], [to.Position.Latitude, to.Position.Longitude],
+            label, ColorFor(type), accepted, id == _selected, to.Ident,
+            MissionTexts.City(to) is { Length: > 0 } city ? $"{to.Name} ({city})" : to.Name, type.DisplayName, details, Eur(c.Payout)) { Path = path };
     }
 
     /// <summary>Return legs opened by the user; a waiting return leg is shown collapsed.</summary>
@@ -768,20 +831,53 @@
         if (!_expanded.Remove(id)) _expanded.Add(id);
     }
 
-    /// <summary>A return leg whose aircraft hasn't reached its origin yet (the outbound is still ahead).</summary>
+    /// <summary>The height band the waypoints are to be passed in ("below 3,000 ft AGL", "1,200–1,800 ft AGL").</summary>
+    private static string? TourBand(IReadOnlyList<TourWaypoint> waypoints) => waypoints.FirstOrDefault() switch
+    {
+        { MinAglFt: { } min, MaxAglFt: { } max } => F("at {0:N0}–{1:N0} ft AGL", min, max),
+        { MaxAglFt: { } max } => F("below {0:N0} ft AGL", max),
+        { MinAglFt: { } min } => F("above {0:N0} ft AGL", min),
+        _ => null
+    };
+
+    /// <summary>A multi-stop package on which the same group travels every leg (VIP and charter roadshows).</summary>
+    private bool IsRoadshow(MissionContract c) => c.Kind == PackageKind.MultiStop && Career.MissionType(c.MissionTypeId).MultiStop?.SameLoad == true;
+
+    /// <summary>"Outbound 1/2", "Return flight 2/2" or "Leg 2/3".</summary>
+    private static string LegText(MissionContract c, int leg) => c.Kind != PackageKind.Return ? F("Leg {0}/{1}", leg, c.LegCount)
+        : leg == 1 ? T("Outbound 1/2") : T("Return flight 2/2");
+
+    /// <summary>"EDDF → EDFE → EDGZ → EDDF" for a package, "EDDF → EDDM" for a single job.</summary>
+    private static string RouteText(MissionContract first, IReadOnlyList<MissionContract> later) =>
+        first.IsTour ? $"{first.Origin} ↻ {string.Join(", ", first.WaypointList.Select(w => w.Name))}"
+        : later.Count == 0 || first.Kind == PackageKind.Return ? $"{first.Origin} → {first.Destination}"
+            : string.Join(" → ", later.Select(l => l.Destination).Prepend(first.Destination).Prepend(first.Origin));
+
+    /// <summary>A later leg whose aircraft hasn't reached its origin yet (an earlier leg is still ahead).</summary>
     private static bool IsWaitingReturn(MissionContract c, FleetAircraft? aircraft) =>
-        c is { IsReturnLeg: true, Status: ContractStatus.Accepted } && aircraft is not null &&
+        c is { IsFollowUpLeg: true, Status: ContractStatus.Accepted } && aircraft is not null &&
         !string.Equals(aircraft.Location, c.Origin, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The return leg of a package outbound (on the market or accepted).</summary>
-    private MissionContract? ReturnOf(MissionContract c) =>
-        c is { PackageId: { } package, IsReturnLeg: false } ? _offers.Concat(_active).FirstOrDefault(x => x.PackageId == package && x.IsReturnLeg) : null;
+    /// <summary>The later legs of a package's first leg (on the market or accepted), in flying order; empty for single jobs.</summary>
+    private IReadOnlyList<MissionContract> FollowUpsOf(MissionContract c) =>
+        c is { PackageId: { } package, IsFollowUpLeg: false }
+            ? _offers.Concat(_active).Where(x => x.PackageId == package && x.IsFollowUpLeg).OrderBy(x => x.PackageLeg).ToList()
+            : [];
 
-    private decimal PackageBonus(MissionContract outbound, MissionContract back) =>
-        Math.Round((Career.MissionType(back.MissionTypeId).ReturnFlight?.Bonus ?? 0.1m) * (outbound.Payout + back.Payout), 0);
+    /// <summary>The bonus for flying every leg: the package's bonus share on all payouts.</summary>
+    private decimal PackageBonus(MissionContract first, IReadOnlyList<MissionContract> later) =>
+        Math.Round((first.PackageBonusShare ?? Career.MissionType(first.MissionTypeId).ReturnFlight?.Bonus ?? 0.1m)
+                   * (first.Payout + later.Sum(l => l.Payout)), 0);
 
-    /// <summary>What accepting the offer is worth: with a return leg both payouts plus the package bonus.</summary>
-    private decimal OfferValue(MissionContract o) => ReturnOf(o) is { } back ? o.Payout + back.Payout + PackageBonus(o, back) : o.Payout;
+    /// <summary>Planned block time of an offer and its later legs at the aircraft's cruise speed.</summary>
+    private double BlockHoursOf(MissionContract o) =>
+        _fleet.FirstOrDefault(f => f.Id == o.AircraftId) is { } plane
+            ? FollowUpsOf(o).Prepend(o).Sum(leg => SkyCareer.Missions.Generation.StandardMissionGenerator.BlockHours(Career.Profile(plane.ProfileId), leg.DistanceNm))
+            : 0;
+
+    /// <summary>What accepting the offer is worth: with later legs all payouts plus the package bonus.</summary>
+    private decimal OfferValue(MissionContract o) => FollowUpsOf(o) is { Count: > 0 } later
+        ? o.Payout + later.Sum(l => l.Payout) + PackageBonus(o, later) : o.Payout;
 
     private sealed record PrepStep(string Label, bool Done, bool Disabled, Func<Task> Action, string? Hint = null);
 
@@ -849,19 +945,15 @@
     private Task Search() => Run(async () =>
     {
         var search = Filter.ToSearch();
-        _searchStatus = search.RequireIls && IlsLookup.Available
-            ? T("Searching – unknown destination airports are checked for ILS in the simulator …")
-            : T("Searching …");
+        _searchStatus = T("Searching …");
         StateHasChanged();
         try
         {
             var r = await Career.SearchMarketAsync(search, Filter.AircraftId);
             Snackbar.Add(r.Created == 0
                     ? T("No matching jobs found – relax the filters (e.g. distance or runway length).")
-                    : F("{0} new jobs", r.Created) + (r.IlsChecked > 0 ? F(" ({0} airports checked for ILS)", r.IlsChecked) : "") + ".",
+                    : F("{0} new jobs", r.Created) + ".",
                 r.Created == 0 ? Severity.Warning : Severity.Success);
-            if (r.IlsUnavailable)
-                Snackbar.Add(T("MSFS is not connected: only airports with known ILS data were used."), Severity.Info);
             if (_map is not null) await _map.FitAsync();
         }
         finally
@@ -870,14 +962,24 @@
         }
     });
 
-    private Task Accept(MissionContract o) => Run(() => Career.AcceptAsync(o.Id), ReturnOf(o) is null ? T("Job accepted.") : T("Outbound and return flight accepted."));
+    private Task Accept(MissionContract o) => Run(() => Career.AcceptAsync(o.Id), FollowUpsOf(o) switch
+    {
+        { Count: 0 } => T("Job accepted."),
+        _ when o.Kind == PackageKind.Return => T("Outbound and return flight accepted."),
+        var later => F("All {0} legs accepted.", later.Count + 1)
+    });
 
     private async Task Cancel(MissionContract c)
     {
-        var back = ReturnOf(c) is { Status: ContractStatus.Accepted } r ? r : null;
-        decimal penalty = Math.Round(c.Payout * CareerService.CancellationPenalty, 0) + (back is null ? 0 : Math.Round(back.Payout * CareerService.CancellationPenalty, 0));
-        string question = back is not null ? F("Cancel outbound and return flight? Cancellation penalty {0}.", Eur(penalty))
-            : c.IsReturnLeg ? F("Cancel the return flight? Cancellation penalty {0}, the package bonus is lost.", Eur(penalty))
+        // Cancelling a leg cancels the later legs of its package too.
+        var later = c.PackageId is { } package
+            ? _active.Where(x => x.PackageId == package && x.PackageLeg > c.PackageLeg && x.Status == ContractStatus.Accepted).ToList()
+            : [];
+        decimal penalty = Math.Round(c.Payout * CareerService.CancellationPenalty, 0) + later.Sum(l => Math.Round(l.Payout * CareerService.CancellationPenalty, 0));
+        string question = later.Count > 0 && c.Kind == PackageKind.Return ? F("Cancel outbound and return flight? Cancellation penalty {0}.", Eur(penalty))
+            : later.Count > 0 ? F("Cancel this leg and the {0} after it? Cancellation penalty {1}, the package bonus is lost.", later.Count, Eur(penalty))
+            : c.IsReturnFlight ? F("Cancel the return flight? Cancellation penalty {0}, the package bonus is lost.", Eur(penalty))
+            : c.IsFollowUpLeg ? F("Cancel the last leg? Cancellation penalty {0}, the package bonus is lost.", Eur(penalty))
             : F("Cancel the job? Cancellation penalty {0}.", Eur(penalty));
         if (await Dialogs.ShowMessageBoxAsync(T("Cancel job"), question, yesText: T("Cancel job"), cancelText: T("Back")) != true)
             return;

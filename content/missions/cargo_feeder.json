@@ -9,6 +9,7 @@
   "distance": { "minNm": 50, "maxNm": 600 },
   "destinations": {"sizeWeights": {"large": 4, "medium": 3}, "minLargeShare": 0.3, "cityWeight": 2, "distanceInfluence": 0.5, "minCapitalShare": 0.2},
   "pay": { "base": 600, "perNm": 1.5, "perCargoKg": 1.0, "hourlyRateFactor": 1.2, "onTimeBonus": 0.15 },
+  "multiStop": { "chance": 0.2, "minLegs": 3, "maxLegs": 3, "minLegNm": 40, "maxLegNm": 250, "bonus": 0.12 },
   "scoring": { "landingRateWeight": 0.5, "punctualityWeight": 2 },
   "simBrief": "optional",
   "flightRules": "any",

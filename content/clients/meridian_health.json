@@ -1,0 +1,73 @@
+{
+  "id": "meridian_health",
+  "name": "Meridian Health",
+  "description": "Hospital group running air ambulance and organ transport services for its clinics.",
+  "texts": {
+    "de": {
+      "description": "Klinikverbund mit Ambulanz- und Organtransportdienst für seine Häuser."
+    }
+  },
+  "missionTypes": [
+    "air_ambulance",
+    "organ_transport"
+  ],
+  "chains": [
+    {
+      "id": "rural_clinic",
+      "title": "The rural clinic",
+      "minStanding": 35,
+      "completionStanding": 10,
+      "texts": {
+        "de": {
+          "title": "Die Landklinik"
+        }
+      },
+      "steps": [
+        {
+          "title": "Doctor on call",
+          "missionType": "air_ambulance",
+          "sizes": [
+            "small",
+            "medium"
+          ],
+          "maxNm": 150,
+          "briefing": "A small clinic in the countryside lost its doctor. Fly our physician and the equipment out there.",
+          "texts": {
+            "de": {
+              "title": "Ärztin auf Abruf",
+              "briefing": "Eine kleine Klinik auf dem Land hat keinen Arzt mehr. Fliegen Sie unsere Ärztin und die Ausrüstung hinaus."
+            }
+          },
+          "bonus": 0.2
+        },
+        {
+          "title": "Urgent transfer",
+          "missionType": "organ_transport",
+          "minNm": 80,
+          "maxNm": 400,
+          "briefing": "A donor organ is ready for a patient of the clinic. Every minute counts.",
+          "texts": {
+            "de": {
+              "title": "Dringende Überstellung",
+              "briefing": "Ein Spenderorgan ist bereit für einen Patienten der Klinik. Jede Minute zählt."
+            }
+          },
+          "bonus": 0.3
+        },
+        {
+          "title": "Back home",
+          "missionType": "air_ambulance",
+          "maxNm": 200,
+          "briefing": "The operation went well. Bring the patient back home – gently, please.",
+          "texts": {
+            "de": {
+              "title": "Heimkehr",
+              "briefing": "Die Operation ist gut verlaufen. Bringen Sie den Patienten nach Hause – bitte sanft."
+            }
+          },
+          "bonus": 0.3
+        }
+      ]
+    }
+  ]
+}

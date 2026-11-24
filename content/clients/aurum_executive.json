@@ -1,0 +1,14 @@
+{
+  "id": "aurum_executive",
+  "name": "Aurum Executive Travel",
+  "description": "Business travel agency for executives who expect discretion and a smooth ride.",
+  "texts": {
+    "de": {
+      "description": "Geschäftsreiseagentur für Führungskräfte, die Diskretion und einen ruhigen Flug erwarten."
+    }
+  },
+  "missionTypes": [
+    "vip_charter",
+    "air_taxi"
+  ]
+}

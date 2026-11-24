@@ -1,0 +1,13 @@
+{
+  "id": "vector_chemicals",
+  "name": "Vector Chemicals",
+  "description": "Chemical company shipping hazardous goods between its plants – well paid, strict rules.",
+  "texts": {
+    "de": {
+      "description": "Chemiekonzern, der Gefahrgut zwischen seinen Werken verschickt – gut bezahlt, strenge Regeln."
+    }
+  },
+  "missionTypes": [
+    "dangerous_goods"
+  ]
+}

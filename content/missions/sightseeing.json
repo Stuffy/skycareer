@@ -1,0 +1,57 @@
+{
+  "id": "sightseeing",
+  "name": "Sightseeing flight",
+  "description": "Round trip for guests over the towns of the region and back – below 3,000 ft above ground, so they can see something. Fly smoothly.",
+  "texts": {
+    "de": {
+      "name": "Rundflug",
+      "description": "Rundflug für Gäste über die Orte der Umgebung und zurück – unter 3.000 ft über Grund, damit sie etwas sehen. Ruhig fliegen."
+    }
+  },
+  "category": "charter",
+  "generator": "sightseeing",
+  "requirements": {
+    "requiredTags": [
+      "pax"
+    ],
+    "forbiddenTags": [
+      "jet",
+      "airliner"
+    ],
+    "maxMtowKg": 6000
+  },
+  "passengers": {
+    "min": 1,
+    "max": 5,
+    "childShare": 0.1,
+    "baggage": "handOnly",
+    "loadFactor": 0.7,
+    "loadFactorSpread": 0.25
+  },
+  "distance": {
+    "minNm": 8,
+    "maxNm": 35
+  },
+  "tour": {
+    "minWaypoints": 2,
+    "maxWaypoints": 4,
+    "maxAglFt": 3000
+  },
+  "pay": {
+    "base": 250,
+    "perNm": 2,
+    "perPax": 45,
+    "hourlyRateFactor": 1.4,
+    "occupancyShare": 0.3
+  },
+  "scoring": {
+    "gForceWeight": 2,
+    "landingRateWeight": 1.5,
+    "punctualityWeight": 0.5,
+    "maxGForce": 1.4
+  },
+  "simBrief": "none",
+  "flightRules": "vfr",
+  "offerValidityHours": 24,
+  "weight": 1
+}

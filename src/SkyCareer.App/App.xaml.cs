@@ -73,6 +73,7 @@ public partial class App : System.Windows.Application
         // Pages that only read content get the current snapshot when they are created.
         services.AddTransient(sp => sp.GetRequiredService<ContentStore>().Current);
         services.AddSingleton<IMissionGenerator, StandardMissionGenerator>();
+        services.AddSingleton<IMissionGenerator, SightseeingMissionGenerator>();
         services.AddSingleton<MissionGeneratorRegistry>();
         services.AddSingleton<FlightMonitorService>();
         services.AddSingleton<GsxCoordinator>();

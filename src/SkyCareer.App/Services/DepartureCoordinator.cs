@@ -18,12 +18,17 @@ public sealed class DepartureCoordinator : IDisposable
     private readonly SemaphoreSlim _running = new(1, 1);
     private DateTime _lastTick;
 
-    public DepartureCoordinator(FlightMonitorService monitor, CareerService career, GsxCoordinator gsx)
+    public DepartureCoordinator(FlightMonitorService monitor, CareerService career, GsxCoordinator gsx, AppSettings settings)
     {
         _monitor = monitor;
         _career = career;
         _gsx = gsx;
-        Automation = new FlightAutomation(career, monitor) { GroundServices = gsx.GroundServices, PreDepartureServices = gsx.PreDepartureServices };
+        Automation = new FlightAutomation(career, monitor)
+        {
+            GroundServices = gsx.GroundServices, PreDepartureServices = gsx.PreDepartureServices, EventsEnabled = () => settings.InFlightEvents
+        };
+        // An event asks for a decision while the pilot looks at the sim: make a sound.
+        Automation.EventRaised += _ => System.Media.SystemSounds.Exclamation.Play();
         Automation.Armed += OnArmed;
         Automation.Resumed += OnResumed;
         Automation.Changed += () => Changed?.Invoke();

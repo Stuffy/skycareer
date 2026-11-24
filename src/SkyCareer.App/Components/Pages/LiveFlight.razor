@@ -59,6 +59,28 @@
             <NavInfo From="now.Position" Destination="dest" SpeedKt="now.GroundSpeedKt" MagVar="now.MagVar"
                      TrackTrue="@(now.TrackTrueDeg ?? now.HeadingTrueDeg)" Live="true" Class="mt-2" />
         }
+        @if (Monitor.TourProgress is { Waypoints.Count: > 0 } tour && Monitor.Latest is { } here)
+        {
+            var next = tour.Waypoints.Select((w, i) => (w, i)).FirstOrDefault(x => !tour.Passed.Contains(x.i));
+            <MudText Typo="Typo.body2" Class="mt-2">
+                <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Style="vertical-align:middle" />
+                <b>@F("Waypoints {0}/{1}", tour.Passed.Count, tour.Waypoints.Count)</b>
+                @if (next.w is { } wp)
+                {
+                    var nav = SkyCareer.Domain.World.Navigation.DirectTo(here.Position, wp.Position, here.GroundSpeedKt, here.MagVar);
+                    <span>· @F("next: {0} {1} · {2:N1} nm", wp.Name, nav.CourseText, nav.DistanceNm)</span>
+                    @if (wp.MaxAglFt is not null || wp.MinAglFt is not null)
+                    {
+                        bool inBand = here.AltitudeAglFt >= (wp.MinAglFt ?? double.MinValue) && here.AltitudeAglFt <= (wp.MaxAglFt ?? double.MaxValue);
+                        <span class="@(inBand ? "ok" : "bad")"> · @F("{0:N0} ft AGL", here.AltitudeAglFt)</span>
+                    }
+                }
+                else
+                {
+                    <span class="ok"> · @T("all waypoints passed – return to base")</span>
+                }
+            </MudText>
+        }
         @if (_navJob == jobId && _navType?.Handling is { HasLimits: true } handling && Monitor.Latest is { OnGround: false } flying)
         {
             double sink = Math.Max(0, -flying.VerticalSpeedFpm), bank = Math.Abs(flying.BankDeg ?? 0);
@@ -113,6 +135,14 @@
         <MudText Typo="Typo.caption" Class="mt-2" Style="display:block">
             @T("Flight automation reacts as if the phase had been detected: climb starts an accepted job, “Parked” settles it (as arrival or diversion depending on the position). Without “freeze” the telemetry resumes detecting by itself afterwards. The settlement notes manual phase changes.")
         </MudText>
+        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-3" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.body2"><b>@T("Event now:")</b></MudText>
+            @foreach (var kind in Enum.GetValues<InFlightEventKind>())
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => TriggerEvent(kind)">@SkyCareer.Missions.Events.InFlightEvents.Title(kind)</MudButton>
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Style="display:block">@T("Raises the event for the job in flight on the next tick (climb, cruise or descent), even with events switched off.")</MudText>
     </MudPaper>
 }
 
@@ -226,13 +256,16 @@
     private Guid? _navJob;
     private Airport? _navDestination;
     private MissionType? _navType;
+    private int _navVersion;
 
     /// <summary>The tracked job's destination for the direct-to line; loaded once per job.</summary>
     private Airport? DestinationOf(Guid jobId)
     {
-        if (_navJob != jobId)
+        // A decision on an event may send the flight elsewhere: load the destination again then.
+        if (_navJob != jobId || _navVersion != Departure.Automation.EventVersion)
         {
             _navJob = jobId;
+            _navVersion = Departure.Automation.EventVersion;
             _navDestination = null;
             _navType = null;
             _ = LoadDestinationAsync(jobId);
@@ -246,7 +279,7 @@
         {
             var job = (await Career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress)).FirstOrDefault(c => c.Id == jobId);
             if (job is null) return;
-            var airport = (await Career.GetAirportsAsync([job.Destination])).GetValueOrDefault(job.Destination);
+            var airport = (await Career.GetAirportsAsync([job.EffectiveDestination])).GetValueOrDefault(job.EffectiveDestination);
             if (_navJob != jobId) return;
             _navDestination = airport;
             _navType = Career.MissionType(job.MissionTypeId);
@@ -273,6 +306,12 @@
     {
         Monitor.ForcePhase(phase, Monitor.PhaseFrozen);
         Departure.TickNow(); // don't wait for the next telemetry sample
+    }
+
+    private void TriggerEvent(InFlightEventKind kind)
+    {
+        Departure.Automation.TriggerEventNow(kind);
+        Departure.TickNow();
     }
 
     private void SetFrozen(bool freeze)

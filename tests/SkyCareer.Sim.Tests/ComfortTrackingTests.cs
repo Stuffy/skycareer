@@ -53,6 +53,28 @@ public class ComfortTrackingTests
     }
 
     [Fact]
+    public void Waypoints_count_when_passed_in_the_air_and_in_the_height_band()
+    {
+        // The synthetic flight heads north from 50° N / 8° E at 110–160 kt.
+        var near = new Domain.World.TourWaypoint("Near", new Domain.GeoPosition(50.15, 8), MaxAglFt: 3000);
+        var high = new Domain.World.TourWaypoint("Band", new Domain.GeoPosition(50.45, 8), MinAglFt: 100, MaxAglFt: 500);
+        var away = new Domain.World.TourWaypoint("Away", new Domain.GeoPosition(50.3, 8.5));
+        var samples = SyntheticFlight.Standard().Samples;
+
+        var session = new FlightSession();
+        session.SetWaypoints([near, high, away]);
+        foreach (var t in samples) session.Process(t);
+        Assert.Equal(["Band", "Away"], session.Summarize().MissedWaypoints);
+
+        // Set after a journal replay, the waypoints are checked against the samples already recorded.
+        var replayed = new FlightSession();
+        foreach (var t in samples) replayed.Process(t);
+        replayed.SetWaypoints([near, high, away]);
+        Assert.Equal(["Band", "Away"], replayed.Summarize().MissedWaypoints);
+        Assert.Null(new FlightSession().Summarize().MissedWaypoints);
+    }
+
+    [Fact]
     public void A_flight_that_never_left_the_ground_has_no_comfort_data()
     {
         var taxi = new SyntheticFlight().Hold(60, t => t with { AnyEngineRunning = true, ParkingBrake = false, GroundSpeedKt = 15 });

@@ -1,0 +1,14 @@
+{
+  "id": "sunward_tours",
+  "name": "Sunward Tours",
+  "description": "Tour operator flying holidaymakers to the sun and city breaks – full cabins, punctuality matters.",
+  "texts": {
+    "de": {
+      "description": "Reiseveranstalter für Sonnenziele und Städtereisen – volle Kabinen, Pünktlichkeit zählt."
+    }
+  },
+  "missionTypes": [
+    "charter",
+    "scheduled_pax"
+  ]
+}

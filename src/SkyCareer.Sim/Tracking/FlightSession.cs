@@ -23,7 +23,8 @@ public sealed record FlightSummary(
     double? FuelAtBlockOffKg = null,
     double FinalFuelKg = 0,
     IReadOnlyList<string>? Notes = null,
-    Domain.Career.ComfortStats? Comfort = null)
+    Domain.Career.ComfortStats? Comfort = null,
+    IReadOnlyList<string>? MissedWaypoints = null)
 {
     public TimeSpan? BlockTime => BlockOn - BlockOff;
     public TimeSpan? AirTime => LandingTime - TakeoffTime;
@@ -46,6 +47,28 @@ public sealed class FlightSession
     private double? _fuelAtBlockOn;
     private readonly List<string> _notes = [];
     private readonly ComfortTracker _comfort = new();
+    private IReadOnlyList<Domain.World.TourWaypoint> _waypoints = [];
+    private readonly HashSet<int> _passed = [];
+
+    /// <summary>Waypoints of a round trip; samples already recorded (journal replay) are checked against them too.</summary>
+    public IReadOnlyList<Domain.World.TourWaypoint> Waypoints => _waypoints;
+
+    public void SetWaypoints(IReadOnlyList<Domain.World.TourWaypoint> waypoints)
+    {
+        _waypoints = waypoints;
+        _passed.Clear();
+        foreach (var t in _samples) CheckWaypoints(t);
+    }
+
+    /// <summary>Indices of the waypoints passed so far.</summary>
+    public IReadOnlySet<int> PassedWaypoints => _passed;
+
+    private void CheckWaypoints(Telemetry t)
+    {
+        if (t.OnGround || t.Slew) return;
+        for (int i = 0; i < _waypoints.Count; i++)
+            if (!_passed.Contains(i) && _waypoints[i].PassedBy(t.Position, t.AltitudeAglFt)) _passed.Add(i);
+    }
     private DateTimeOffset? _restartedAt;
 
     /// <summary>A pause in the samples longer than this after an app restart is treated as a gap without data.</summary>
@@ -142,6 +165,7 @@ public sealed class FlightSession
             if (t.OverspeedWarning) _overspeedSec += dt;
             if (t.StallWarning && !t.OnGround) _stallSec += dt;
         }
+        if (_waypoints.Count > 0) CheckWaypoints(t);
         if (_last is { } before2 && !t.OnGround && !t.Paused && !t.Slew)
             _comfort.Add(t, Math.Clamp((t.Timestamp - before2.Timestamp).TotalSeconds, 0, 5));
         if (!t.OnGround || Phases.Phase == FlightPhase.Rollout)
@@ -193,5 +217,6 @@ public sealed class FlightSession
         _fuelAtBlockOff,
         _fuelAtBlockOn ?? _last?.FuelKg ?? 0,
         _notes,
-        _comfort.Stats);
+        _comfort.Stats,
+        _waypoints.Count == 0 ? null : _waypoints.Where((_, i) => !_passed.Contains(i)).Select(w => w.Name).ToList());
 }

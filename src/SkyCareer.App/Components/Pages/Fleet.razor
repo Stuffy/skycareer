@@ -166,11 +166,31 @@
         }
     }
 
-    private Task Acquire(AircraftProfile p, Ownership ownership) => Run(async () =>
+    private async Task Acquire(AircraftProfile p, Ownership ownership)
     {
-        var a = await Career.AcquireAircraftAsync(p.Id, ownership);
-        Snackbar.Add(F("{0} ({1}) is ready at {2}.", a.Registration, p.Name, a.Location), Severity.Success);
-    });
+        // New aircraft come from the factory: have them delivered or pick them up and fly them home yourself.
+        var mode = DeliveryMode.Delivered;
+        if (ownership != Ownership.Rented && await Career.QuoteDeliveryAsync(p.Id) is { Needed: true } quote)
+        {
+            string legs = quote.Stops.Count == 0 ? T("one leg")
+                : F("{0} legs via {1}", quote.Stops.Count + 1, string.Join(", ", quote.Stops.Select(s => s.Ident)));
+            var answer = await Dialogs.ShowMessageBoxAsync(T("Delivery"),
+                F("{0} is delivered from {1} ({2:N0} nm to {3}). Have it delivered for {4} (ready in {5:N1} h), or pick it up and fly the delivery yourself ({6})?",
+                    p.Name, quote.From!.Ident, quote.Delivery!.DistanceNm, quote.HomeBase.Ident, Eur(quote.Delivery.Total), quote.Delivery.BlockHours, legs),
+                yesText: T("Have it delivered"), noText: T("Pick it up"), cancelText: T("Cancel"));
+            if (answer is null) return;
+            mode = answer == true ? DeliveryMode.Delivered : DeliveryMode.PickUp;
+        }
+        await Run(async () =>
+        {
+            var a = await Career.AcquireAircraftAsync(p.Id, ownership, delivery: mode);
+            Snackbar.Add(mode == DeliveryMode.PickUp && a.Location != (await Career.GetCareerAsync()).HomeBase
+                    ? F("{0} ({1}) waits at {2} – the delivery job is on the job market page.", a.Registration, p.Name, a.Location)
+                    : a.IsAvailable(_gameTime) ? F("{0} ({1}) is ready at {2}.", a.Registration, p.Name, a.Location)
+                    : F("{0} ({1}) is being delivered to {2}.", a.Registration, p.Name, a.Location),
+                Severity.Success);
+        });
+    }
 
     private FleetAircraft? _relocating;
     private string _target = "";

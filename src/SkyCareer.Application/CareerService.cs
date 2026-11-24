@@ -21,7 +21,7 @@ public sealed class CareerException(string message) : Exception(message);
 /// All career use cases: fleet, mission market, flights, money and game time. Every method uses its own short-lived
 /// DbContext so the UI can call it from any component. <see cref="Changed"/> tells the UI to refresh.
 /// </summary>
-public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, ContentStore store, MissionGeneratorRegistry generators,
+public sealed partial class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, ContentStore store, MissionGeneratorRegistry generators,
     IAirportIlsLookup? ilsLookup = null)
 {
     /// <summary>Always the latest content, so profiles created in the editor are usable right away.</summary>
@@ -31,10 +31,10 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     public const int OffersPerLocation = 45;
     /// <summary>New offers per aircraft for a search with criteria.</summary>
     public const int OffersPerSearch = 60;
+    /// <summary>Open offers of one mission type to one destination per aircraft; a search spreads further jobs elsewhere.</summary>
+    public const int MaxOffersPerDestination = 10;
     /// <summary>Open offers kept per aircraft; older ones are dropped.</summary>
     public const int MaxOffersPerAircraft = 240;
-    /// <summary>Unknown airports checked in the sim per search (each check takes up to ~0.6 s).</summary>
-    public const int IlsChecksPerSearch = 25;
     /// <summary>Ground time added after each flight before the next can depart.</summary>
     public static readonly TimeSpan Turnaround = TimeSpan.FromMinutes(30);
     public const int LeaseTermMonths = 36;
@@ -325,7 +325,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         return (await db.Fleet.Where(f => f.CareerId == id).ToListAsync()).OrderBy(f => f.Registration).ToList();
     }
 
-    public async Task<FleetAircraft> AcquireAircraftAsync(string profileId, Ownership ownership, string? registration = null)
+    /// <param name="delivery">How a bought or leased aircraft reaches the home base when its profile has a delivery airport.</param>
+    public async Task<FleetAircraft> AcquireAircraftAsync(string profileId, Ownership ownership, string? registration = null,
+        DeliveryMode delivery = DeliveryMode.Delivered)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var career = await RequireCareer(db);
@@ -363,6 +365,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         }
 
         db.Fleet.Add(aircraft);
+        await ArrangeDeliveryAsync(db, career, aircraft, profile, delivery);
         await db.SaveChangesAsync();
         Changed?.Invoke();
         return aircraft;
@@ -565,10 +568,10 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         foreach (var aircraft in fleet) await DropOffersAwayFromAsync(db, aircraft, ct);
         var offers = await db.Contracts.Where(c => c.CareerId == career.Id && c.Status == ContractStatus.Offered).ToListAsync(ct);
         var ilsCache = await LoadIlsCacheAsync(db, ct);
-        int created = 0, ilsChecked = 0;
-        bool ilsUnavailable = false;
+        int created = 0;
         var masses = PassengerMassTable.ForCareer(career.PassengerWeightKg, career.BagWeightKg);
         int demandSeed = MarketSeedOf(career);
+        var clientStandings = await db.ClientStandings.Where(s => s.CareerId == career.Id).ToDictionaryAsync(s => s.ClientId, s => s.Standing, ct);
 
         foreach (var aircraft in fleet.Where(f => f.IsAvailable(career.GameTime)))
         {
@@ -578,7 +581,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
 
             var profile = Profile(aircraft.ProfileId);
             var types = RequirementEvaluator.AvailableFor(content.MissionTypes, profile)
-                .Where(t => t.MinReputation <= career.Reputation && search.AcceptsType(t)).ToList();
+                .Where(t => t.MinReputation <= career.Reputation && t.Weight > 0 && search.AcceptsType(t)).ToList();
             if (types.Count == 0) continue;
 
             var origin = (await db.Airports.FindAsync([aircraft.Location], ct))?.ToDomain();
@@ -588,16 +591,15 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             double minRunway = Math.Max(profile.MinRunwayM, search.MinRunwayM ?? 0);
             var airports = await AirportsWithinAsync(db, origin.Position, radius, minRunway, ilsCache, ct);
 
-            if (search.RequireIls)
-            {
-                var (checkedNow, unavailable) = await CheckIlsAsync(db, airports, origin, range, types, search, ilsCache, ct);
-                ilsChecked += checkedNow;
-                ilsUnavailable |= unavailable;
-                airports = airports.Select(a => ilsCache.TryGetValue(a.Ident, out var ils) ? a with { HasIls = ils, InSim = ils is not null } : a).ToList();
-            }
 
             int added = 0;
             var recent = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Open offers per destination and type from here, so no destination collects dozens of jobs.
+            var perDestination = offers
+                .Where(o => o.AircraftId == aircraft.Id && o.Origin == aircraft.Location && o.Status == ContractStatus.Offered && !o.IsFollowUpLeg && o.ChainId == null)
+                .GroupBy(o => (Destination: o.Destination.ToUpperInvariant(), o.MissionTypeId))
+                .ToDictionary(g => g.Key, g => g.Count());
+            var served = perDestination.Keys.Select(k => k.Destination).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var perType = new Dictionary<string, (int Offers, int Large, int Capital)>();
             string? stream = rng is null ? MarketStream(career, aircraft, search) : null;
             int first = stream is null ? 0
@@ -616,7 +618,9 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 var ctxBase = new GenerationContext(type, profile, origin, airports, career.GameTime, draw)
                 {
                     Search = search, RecentDestinations = recent, Masses = masses, VaryBaggage = career.SimBriefDetailedLoad,
-                    Reputation = career.Reputation, Demand = a => DemandEvents.At(demandSeed, career.GameTime, a)
+                    Reputation = career.Reputation, Demand = a => DemandEvents.At(demandSeed, career.GameTime, a),
+                    DestinationFull = a => perDestination.GetValueOrDefault((a.Ident.ToUpperInvariant(), type.Id)) >= MaxOffersPerDestination,
+                    Unserved = a => !served.Contains(a.Ident)
                 };
                 var generator = generators.Get(type);
                 var offer = (needCapital ? generator.TryGenerate(ctxBase with { RequireCapital = true }) : null)
@@ -629,27 +633,21 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
                 contract.FlightNumber = NewFlightNumber(career, type, offer, draw);
                 db.Contracts.Add(contract);
                 offers.Add(contract);
-                if (offer.Return is { } back)
-                {
-                    var returnLeg = ToContract(back, career, aircraft);
-                    (returnLeg.MarketStream, returnLeg.MarketIndex) = (contract.MarketStream, contract.MarketIndex);
-                    // The way back gets the next (even) number, as airlines do.
-                    returnLeg.FlightNumber = contract.FlightNumber + 1;
-                    contract.PackageId = returnLeg.PackageId = Guid.NewGuid();
-                    contract.PackageLeg = 1;
-                    returnLeg.PackageLeg = 2;
-                    db.Contracts.Add(returnLeg);
-                    offers.Add(returnLeg);
-                }
+                var followUps = offer.FollowUps.Count > 0 ? AddFollowUps(db, contract, offer, career, aircraft) : [];
+                offers.AddRange(followUps);
+                AssignClient(offer, [contract, .. followUps], clientStandings, draw);
                 recent.Add(offer.Destination.Ident);
+                served.Add(offer.Destination.Ident);
+                var destinationKey = (offer.Destination.Ident.ToUpperInvariant(), type.Id);
+                perDestination[destinationKey] = perDestination.GetValueOrDefault(destinationKey) + 1;
                 perType[type.Id] = (typeOffers + 1, typeLarge + (offer.Destination.Size == AirportSize.Large ? 1 : 0),
                     typeCapital + (DestinationRule.ServesCapital(offer.Destination) ? 1 : 0));
                 added++;
             }
             created += added;
 
-            // Keep the market manageable: drop the oldest untouched offers beyond the cap (a package counts once).
-            foreach (var old in offers.Where(o => o.AircraftId == aircraft.Id && o.Status == ContractStatus.Offered && !o.IsReturnLeg)
+            // Keep the market manageable: drop the oldest untouched offers beyond the cap (a package counts once, story jobs stay).
+            foreach (var old in offers.Where(o => o.AircraftId == aircraft.Id && o.Status == ContractStatus.Offered && !o.IsFollowUpLeg && o.ChainId == null)
                          .OrderByDescending(o => o.OfferedAt).Skip(MaxOffersPerAircraft).ToList())
             {
                 foreach (var leg in offers.Where(o => o == old || old.PackageId != null && o.PackageId == old.PackageId).ToList())
@@ -660,44 +658,10 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             }
         }
 
+        if (rng is null) created += await EnsureStoryOffersAsync(db, career, fleet, offers, ilsCache, ct);
         await db.SaveChangesAsync(ct);
         if (created > 0) Changed?.Invoke();
-        return new MarketSearchResult(created, ilsChecked, ilsUnavailable);
-    }
-
-    /// <summary>
-    /// Asks the simulator about candidate airports with unknown ILS status, nearest to the preferred trip length first,
-    /// and stores the answers. Returns how many were checked and whether the sim was unavailable.
-    /// </summary>
-    private async Task<(int Checked, bool Unavailable)> CheckIlsAsync(SkyCareerDb db, List<Airport> airports, Airport origin, double range,
-        List<MissionType> types, MissionSearch search, Dictionary<string, bool?> cache, CancellationToken ct)
-    {
-        double minNm = Math.Max(types.Min(t => t.Distance.MinNm), search.DistanceMinNm ?? 0);
-        double maxNm = Math.Min(Math.Min(types.Max(t => t.Distance.MaxNm), search.DistanceMaxNm ?? double.MaxValue), range * 0.9);
-        double preferred = StandardMissionGenerator.PreferredDistance(range, minNm, maxNm);
-
-        var unknown = airports
-            .Where(a => a.Ident != origin.Ident && !cache.ContainsKey(a.Ident) && search.AcceptsDestination(a with { HasIls = true }))
-            .Select(a => (a.Ident, Dist: origin.Position.DistanceNmTo(a.Position)))
-            .Where(x => x.Dist >= minNm && x.Dist <= maxNm)
-            .OrderBy(x => Math.Abs(Math.Log(Math.Max(1, x.Dist) / Math.Max(1, preferred))))
-            .Take(IlsChecksPerSearch)
-            .Select(x => x.Ident)
-            .ToList();
-        if (unknown.Count == 0) return (0, false);
-        if (ilsLookup is not { Available: true }) return (0, true);
-
-        var results = await ilsLookup.CheckAsync(unknown, ct);
-        foreach (var (ident, info) in results)
-        {
-            cache[ident] = info?.HasIls;
-            db.AirportFacilities.Add(new AirportFacilityCacheRow
-            {
-                Ident = ident, HasIls = info?.HasIls, IlsRunways = info?.IlsRunways ?? "", CheckedAtUtc = DateTime.UtcNow
-            });
-        }
-        await db.SaveChangesAsync(ct);
-        return (results.Count, false);
+        return new MarketSearchResult(created);
     }
 
     public async Task AcceptAsync(Guid contractId)
@@ -706,7 +670,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var career = await RequireCareer(db);
         var c = await RequireContract(db, contractId);
         if (c.Status != ContractStatus.Offered) throw new CareerException(L.T("The offer is no longer available."));
-        if (c.IsReturnLeg) throw new CareerException(L.T("The return flight is accepted together with the outbound flight."));
+        if (c.IsFollowUpLeg) throw new CareerException(L.T("The later legs of a package are accepted together with its first leg."));
         if (c.ExpiresAt < career.GameTime) throw new CareerException(L.T("The offer has expired."));
         var aircraft = await RequireAircraft(db, c.AircraftId);
         if (!string.Equals(aircraft.Location, c.Origin, StringComparison.OrdinalIgnoreCase))
@@ -722,8 +686,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
     }
 
     /// <summary>
-    /// Cancelling an accepted job costs 10 % of the payout and some reputation. Cancelling a package's outbound cancels
-    /// its return leg too; the return leg alone can be dropped later (its bonus is lost).
+    /// Cancelling an accepted job costs 10 % of the payout and some reputation. Cancelling a leg of a package cancels its
+    /// later legs too (they start where it ends); earlier legs already flown stay, the package bonus is lost.
     /// </summary>
     public async Task CancelAsync(Guid contractId)
     {
@@ -732,14 +696,19 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var c = await RequireContract(db, contractId);
         if (c.Status is not (ContractStatus.Accepted or ContractStatus.InProgress)) throw new CareerException(L.T("Only accepted jobs can be cancelled."));
         var legs = new List<MissionContract> { c };
-        if (c is { PackageId: { } package, IsReturnLeg: false })
-            legs.AddRange(await db.Contracts.Where(x => x.PackageId == package && x.Id != c.Id && x.Status == ContractStatus.Accepted).ToListAsync());
+        if (c is { PackageId: { } package, PackageLeg: { } position })
+            legs.AddRange(await db.Contracts.Where(x => x.PackageId == package && x.PackageLeg > position && x.Status == ContractStatus.Accepted).ToListAsync());
         foreach (var leg in legs)
         {
             leg.Status = ContractStatus.Cancelled;
             Book(db, career, LedgerCategory.Penalty, -Math.Round(leg.Payout * CancellationPenalty, 0), L.F("Cancellation {0}→{1}", leg.Origin, leg.Destination), leg.AircraftId);
         }
         career.Reputation = Math.Max(0, career.Reputation - 1);
+        if (Client(c.ClientId) is { } client)
+        {
+            var standing = await StandingAsync(db, career, client.Id);
+            standing.Standing = Math.Clamp(standing.Standing + ClientStandings.CancellationStanding, 0, 100);
+        }
         await db.SaveChangesAsync();
         Changed?.Invoke();
     }
@@ -803,7 +772,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         var profile = Profile(aircraft.ProfileId);
         var type = MissionType(c.MissionTypeId);
         var origin = await RequireAirport(db, c.Origin);
-        var destination = await RequireAirport(db, c.Destination);
+        // After a diversion or a change of plans the flight is settled against the airport it was sent to.
+        var destination = await RequireAirport(db, c.EffectiveDestination);
         var nearest = await NearestAirportAsync(db, result.FinalPosition);
         var departure = career.GameTime;
 
@@ -813,7 +783,12 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             : null;
         var s = FlightSettlement.Settle(new SettlementInput(type, c, profile, aircraft, origin, destination, nearest, result,
             departure, EconomyTables.For(career.Difficulty), ExternalGroundCosts: career.GsxCostsEnabled, FuelUpliftKg: uplift,
-            PackageBonus: await PackageBonusAsync(db, c, type)));
+            PackageBonus: await PackageBonusAsync(db, c, type), PackageKind: c.Kind)
+        {
+            StoryBonus = StoryStepOf(c) is { } story ? (story.Bonus, story.DisplayTitle) : null
+        });
+        var (clientNote, clientLines) = await SettleClientAsync(db, career, c, s);
+        if (clientNote is not null) s = s with { ClientNote = clientNote, Lines = [.. s.Lines, .. clientLines] };
 
         var flight = new FlightRecord
         {
@@ -952,7 +927,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             FlightRecord? flight = null;
             // At the origin, receipts from before the job was armed are the previous flight's deboarding.
             bool forActive = active is not null &&
-                             (Same(active.Destination, r.Icao) && active.Status == ContractStatus.InProgress ||
+                             (Same(active.EffectiveDestination, r.Icao) && active.Status == ContractStatus.InProgress ||
                               Same(active.Origin, r.Icao) && (active.ArmedAtUtc is not { } armed || r.CreatedUtc >= armed));
             if (forActive)
             {
@@ -1310,13 +1285,44 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         aircraft.UnavailableReason = L.T("Scheduled check");
     }
 
-    /// <summary>The return leg's bonus on both payouts, when the package's outbound was flown (on time or late).</summary>
+    /// <summary>
+    /// Turns an offer's later legs into contracts of one package with the first leg <paramref name="first"/>: the same
+    /// market stream, consecutive flight numbers (a round trip's way back gets the next, even number as airlines do).
+    /// </summary>
+    private static List<MissionContract> AddFollowUps(SkyCareerDb db, MissionContract first, MissionOffer offer, Career career, FleetAircraft aircraft)
+    {
+        var package = Guid.NewGuid();
+        var legs = new List<MissionContract>();
+        first.PackageId = package;
+        first.PackageLeg = 1;
+        first.PackageLegs = offer.FollowUps.Count + 1;
+        first.PackageKind = offer.PackageKind.ToString();
+        first.PackageBonusShare = offer.PackageBonus;
+        int number = 2;
+        foreach (var followUp in offer.FollowUps)
+        {
+            var leg = ToContract(followUp, career, aircraft);
+            (leg.MarketStream, leg.MarketIndex) = (first.MarketStream, first.MarketIndex);
+            leg.FlightNumber = first.FlightNumber + number - 1;
+            (leg.PackageId, leg.PackageLeg, leg.PackageLegs, leg.PackageKind, leg.PackageBonusShare) =
+                (package, number++, first.PackageLegs, first.PackageKind, first.PackageBonusShare);
+            db.Contracts.Add(leg);
+            legs.Add(leg);
+        }
+        return legs;
+    }
+
+    /// <summary>
+    /// The package bonus, paid with the last leg once every earlier leg was flown (on time or late): the bonus share on
+    /// the payouts of all legs. Packages from before 0.6 are round trips and use the type's return flight bonus.
+    /// </summary>
     private static async Task<decimal> PackageBonusAsync(SkyCareerDb db, MissionContract c, MissionType type)
     {
-        if (c is not { IsReturnLeg: true, PackageId: { } package }) return 0;
-        var outbound = await db.Contracts.FirstOrDefaultAsync(x => x.PackageId == package && x.PackageLeg == 1);
-        if (outbound?.Status != ContractStatus.Completed) return 0;
-        return (type.ReturnFlight?.Bonus ?? 0.1m) * (outbound.Payout + c.Payout);
+        if (c is not { IsFollowUpLeg: true, IsLastLeg: true, PackageId: { } package }) return 0;
+        var earlier = await db.Contracts.Where(x => x.PackageId == package && x.Id != c.Id).ToListAsync();
+        if (earlier.Count < c.LegCount - 1 || earlier.Any(x => x.Status != ContractStatus.Completed)) return 0;
+        decimal share = c.PackageBonusShare ?? type.ReturnFlight?.Bonus ?? 0.1m;
+        return share * (earlier.Sum(x => x.Payout) + c.Payout);
     }
 
     /// <summary>
@@ -1329,7 +1335,7 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
             .Where(o => o.AircraftId == aircraft.Id && o.Status == ContractStatus.Offered && o.PackageLeg == 1 && o.Origin == aircraft.Location)
             .Select(o => o.PackageId);
         return db.Contracts.Where(c => c.AircraftId == aircraft.Id && c.Status == ContractStatus.Offered
-                                       && (c.PackageLeg == 2 ? !startable.Contains(c.PackageId) : c.Origin != aircraft.Location))
+                                       && (c.PackageLeg > 1 ? !startable.Contains(c.PackageId) : c.Origin != aircraft.Location))
             .ExecuteDeleteAsync(ct);
     }
 
@@ -1377,7 +1383,8 @@ public sealed class CareerService(IDbContextFactory<SkyCareerDb> dbFactory, Cont
         OfferedAt = career.GameTime,
         ExpiresAt = o.ExpiresAt.UtcDateTime,
         Deadline = o.Deadline.UtcDateTime,
-        DemandEvent = o.Demand?.Kind.ToString()
+        DemandEvent = o.Demand?.Kind.ToString(),
+        Waypoints = o.Waypoints.Count > 0 ? TourWaypoint.Serialize(o.Waypoints) : null
     };
 
     /// <summary>

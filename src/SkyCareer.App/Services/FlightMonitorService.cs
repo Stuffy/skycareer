@@ -57,6 +57,21 @@ public sealed class FlightMonitorService : IFlightSessionHost, IAsyncDisposable
     public Guid? ContractId { get; private set; }
 
     /// <summary>Begins tracking a new flight (armed automatically by the departure coordinator, or a test flight).</summary>
+    /// <summary>Waypoints of the current round trip and the indices passed so far; empty without one.</summary>
+    public (IReadOnlyList<Domain.World.TourWaypoint> Waypoints, IReadOnlyCollection<int> Passed) TourProgress
+    {
+        get
+        {
+            lock (_sessionLock)
+                return Session is { } s ? (s.Waypoints, s.PassedWaypoints.ToList()) : ([], []);
+        }
+    }
+
+    public void SetWaypoints(IReadOnlyList<Domain.World.TourWaypoint> waypoints)
+    {
+        lock (_sessionLock) Session?.SetWaypoints(waypoints);
+    }
+
     public void BeginFlight(Guid? contractId = null)
     {
         var session = new FlightSession();

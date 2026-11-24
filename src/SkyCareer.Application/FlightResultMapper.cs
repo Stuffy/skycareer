@@ -22,6 +22,7 @@ public static class FlightResultMapper
         MaxGForce = s.MaxGForce,
         Bounces = s.FinalTouchdown?.Bounces ?? 0,
         Comfort = s.Comfort,
+        MissedWaypoints = s.MissedWaypoints,
         LandingConditions = s.FinalTouchdown?.Conditions,
         OverspeedSeconds = s.OverspeedSeconds,
         StallWarningSeconds = s.StallWarningSeconds,

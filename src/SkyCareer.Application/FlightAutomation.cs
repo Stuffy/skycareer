@@ -21,6 +21,8 @@ public interface IFlightSessionHost
     /// <summary>Red departure checks recorded at liftoff; cleared when a new flight begins.</summary>
     IReadOnlyList<string> DepartureIssues { get; set; }
     void BeginFlight(Guid? contractId = null);
+    /// <summary>Waypoints the current flight has to pass (round trips); recorded samples are checked again.</summary>
+    void SetWaypoints(IReadOnlyList<Domain.World.TourWaypoint> waypoints);
     /// <summary>
     /// Continues tracking a job that is already flying (journal replay, or picked up from the current state). With
     /// <paramref name="live"/> false only the journal counts and live telemetry is ignored (another aircraft is loaded).
@@ -49,7 +51,7 @@ public enum GroundServiceState { NotUsed, NotStarted, InProgress, Completed }
 /// With several aircraft on jobs, the job of the aircraft type loaded in the sim (profile sim match) is armed or resumed.
 /// Not thread-safe by itself: the caller serialises <see cref="TickAsync"/>.
 /// </summary>
-public sealed class FlightAutomation(CareerService career, IFlightSessionHost host)
+public sealed partial class FlightAutomation(CareerService career, IFlightSessionHost host)
 {
     /// <summary>An armed job is dropped when the aircraft shows up this far from its departure airport before takeoff.</summary>
     public const double DisarmDistanceNm = 5;
@@ -215,6 +217,8 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             await RecordStartWearAsync(job);
             if (job.SimWearAtStart is not null) _wearFromResume.Add(job.Id);
         }
+        if (job.Status == ContractStatus.InProgress && !_offline.Contains(job.Id) && host.Latest is { } now)
+            await FollowEventsAsync(job, phase, now);
         if (job.Status != ContractStatus.InProgress || phase is not (FlightPhase.Arrived or FlightPhase.Crashed))
         {
             Waiting = null;
@@ -368,12 +372,14 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
             if (MatchesSim(job, t) && NearFlight(job, t, end))
             {
                 if (!host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg)) continue;
+                if (job.IsTour) host.SetWaypoints(job.WaypointList);
                 _journalEnds.Remove(job.Id);
                 host.Log(L.F("Flight {0} → {1} resumed after restart", job.Origin, job.Destination));
                 Resumed?.Invoke(job.Id);
                 return true;
             }
-            if (end is { Phase: FlightPhase.Arrived or FlightPhase.Crashed } && host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg, live: false))
+            if (end is { Phase: FlightPhase.Arrived or FlightPhase.Crashed } && host.ResumeFlight(job.Id, startedAt, job.FuelAtBlockOffKg, live: false)
+                && (!job.IsTour || SetWaypoints(job)))
             {
                 _journalEnds.Remove(job.Id);
                 _offline.Add(job.Id);
@@ -389,7 +395,7 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         if (!t.OnGround) return true;
         var places = new List<SkyCareer.Domain.GeoPosition>();
         if (end is not null) places.Add(end.Last.Position);
-        foreach (var icao in new[] { job.Origin, job.Destination })
+        foreach (var icao in new[] { job.Origin, job.Destination, job.EffectiveDestination })
             if (_airports.TryGetValue(icao, out var airport)) places.Add(airport.Position);
         return places.Any(p => t.Position.DistanceNmTo(p) <= DepartureCheck.MaxDistanceNm);
     }
@@ -414,11 +420,19 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         if (Candidates(t).FirstOrDefault() is { } job) Arm(job.Id);
     }
 
+    /// <summary>Gives the resumed session its round trip's waypoints again; always true so it can sit in a condition.</summary>
+    private bool SetWaypoints(MissionContract job)
+    {
+        host.SetWaypoints(job.WaypointList);
+        return true;
+    }
+
     private void Arm(Guid contractId)
     {
         _chosen = null;
         _groundReadiness = Readiness.GetValueOrDefault(contractId);
         host.BeginFlight(contractId);
+        if (_jobs.FirstOrDefault(j => j.Id == contractId) is { IsTour: true } tour) host.SetWaypoints(tour.WaypointList);
         host.DepartureIssues = [];
         _notStarted.Remove(contractId);
         var job = _jobs.First(j => j.Id == contractId);
@@ -440,6 +454,6 @@ public sealed class FlightAutomation(CareerService career, IFlightSessionHost ho
         _gameTime = (await career.GetCareerAsync()).GameTime;
         _jobs = await career.GetContractsAsync(ContractStatus.Accepted, ContractStatus.InProgress);
         _fleet = (await career.GetFleetAsync()).ToDictionary(f => f.Id);
-        _airports = await career.GetAirportsAsync(_jobs.SelectMany(j => new[] { j.Origin, j.Destination }).Distinct());
+        _airports = await career.GetAirportsAsync(_jobs.SelectMany(j => new[] { j.Origin, j.Destination, j.EffectiveDestination }).Distinct());
     }
 }

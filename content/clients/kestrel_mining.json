@@ -1,0 +1,89 @@
+{
+  "id": "kestrel_mining",
+  "name": "Kestrel Mining",
+  "description": "Mining company with exploration camps far from any road. Needs supplies, tools and crews at remote strips.",
+  "texts": {
+    "de": {
+      "description": "Bergbaugesellschaft mit Explorationscamps fernab jeder Straße. Braucht Versorgung, Werkzeug und Mannschaften auf abgelegenen Pisten."
+    }
+  },
+  "missionTypes": [
+    "bush_supply",
+    "cargo_feeder",
+    "air_taxi"
+  ],
+  "chains": [
+    {
+      "id": "new_mine",
+      "title": "A new mine",
+      "minStanding": 30,
+      "completionStanding": 10,
+      "texts": {
+        "de": {
+          "title": "Eine neue Mine"
+        }
+      },
+      "steps": [
+        {
+          "title": "Survey team",
+          "missionType": "air_taxi",
+          "maxNm": 200,
+          "briefing": "Our geologists found promising samples. Fly the survey team to the nearest airfield of the area.",
+          "texts": {
+            "de": {
+              "title": "Vermessungsteam",
+              "briefing": "Unsere Geologen haben vielversprechende Proben gefunden. Fliegen Sie das Vermessungsteam zum nächsten Flugplatz der Gegend."
+            }
+          },
+          "bonus": 0.2
+        },
+        {
+          "title": "Camp supplies",
+          "missionType": "bush_supply",
+          "sizes": [
+            "small"
+          ],
+          "minNm": 30,
+          "maxNm": 150,
+          "cargoKind": "tools",
+          "briefing": "The team sets up camp. They need tools and tents on a gravel strip close to the site.",
+          "texts": {
+            "de": {
+              "title": "Camp-Versorgung",
+              "briefing": "Das Team schlägt sein Lager auf. Es braucht Werkzeug und Zelte auf einer Schotterpiste nahe dem Fundort."
+            }
+          },
+          "bonus": 0.25
+        },
+        {
+          "title": "Drilling equipment",
+          "missionType": "cargo_feeder",
+          "minNm": 60,
+          "maxNm": 300,
+          "cargoKind": "spare_parts",
+          "briefing": "Test drilling begins. Bring the drill parts from the regional depot – heavy, but the camp is waiting.",
+          "texts": {
+            "de": {
+              "title": "Bohrausrüstung",
+              "briefing": "Die Probebohrungen beginnen. Bringen Sie die Bohrteile aus dem Regionallager – schwer, aber das Camp wartet."
+            }
+          },
+          "bonus": 0.25
+        },
+        {
+          "title": "Opening day",
+          "missionType": "air_taxi",
+          "maxNm": 250,
+          "briefing": "The deposit is confirmed. Fly the board to the opening – a smooth flight makes a good impression.",
+          "texts": {
+            "de": {
+              "title": "Eröffnung",
+              "briefing": "Die Lagerstätte ist bestätigt. Fliegen Sie den Vorstand zur Eröffnung – ein ruhiger Flug macht Eindruck."
+            }
+          },
+          "bonus": 0.4
+        }
+      ]
+    }
+  ]
+}

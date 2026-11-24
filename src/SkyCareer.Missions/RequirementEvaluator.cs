@@ -40,8 +40,9 @@ public static class RequirementEvaluator
         return reasons.Count == 0 ? EligibilityResult.Ok : new EligibilityResult(false, reasons);
     }
 
+    /// <summary>Mission types the aircraft can fly on the market; types with weight 0 (deliveries) are never offered.</summary>
     public static IEnumerable<MissionType> AvailableFor(IEnumerable<MissionType> missions, AircraftProfile aircraft) =>
-        missions.Where(m => Evaluate(m, aircraft).Eligible);
+        missions.Where(m => m.Weight > 0 && Evaluate(m, aircraft).Eligible);
 
     /// <summary>Still-air range with full tanks keeping a 45 minute reserve.</summary>
     public static double EstimatedRangeNm(AircraftProfile a) =>

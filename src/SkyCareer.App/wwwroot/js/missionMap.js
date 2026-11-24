@@ -70,19 +70,27 @@ window.skyMap = (() => {
         const groups = new Map();
 
         for (const o of data.offers) {
-            const line = L.polyline([o.from, o.to], {
-                color: o.color,
-                weight: o.accepted ? 4 : (o.selected ? 4 : 2),
-                opacity: o.accepted || o.selected ? 1 : 0.65,
-                dashArray: o.accepted ? null : '6 6'
-            }).addTo(m.layers);
-            line.bindTooltip(o.label, { sticky: true });
-            // Accepted jobs: the arrival radius (3 nm) the settlement checks the parking position against.
-            if (o.accepted) {
-                L.circle(o.to, { radius: 5556, color: o.color, weight: 1.5, opacity: 0.9, fillOpacity: 0.08, interactive: false }).addTo(m.layers);
-            }
-            line.on('click', () => m.dotNetRef.invokeMethodAsync('OnOfferClicked', o.id));
             bounds.push(o.from, o.to);
+            // Only accepted jobs and the selected offer get their route drawn; the others show as destination pins,
+            // so a busy market stays readable.
+            if (o.accepted || o.selected) {
+                const line = L.polyline(o.path || [o.from, o.to], {
+                    color: o.color,
+                    weight: 4,
+                    opacity: 1,
+                    dashArray: o.accepted ? null : '6 6'
+                }).addTo(m.layers);
+                line.bindTooltip(o.label, { sticky: true });
+                line.on('click', () => m.dotNetRef.invokeMethodAsync('OnOfferClicked', o.id));
+                // Accepted jobs: the arrival radius (3 nm) the settlement checks the parking position against.
+                if (o.accepted) {
+                    L.circle(o.to, { radius: 5556, color: o.color, weight: 1.5, opacity: 0.9, fillOpacity: 0.08, interactive: false }).addTo(m.layers);
+                }
+                // Waypoints of a round trip: small rings along the path.
+                for (const p of (o.path || []).slice(1, -1)) {
+                    L.circleMarker(p, { radius: 4, color: o.color, weight: 2, fill: false, interactive: false }).addTo(m.layers);
+                }
+            }
 
             if (!groups.has(o.destIdent)) groups.set(o.destIdent, { destIdent: o.destIdent, destName: o.destName, to: o.to, offers: [] });
             groups.get(o.destIdent).offers.push(o);

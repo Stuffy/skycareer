@@ -16,6 +16,7 @@ public static class MissionTexts
         "cargo" => L.T("Cargo"),
         "medical" => L.T("Medical"),
         "bush" => L.T("Bush"),
+        "ferry" => L.T("Delivery"),
         _ => category
     };
 

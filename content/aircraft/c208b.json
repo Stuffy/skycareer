@@ -2,6 +2,7 @@
   "id": "c208b",
   "name": "Cessna 208B Grand Caravan EX",
   "icaoType": "C208",
+  "deliveryAirport": "KICT",
   "simMatch": ["C208", "Caravan"],
   "operatingEmptyKg": 2145,
   "maxZeroFuelKg": 3995,

@@ -37,6 +37,11 @@ public sealed class AppSettings
     /// <summary>UI language ("en", "de"); null follows the Windows display language.</summary>
     public string? Language => _values.Language;
 
+    /// <summary>Events during flights (medical emergency, change of destination, technical warning); on by default.</summary>
+    public bool InFlightEvents => _values.InFlightEvents;
+
+    public void SetInFlightEvents(bool enabled) => Update(v => v with { InFlightEvents = enabled });
+
     public event Action? Changed;
 
     public void SetDebugMode(bool enabled) => Update(v => v with { DebugMode = enabled });
@@ -65,5 +70,6 @@ public sealed class AppSettings
     {
         public bool DebugMode { get; init; }
         public string? Language { get; init; }
+        public bool InFlightEvents { get; init; } = true;
     }
 }

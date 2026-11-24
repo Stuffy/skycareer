@@ -2,6 +2,7 @@
   "id": "kingair350",
   "name": "Beechcraft King Air 350i",
   "icaoType": "B350",
+  "deliveryAirport": "KBEC",
   "simMatch": ["King Air 350", "B350"],
   "operatingEmptyKg": 4150,
   "maxZeroFuelKg": 5670,

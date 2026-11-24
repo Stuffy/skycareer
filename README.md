@@ -23,7 +23,16 @@ airline career: accept jobs, build a fleet, keep costs under control and earn re
 - **Job market** – scheduled, charter, VIP, air taxi, cargo, air ambulance and bush flights that match the aircraft, its
   range and runway requirements. Big cities and capitals are preferred destinations; military airfields are only open to
   military aircraft. Scheduled and charter flights are usually well booked, and the pay follows the load factor. Some jobs
-  come as an outbound and return package ("Round trip") with a bonus when both legs are flown.
+  come as an outbound and return package ("Round trip") or as a run over several stops (VIP and charter: a roadshow of one
+  group), with a bonus when every leg is flown.
+- **Round trips** – sightseeing flights, aerial surveys and pipeline patrols over waypoints around your airfield, each
+  with its height band.
+- **Events during flights** – now and then a medical emergency, a change of plans or a technical warning asks for a
+  decision (can be switched off).
+- **Job search** – filter by aircraft, mission type, distance, load, pay (also per block hour), destination runway, size
+  and lighting, airfields known to MSFS, and in the list by client, story jobs, packages or demand bonus.
+- **Clients** – recurring companies with their own standing towards your airline: better standing pays more, unlocks
+  series of flights with a bonus and story chains of jobs with briefings.
 - **Your airline** – name, ICAO code and radio callsign (derived from the name or set by you), pilot, home base and key
   figures such as flights, block hours, punctuality and revenue. Every job has a flight number: scheduled flights keep one
   per route, return flights take the next even number.

@@ -10,6 +10,7 @@
   "distance": { "minNm": 20, "maxNm": 250 },
   "destinations": {"sizes": ["small"]},
   "pay": { "base": 500, "perNm": 2, "perPax": 40, "perCargoKg": 1.5, "hourlyRateFactor": 1.4 },
+  "multiStop": { "chance": 0.3, "minLegs": 3, "maxLegs": 4, "minLegNm": 15, "maxLegNm": 80, "bonus": 0.2, "returnToOrigin": true },
   "scoring": { "landingRateWeight": 0.5, "punctualityWeight": 0.5, "maxTouchdownFpm": 500 },
   "simBrief": "none",
   "flightRules": "vfr",

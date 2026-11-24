@@ -6,6 +6,12 @@ public enum Ownership { Owned, Leased, Rented }
 
 public enum ContractStatus { Offered, Accepted, InProgress, Completed, Failed, Expired, Cancelled }
 
+/// <summary>Something that happened during a flight and asked the crew for a decision.</summary>
+public enum InFlightEventKind { MedicalEmergency, DestinationChange, TechnicalWarning }
+
+/// <summary>The kind of a package of legs: a round trip, a run over several stops, an aircraft delivery or a client's story step.</summary>
+public enum PackageKind { Return, MultiStop, Delivery, Story }
+
 public enum FlightOutcome { Completed, Late, Diverted, Failed, Crashed, Cancelled }
 
 public enum LedgerCategory
@@ -146,12 +152,31 @@ public sealed class MissionContract
     public double? FuelAtBlockOffKg { get; set; }
     /// <summary>Real time (UTC) the job was first armed at its origin; older GSX receipts there belong to the previous flight.</summary>
     public DateTime? ArmedAtUtc { get; set; }
-    /// <summary>Shared by the outbound and return leg of a package; null for single jobs.</summary>
+    /// <summary>Shared by all legs of a package (return flight, multi-stop run, delivery); null for single jobs.</summary>
     public Guid? PackageId { get; set; }
-    /// <summary>1 = outbound, 2 = return leg of a package.</summary>
+    /// <summary>Position of the leg in its package, 1 = first; legs are flown in order.</summary>
     public int? PackageLeg { get; set; }
+    /// <summary>Number of legs in the package; null on packages from before 0.6, which were round trips of two legs.</summary>
+    public int? PackageLegs { get; set; }
+    /// <summary>What the package is (<see cref="global::SkyCareer.Domain.Career.PackageKind"/> name); null = <see cref="PackageKind.Return"/>.</summary>
+    public string? PackageKind { get; set; }
+    /// <summary>Bonus share on all payouts once every leg is flown; null = the mission type's return flight bonus.</summary>
+    public decimal? PackageBonusShare { get; set; }
     /// <summary>Flight number (1–9999): fixed per route for scheduled flights, random otherwise, return legs +1.</summary>
     public int? FlightNumber { get; set; }
+    /// <summary>Event during the flight (<see cref="InFlightEventKind"/> name) and the crew's decision; null without one.</summary>
+    public string? EventKind { get; set; }
+    /// <summary>True = diverted / accepted the change, false = flew on as planned.</summary>
+    public bool? EventAccepted { get; set; }
+    /// <summary>Where the flight now goes after an event (diversion, new destination); null = <see cref="Destination"/>.</summary>
+    public string? RevisedDestination { get; set; }
+    /// <summary>Waypoints of a round trip (<see cref="World.TourWaypoint"/> text); null for ordinary jobs.</summary>
+    public string? Waypoints { get; set; }
+    /// <summary>The recurring client the job is for (content/clients); null for anonymous jobs.</summary>
+    public string? ClientId { get; set; }
+    /// <summary>The client's story chain and the step (0-based) this job is; null for ordinary jobs.</summary>
+    public string? ChainId { get; set; }
+    public int? ChainStep { get; set; }
     /// <summary>Demand event at the destination that raised the payout (the event kind's name); null for none.</summary>
     public string? DemandEvent { get; set; }
     /// <summary>Market stream the offer was generated from (career seed, game date, origin, aircraft, search).</summary>
@@ -159,9 +184,20 @@ public sealed class MissionContract
     /// <summary>Attempt number within <see cref="MarketStream"/>; the next search of the stream continues after the highest.</summary>
     public int? MarketIndex { get; set; }
 
-    public bool IsReturnLeg => PackageLeg == 2;
+    /// <summary>A later leg of a package: accepted, cancelled and offered only together with the first one.</summary>
+    public bool IsFollowUpLeg => PackageLeg > 1;
+    public int LegCount => PackageLegs ?? (PackageId is null ? 1 : 2);
+    public bool IsLastLeg => PackageLeg is null || PackageLeg >= LegCount;
+    public PackageKind Kind => Enum.TryParse<PackageKind>(PackageKind, out var kind) ? kind : global::SkyCareer.Domain.Career.PackageKind.Return;
+    /// <summary>The way back of a round trip.</summary>
+    public bool IsReturnFlight => IsFollowUpLeg && Kind == global::SkyCareer.Domain.Career.PackageKind.Return;
 
     public int TotalPassengers => Adults + Children + Infants;
+    public IReadOnlyList<World.TourWaypoint> WaypointList => World.TourWaypoint.Parse(Waypoints);
+    /// <summary>The airport the flight is settled against: the revised one after a diversion or change, else the destination.</summary>
+    public string EffectiveDestination => RevisedDestination ?? Destination;
+    public InFlightEventKind? Event => Enum.TryParse<InFlightEventKind>(EventKind, out var kind) ? kind : null;
+    public bool IsTour => !string.IsNullOrEmpty(Waypoints);
     public IReadOnlyList<string> DepartureIssueList =>
         string.IsNullOrEmpty(DepartureIssues) ? [] : DepartureIssues.Split('\n', StringSplitOptions.RemoveEmptyEntries);
     public IReadOnlyList<GroundService> GroundServiceList => GroundServiceCodec.Parse(GroundServices);

@@ -102,14 +102,69 @@ public class GeneratorSearchTests
     }
 
     [Fact]
+    public void Full_destinations_are_skipped_and_unserved_ones_preferred()
+    {
+        var airports = Grid().Where(a => a.Position.DistanceNmTo(Origin.Position) <= 400).ToList();
+        var full = airports.Take(airports.Count / 2).Select(a => a.Ident).ToHashSet();
+        var served = airports.Skip(airports.Count / 2).Take(5).Select(a => a.Ident).ToHashSet();
+        var gen = new StandardMissionGenerator();
+        var picks = Enumerable.Range(0, 400)
+            .Select(i => gen.TryGenerate(new GenerationContext(WideType, Jet(), Origin, airports, DateTimeOffset.UnixEpoch, new Random(i))
+            {
+                DestinationFull = a => full.Contains(a.Ident),
+                Unserved = a => !served.Contains(a.Ident) && !full.Contains(a.Ident)
+            }))
+            .OfType<MissionOffer>().Select(o => o.Destination.Ident).ToList();
+
+        Assert.NotEmpty(picks);
+        Assert.DoesNotContain(picks, full.Contains);
+        // Five served destinations among the open ones would get their share by chance; unserved ones are weighted ×2.
+        int open = airports.Count - full.Count;
+        double servedShare = picks.Count(served.Contains) / (double)picks.Count;
+        Assert.True(servedShare < 5.0 / open, $"served share {servedShare:P0}");
+    }
+
+    [Fact]
+    public void Pay_per_hour_and_msfs_airfields_steer_the_search()
+    {
+        // The grid's made-up idents count as known to the sim, except one strip without an ICAO code.
+        var airports = Grid().Select(a => a with { InSim = true }).ToList();
+        airports[3] = airports[3] with { Ident = "XX-0001", InSim = null };
+        var gen = new StandardMissionGenerator();
+        var plain = Enumerable.Range(0, 200)
+            .Select(i => gen.TryGenerate(new GenerationContext(WideType, Jet(), Origin, airports, DateTimeOffset.UnixEpoch, new Random(i))))
+            .OfType<MissionOffer>().ToList();
+        decimal median = plain.Select(o => o.Payout.Amount / (decimal)StandardMissionGenerator.BlockHours(Jet(), o.DistanceNm)).Order().ElementAt(plain.Count / 2);
+
+        var search = new MissionSearch { PayPerHourMin = median, KnownToSimOnly = true };
+        var filtered = Enumerable.Range(0, 200)
+            .Select(i => gen.TryGenerate(new GenerationContext(WideType, Jet(), Origin, airports, DateTimeOffset.UnixEpoch, new Random(i)) { Search = search }))
+            .OfType<MissionOffer>().ToList();
+        Assert.NotEmpty(filtered);
+        Assert.All(filtered, o => Assert.True(o.Payout.Amount / (decimal)StandardMissionGenerator.BlockHours(Jet(), o.DistanceNm) >= median));
+        Assert.DoesNotContain(filtered, o => o.Destination.Ident == "XX-0001");
+        Assert.True(search.AcceptsPayPerHour(2000, 1) == (2000 >= median));
+    }
+
+    [Fact]
+    public void The_fingerprint_of_older_searches_stays_the_same()
+    {
+        // Stored market streams are keyed by this text; it must not change for searches without the newer criteria.
+        var search = new MissionSearch { MissionTypeIds = new HashSet<string> { "charter" }, DistanceMinNm = 100, ScheduledServiceOnly = true };
+        Assert.Equal("charter;;100//////;False/False/False/True", search.Fingerprint);
+        Assert.Equal(";;//////;False/False/False/False", MissionSearch.Any.Fingerprint);
+        Assert.EndsWith(";pph=500;msfs", (search with { PayPerHourMin = 500, KnownToSimOnly = true }).Fingerprint);
+    }
+
+    [Fact]
     public void Search_window_and_destination_criteria_are_respected()
     {
         var airports = Grid();
-        // Only every other airport has ILS, some have short or unpaved runways.
+        // Some airports have short runways.
         for (int i = 0; i < airports.Count; i++)
-            airports[i] = airports[i] with { HasIls = i % 2 == 0, LongestRunwayM = i % 3 == 0 ? 1200 : 3000, LongestPavedRunwayM = i % 3 == 0 ? 1200 : 3000 };
+            airports[i] = airports[i] with { LongestRunwayM = i % 3 == 0 ? 1200 : 3000, LongestPavedRunwayM = i % 3 == 0 ? 1200 : 3000 };
 
-        var search = new MissionSearch { DistanceMinNm = 500, DistanceMaxNm = 800, RequireIls = true, MinRunwayM = 2500, RequirePaved = true };
+        var search = new MissionSearch { DistanceMinNm = 500, DistanceMaxNm = 800, MinRunwayM = 2500, RequirePaved = true };
         var gen = new StandardMissionGenerator();
         var rng = new Random(5);
         int offers = 0;
@@ -119,7 +174,6 @@ public class GeneratorSearchTests
             if (o is null) continue;
             offers++;
             Assert.InRange(o.DistanceNm, 500, 800);
-            Assert.True(o.Destination.HasIls);
             Assert.True(o.Destination.LongestPavedRunwayM >= 2500);
         }
         Assert.True(offers > 50);
@@ -169,8 +223,6 @@ public class GeneratorSearchTests
 
         Assert.True(new MissionSearch { MissionTypeIds = new HashSet<string> { "charter" }, DistanceMaxNm = 700, PaxMin = 6 }.Matches(contract, dest));
         Assert.False(new MissionSearch { PaxMin = 7 }.Matches(contract, dest));
-        Assert.False(new MissionSearch { RequireIls = true }.Matches(contract, dest)); // unknown ILS doesn't count
-        Assert.True(new MissionSearch { RequireIls = true }.Matches(contract, dest with { HasIls = true }));
         Assert.False(new MissionSearch { RequirePaved = true }.Matches(contract, null));
         Assert.False(new MissionSearch { Sizes = new HashSet<AirportSize> { AirportSize.Large } }.Matches(contract, dest));
     }

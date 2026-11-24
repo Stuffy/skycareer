@@ -10,6 +10,7 @@
   "destinations": {"sizeWeights": {"large": 5, "medium": 3}, "minLargeShare": 0.3, "cityWeight": 4, "distanceInfluence": 0.5, "minCapitalShare": 0.4},
   "pay": { "base": 3000, "perNm": 3, "perPax": 250, "hourlyRateFactor": 1.9, "occupancyShare": 0.3, "onTimeBonus": 0.25 },
   "returnFlight": { "chance": 0.3, "bonus": 0.15 },
+  "multiStop": { "chance": 0.2, "minLegs": 3, "maxLegs": 4, "minLegNm": 150, "maxLegNm": 700, "bonus": 0.15, "returnToOrigin": true, "sameLoad": true },
   "scoring": { "landingRateWeight": 3, "gForceWeight": 2, "punctualityWeight": 2, "maxTouchdownFpm": 250, "maxGForce": 1.4 },
   "simBrief": "optional",
   "flightRules": "ifr",

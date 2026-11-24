@@ -3,6 +3,7 @@
   "id": "c172",
   "name": "Cessna 172 Skyhawk",
   "icaoType": "C172",
+  "deliveryAirport": "KIDP",
   "simMatch": ["C172", "Skyhawk"],
   "operatingEmptyKg": 767,
   "maxZeroFuelKg": 1111,

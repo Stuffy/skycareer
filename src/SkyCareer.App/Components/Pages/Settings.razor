@@ -101,6 +101,11 @@
         <MudText Typo="Typo.body2" Class="mt-1">
             @T("Shows the “Debug” menu with developer and cheat tools (balance, reputation, fleet, jobs) as well as replay and free relocation. Changes to the balance are recorded in the ledger as adjustments.")
         </MudText>
+        <MudSwitch T="bool" Value="AppSettings.InFlightEvents" ValueChanged="AppSettings.SetInFlightEvents" Color="Color.Primary" Class="mt-3"
+                   Label="@T("Events during flights")" />
+        <MudText Typo="Typo.body2" Class="mt-1">
+            @T("On about every tenth flight something happens that asks for a decision: a medical emergency on board, the customer changing the destination or a technical warning from a worn component. The settlement judges the decision.")
+        </MudText>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@T("Report a problem")</MudText>
         <MudText Typo="Typo.body2" Class="mb-2">
             @T("The app writes an error log. “Copy diagnostics” puts the version, simulator status and the latest log lines on the clipboard – just paste them into your bug report.")

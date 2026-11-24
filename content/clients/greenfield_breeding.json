@@ -1,0 +1,13 @@
+{
+  "id": "greenfield_breeding",
+  "name": "Greenfield Breeding",
+  "description": "Livestock breeder shipping horses and cattle to shows and new owners.",
+  "texts": {
+    "de": {
+      "description": "Tierzucht, die Pferde und Rinder zu Ausstellungen und neuen Besitzern fliegt."
+    }
+  },
+  "missionTypes": [
+    "livestock"
+  ]
+}

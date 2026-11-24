@@ -11,6 +11,8 @@ public sealed record GameContent(
     IReadOnlyList<MissionType> MissionTypes,
     IReadOnlyList<ContentError> Errors)
 {
+    /// <summary>Recurring clients (content/clients).</summary>
+    public IReadOnlyList<Client> Clients { get; init; } = [];
     /// <summary>File each aircraft profile was loaded from (after overrides).</summary>
     public IReadOnlyDictionary<string, string> AircraftFiles { get; init; } = new Dictionary<string, string>();
 }
@@ -35,11 +37,13 @@ public static class ContentLoader
         var errors = new List<ContentError>();
         var aircraft = new Dictionary<string, (AircraftProfile Item, string File)>(StringComparer.OrdinalIgnoreCase);
         var missions = new Dictionary<string, (MissionType Item, string File)>(StringComparer.OrdinalIgnoreCase);
+        var clients = new Dictionary<string, (Client Item, string File)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var root in contentRoots)
         {
             Merge(LoadDir<AircraftProfile>(Path.Combine(root, "aircraft"), errors), a => a.Id, aircraft, "aircraft", errors);
             Merge(LoadDir<MissionType>(Path.Combine(root, "missions"), errors), m => m.Id, missions, "mission type", errors);
+            Merge(LoadDir<Client>(Path.Combine(root, "clients"), errors), c => c.Id, clients, "client", errors);
         }
 
         return new GameContent(
@@ -47,6 +51,7 @@ public static class ContentLoader
             missions.Values.Select(v => v.Item).ToList(),
             errors)
         {
+            Clients = clients.Values.Select(v => v.Item).OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList(),
             AircraftFiles = aircraft.ToDictionary(kv => kv.Key, kv => kv.Value.File, StringComparer.OrdinalIgnoreCase)
         };
     }

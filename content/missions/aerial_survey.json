@@ -1,0 +1,57 @@
+{
+  "id": "aerial_survey",
+  "name": "Aerial survey",
+  "description": "Photo and mapping flight with a survey crew: pass every waypoint at 1,500 ft above ground (±300 ft) and return.",
+  "texts": {
+    "de": {
+      "name": "Luftbildvermessung",
+      "description": "Foto- und Vermessungsflug mit Vermessungsteam: jeden Wegpunkt in 1.500 ft über Grund (±300 ft) überfliegen und zurückkehren."
+    }
+  },
+  "category": "charter",
+  "generator": "sightseeing",
+  "requirements": {
+    "forbiddenTags": [
+      "jet",
+      "airliner"
+    ],
+    "maxMtowKg": 9000
+  },
+  "passengers": {
+    "min": 1,
+    "max": 2,
+    "childShare": 0,
+    "infantShare": 0,
+    "baggage": "handOnly"
+  },
+  "cargo": {
+    "minKg": 30,
+    "maxKg": 120,
+    "kinds": [
+      "survey_equipment"
+    ]
+  },
+  "distance": {
+    "minNm": 10,
+    "maxNm": 60
+  },
+  "tour": {
+    "minWaypoints": 3,
+    "maxWaypoints": 4,
+    "minAglFt": 1200,
+    "maxAglFt": 1800
+  },
+  "pay": {
+    "base": 600,
+    "perNm": 3,
+    "hourlyRateFactor": 1.6
+  },
+  "scoring": {
+    "gForceWeight": 0.5,
+    "landingRateWeight": 0.5,
+    "punctualityWeight": 1
+  },
+  "simBrief": "none",
+  "flightRules": "vfr",
+  "weight": 0.8
+}

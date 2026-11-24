@@ -1,0 +1,14 @@
+{
+  "id": "open_skies_relief",
+  "name": "Open Skies Relief",
+  "description": "Aid organisation bringing medical supplies and food where roads end.",
+  "texts": {
+    "de": {
+      "description": "Hilfsorganisation, die Medikamente und Lebensmittel dorthin bringt, wo Straßen enden."
+    }
+  },
+  "missionTypes": [
+    "bush_supply",
+    "air_ambulance"
+  ]
+}

@@ -20,7 +20,12 @@ public sealed record SettlementInput(
     EconomyTables Economy,
     bool ExternalGroundCosts = false, // fuel, handling and catering are paid from GSX receipts instead
     double? FuelUpliftKg = null,      // fuel stays in the aircraft: pay what was added since the last flight, not what was burnt
-    decimal PackageBonus = 0);        // return leg of a package whose outbound was flown: bonus on both payouts
+    decimal PackageBonus = 0,         // last leg of a package whose earlier legs were flown: bonus on all payouts
+    PackageKind PackageKind = PackageKind.Return)
+{
+    /// <summary>A client's story step: its bonus share on the payout and its title.</summary>
+    public (decimal Share, string Title)? StoryBonus { get; init; }
+}
 
 public sealed record SettlementResult(
     FlightOutcome Outcome,
@@ -36,6 +41,8 @@ public sealed record SettlementResult(
 {
     /// <summary>Passenger comfort of the flight; null on flights without passengers or without flight data.</summary>
     public ComfortRating? Comfort { get; init; }
+    /// <summary>How the flight changed the client's standing ("Kestrel Mining: standing +2 → 42 (silver)"); null without a client.</summary>
+    public string? ClientNote { get; init; }
     /// <summary>What the passengers said about the flight (in the language of the settlement).</summary>
     public IReadOnlyList<string> PassengerComments { get; init; } = [];
 
@@ -167,11 +174,20 @@ public static class FlightSettlement
         {
             case FlightOutcome.Completed:
             case FlightOutcome.Late:
-                lines.Add(new(LedgerCategory.MissionRevenue, c.Payout, $"{i.Type.DisplayName} {c.Origin}→{c.Destination}"));
+                if (c.Payout > 0) lines.Add(new(LedgerCategory.MissionRevenue, c.Payout, $"{i.Type.DisplayName} {c.Origin}→{c.EffectiveDestination}"));
                 if (outcome == FlightOutcome.Completed && i.Type.Pay.OnTimeBonus > 0)
                     lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * i.Type.Pay.OnTimeBonus, 0), L.T("On-time bonus")));
                 if (i.PackageBonus > 0)
-                    lines.Add(new(LedgerCategory.Bonus, Math.Round(i.PackageBonus, 0), L.T("Return flight bonus")));
+                    lines.Add(new(LedgerCategory.Bonus, Math.Round(i.PackageBonus, 0),
+                        i.PackageKind == PackageKind.Return ? L.T("Return flight bonus") : L.F("Package bonus ({0} legs)", c.LegCount)));
+                if (c.IsTour && r.MissedWaypoints is { Count: > 0 } missed)
+                {
+                    int total = Math.Max(missed.Count, c.WaypointList.Count);
+                    lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * missed.Count / total, 0), L.F("Waypoints missed: {0} of {1}", missed.Count, total)));
+                    notes.Add(L.F("Not passed: {0}", string.Join(", ", missed)));
+                }
+                if (i.StoryBonus is { Share: > 0 } story)
+                    lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * story.Share, 0), L.F("Story bonus: {0}", story.Title)));
                 if (outcome == FlightOutcome.Completed && i.Type.Timing.EarlyBonus(-lateBy) is > 0 and var early)
                     lines.Add(new(LedgerCategory.Bonus, Math.Round(c.Payout * early, 0), L.F("Early arrival bonus ({0:N0} min)", -lateBy.TotalMinutes)));
                 if (comfort is not null && TipShare(comfort.Score) is > 0 and var tip)
@@ -211,7 +227,7 @@ public static class FlightSettlement
                         lines.Add(new(LedgerCategory.Penalty, -Math.Round(c.Payout * share, 0), L.F("Rule violation: {0}", ViolationText(type))));
                 break;
             case FlightOutcome.Diverted:
-                notes.Add(L.F("Did not arrive at destination {0} (final position {1}). No payment.", c.Destination, landedAt.Ident));
+                notes.Add(L.F("Did not arrive at destination {0} (final position {1}). No payment.", c.EffectiveDestination, landedAt.Ident));
                 reputation = -2;
                 break;
             case FlightOutcome.Crashed:
@@ -222,6 +238,32 @@ public static class FlightSettlement
                 reputation = 0;
                 break;
         }
+
+        // Events during the flight: the crew's decision counts, whatever came of it.
+        if (outcome != FlightOutcome.Crashed && c.Event is { } happened)
+            switch (happened, c.EventAccepted)
+            {
+                case (InFlightEventKind.MedicalEmergency, true) when outcome is FlightOutcome.Completed or FlightOutcome.Late:
+                    reputation += Events.InFlightEvents.MedicalDiversionReputation;
+                    notes.Add(L.F("Diverted to {0} for a medical emergency (+{1} reputation).", c.EffectiveDestination, Events.InFlightEvents.MedicalDiversionReputation));
+                    break;
+                case (InFlightEventKind.MedicalEmergency, false):
+                    reputation += Events.InFlightEvents.MedicalIgnoredReputation;
+                    notes.Add(L.F("A passenger needed medical help and the flight continued ({0} reputation).", Events.InFlightEvents.MedicalIgnoredReputation));
+                    break;
+                case (InFlightEventKind.TechnicalWarning, true):
+                    notes.Add(L.F("Precautionary landing at {0}: paid for the share of the trip flown.", c.EffectiveDestination));
+                    break;
+                case (InFlightEventKind.TechnicalWarning, false):
+                    notes.Add(L.T("Flew on with a technical warning – extra wear."));
+                    break;
+                case (InFlightEventKind.DestinationChange, true):
+                    notes.Add(L.F("Destination changed by the customer to {0}.", c.EffectiveDestination));
+                    break;
+                case (InFlightEventKind.DestinationChange, false):
+                    notes.Add(L.T("The customer's change of destination was declined."));
+                    break;
+            }
 
         // Rule violations cost part of the payout (above) and reputation, but never void the flight.
         var penalised = ViolationPenalties(r.Violations);
@@ -270,6 +312,8 @@ public static class FlightSettlement
                 ? L.T("MSFS wear: none measurable.")
                 : L.F("MSFS wear: {0} (condition −{1:0.##} %).", string.Join(", ", worn), simLoss));
         }
+        if (c.Event == InFlightEventKind.TechnicalWarning && c.EventAccepted == false && outcome != FlightOutcome.Crashed)
+            conditionLoss += Events.InFlightEvents.IgnoredWarningConditionLoss;
         if (Math.Abs(r.TouchdownFpm) > 600) notes.Add(L.F("Hard landing ({0:N0} fpm) – inspection recommended.", r.TouchdownFpm));
 
         return new SettlementResult(outcome, score, lines, landedAt.Ident, arrivalTime, blockHours, airHours,

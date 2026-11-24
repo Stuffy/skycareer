@@ -32,6 +32,8 @@ public sealed record AircraftProfile
 
     /// <summary>Case-insensitive substrings matched against ATC MODEL / TITLE to recognise the loaded aircraft.</summary>
     public IReadOnlyList<string> SimMatch { get; init; } = [];
+    /// <summary>Airport (ICAO) new aircraft of this type are delivered from; null = ready at the home base at once.</summary>
+    public string? DeliveryAirport { get; init; }
 
     /// <summary>True if the sim's aircraft title contains one of <see cref="SimMatch"/>.</summary>
     public bool MatchesSimTitle(string? title) =>

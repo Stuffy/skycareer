@@ -2,6 +2,46 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **Jobs with several stops:** bush supply, cargo feeder and the new mail run sometimes come as a run over 3–4 stops
+  (A → B → C …, mail runs and bush rounds back home). The legs are accepted together, each one starts by itself once
+  the aircraft is at its origin, and the last leg pays a bonus on all payouts when every leg was flown. The job market
+  shows the whole route and the map draws every leg. VIP and charter flights sometimes come as a roadshow: the same
+  group travels to 1–2 stops and is flown back home, with the same passengers and bags on every leg.
+- **Recurring clients:** eight companies (a mining company, a hospital group, a tour operator, an express service, an aid
+  organisation, a business travel agency, a livestock breeder and a chemical company) hand out jobs of their kind and
+  keep their own standing with your airline. Good flights raise it, late arrivals, diversions and cancellations lower
+  it; silver and gold pay 5 % and 10 % more. From silver a client offers a series (4–5 flights in 7 game days, 20 %
+  bonus), and two clients have story chains – short series of jobs with briefings, unlocked by standing. The new
+  "Clients" page shows standing, series and story progress.
+- **Sightseeing and survey flights:** round trips from your airfield over 2–4 towns of the region and back – sightseeing
+  for guests below 3,000 ft above ground, aerial survey at 1,500 ft (±300 ft) and pipeline patrol below 1,000 ft. Live
+  flight shows the next waypoint with course and distance and whether you are in the height band; every waypoint
+  not passed within 1.5 nm costs its share of the pay. The map draws the tour, the flight plan contains the waypoints.
+- **Delivery flights:** bought and leased aircraft now come from their factory (Cessna Wichita/Independence, Beechcraft
+  Wichita, Airbus Toulouse, Airbus Helicopters Augsburg). Have them delivered – paid like a ferry flight, the aircraft
+  is unavailable meanwhile – or pick them up and fly the delivery to the home base yourself, with fuel stops planned
+  automatically when the distance is beyond the aircraft's range. Rentals are still ready at the home base at once.
+- **Events during flights:** on about every tenth flight something happens that asks for a decision – a medical
+  emergency on board (divert to the nearest suitable airfield), the customer changing the destination (new destination
+  and pay) or a technical warning from a worn component (precautionary landing, paid for the share flown). A banner on
+  every page with a sound asks for the decision; without an answer within 5 minutes the flight continues as planned.
+  The settlement judges the decision. Can be switched off under Settings → Advanced.
+
+- **New job filters:** pay per block hour (the offer list also shows €/h), only airfields known to MSFS, and – for the
+  list – client, story jobs only, packages only and demand bonus only.
+
+### Changed
+- New aircraft are no longer delivered to the home base for free and at once (see delivery flights).
+- **Clearer map:** routes are only drawn for accepted jobs and the selected offer; other offers show as destination pins.
+- **Better spread market:** at most 10 open offers of one mission type go to the same destination; new searches
+  prefer destinations that have no offer yet.
+
+### Removed
+- The "ILS at destination" filter: it needed MSFS running during the search. Known ILS data is still shown in the list.
+
 ## 0.5.0 – 2026-11-15
 
 ### Added

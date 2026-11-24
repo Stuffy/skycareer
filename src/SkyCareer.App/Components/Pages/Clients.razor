@@ -1,0 +1,96 @@
+@page "/clients"
+@inherits CareerPageBase
+
+<MudText Typo="Typo.h5" Class="mb-1">@T("Clients")</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    @T("Recurring clients hand out jobs of their kind and remember how you fly for them. Punctual, smooth flights raise their standing; late arrivals, diversions and cancellations lower it.")
+    @F("Silver from {0}, gold from {1}: each tier pays +{2:P0} more and unlocks series and story jobs.", ClientStandings.SilverFrom, ClientStandings.GoldFrom, ClientStandings.PayPerTier)
+</MudText>
+
+@if (_clients.Count == 0)
+{
+    <MudText Typo="Typo.body2">@T("No clients defined (content/clients).")</MudText>
+}
+
+<MudGrid>
+    @foreach (var o in _clients)
+    {
+        var tier = ClientStandings.Tier(o.Standing.Standing);
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="height:100%">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudAvatar Color="@TierColor(tier)" Variant="Variant.Outlined">@o.Client.Initials</MudAvatar>
+                    <div style="flex:1">
+                        <MudText Typo="Typo.h6">@o.Client.Name</MudText>
+                        <MudText Typo="Typo.caption">@string.Join(", ", o.Client.MissionTypes.Select(TypeName))</MudText>
+                    </div>
+                    <MudChip T="string" Size="Size.Small" Color="@TierColor(tier)">@ClientStandings.TierText(tier)</MudChip>
+                </MudStack>
+                <MudText Typo="Typo.body2" Class="mb-2">@o.Client.DisplayDescription</MudText>
+                <MudProgressLinear Value="o.Standing.Standing" Color="@TierColor(tier)" Rounded="true" Size="Size.Medium" Class="mb-1" />
+                <MudText Typo="Typo.caption" Class="d-block mb-2">
+                    @F("Standing {0}/100 · {1} flights · pay +{2:P0}", o.Standing.Standing, o.Standing.FlightsFlown, ClientStandings.PayFactor(o.Standing.Standing) - 1)
+                </MudText>
+
+                @if (o.Standing.HasSeries)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                        @F("Series: {0} of {1} flights, until {2:dd.MM. HH:mm} – then +{3:P0} on their payouts.", o.Standing.SeriesFlown, o.Standing.SeriesTarget, o.Standing.SeriesEndsAt, ClientStandings.SeriesBonus)
+                    </MudAlert>
+                }
+                else if (o.CanStartSeries)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.body2">
+                            @F("Series offer: {0} flights within {1} game days, +{2:P0} on their payouts.", ClientStandings.SeriesTarget(o.Standing.Standing), ClientStandings.SeriesDays, ClientStandings.SeriesBonus)
+                        </MudText>
+                        <MudSpacer />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="() => StartSeries(o.Client)">@T("Accept series")</MudButton>
+                    </MudStack>
+                }
+
+                @foreach (var chain in o.Client.Chains)
+                {
+                    bool done = o.Standing.Completed(chain.Id);
+                    bool current = o.AvailableChain?.Id == chain.Id;
+                    int step = done ? chain.Steps.Count : current ? (o.Standing.ChainId == chain.Id ? o.Standing.ChainStep : 0) : 0;
+                    <MudPaper Outlined="true" Class="pa-2 mb-1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@(done ? Icons.Material.Filled.CheckCircle : current ? Icons.Material.Filled.AutoStories : Icons.Material.Filled.Lock)"
+                                     Size="Size.Small" Color="@(done ? Color.Success : current ? Color.Warning : Color.Default)" />
+                            <MudText Typo="Typo.body2"><b>@chain.DisplayTitle</b></MudText>
+                            <MudSpacer />
+                            <MudText Typo="Typo.caption">@(done ? T("completed") : current ? F("step {0}/{1}", step + 1, chain.Steps.Count) : F("from standing {0}", chain.MinStanding))</MudText>
+                        </MudStack>
+                        @if (current && o.NextStep is { } next)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1"><b>@next.DisplayTitle:</b> @next.DisplayBriefing</MudText>
+                            <MudText Typo="Typo.caption" Class="d-block">
+                                @(o.StoryJob is { } job
+                                    ? F("On the job market: {0} → {1}", job.Origin, job.Destination)
+                                    : T("Appears on the job market at the next job search, for an aircraft that can fly it."))
+                            </MudText>
+                        }
+                    </MudPaper>
+                }
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private List<ClientOverview> _clients = [];
+
+    protected override async Task LoadAsync() => _clients = await Career.GetClientsAsync();
+
+    private string TypeName(string id) => Career.Content.MissionTypes.FirstOrDefault(t => t.Id == id)?.DisplayName ?? id;
+
+    private static Color TierColor(ClientTier tier) => tier switch
+    {
+        ClientTier.Gold => Color.Warning,
+        ClientTier.Silver => Color.Info,
+        _ => Color.Default
+    };
+
+    private Task StartSeries(Client client) => Run(() => Career.StartSeriesAsync(client.Id), T("Series accepted."));
+}

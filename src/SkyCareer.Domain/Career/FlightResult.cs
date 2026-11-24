@@ -32,6 +32,8 @@ public sealed record FlightResult
     public ComfortStats? Comfort { get; init; }
     /// <summary>Night, visibility and crosswind at touchdown; null without a recorded touchdown.</summary>
     public LandingConditions? LandingConditions { get; init; }
+    /// <summary>Waypoints of a round trip that were not passed (names); null when the job has none or they weren't tracked.</summary>
+    public IReadOnlyList<string>? MissedWaypoints { get; init; }
     public int OverspeedSeconds { get; init; }
     public int StallWarningSeconds { get; init; }
     public GeoPosition FinalPosition { get; init; }

@@ -17,7 +17,11 @@
     /// share one pin whose popup shows <paramref name="Title"/>, <paramref name="Details"/> and <paramref name="Payout"/>.
     /// </summary>
     public sealed record Route(Guid Id, double[] From, double[] To, string Label, string Color, bool Accepted, bool Selected,
-        string DestIdent, string DestName, string Title, IReadOnlyList<string> Details, string Payout);
+        string DestIdent, string DestName, string Title, IReadOnlyList<string> Details, string Payout)
+    {
+        /// <summary>The way flown when it isn't a straight line (round trips over waypoints).</summary>
+        public double[][]? Path { get; init; }
+    }
 
     /// <summary>A region with a demand event this week, drawn as an outlined area that doesn't take clicks.</summary>
     public sealed record EventRegion(double South, double West, double North, double East, string Label);
@@ -65,7 +69,7 @@
                     {
                         id = r.Id, from = r.From, to = r.To, label = r.Label, color = r.Color, accepted = r.Accepted, selected = r.Selected,
                         destIdent = r.DestIdent, destName = r.DestName, title = r.Title, details = r.Details, payout = r.Payout,
-                        canAccept = !r.Accepted
+                        canAccept = !r.Accepted, path = r.Path
                     }),
                     labels = new { accept = T("Accept"), accepted = T("accepted"), show = T("Show in list"), oneJob = T("1 job"), jobs = T("{0} jobs") }
                 });

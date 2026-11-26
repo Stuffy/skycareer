@@ -2,7 +2,7 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.6.1 – 2026-11-26
 
 ### Fixed
 - **Ice no longer counts as a payload change:** MSFS adds accreted ice to the aircraft's weight, so flights through

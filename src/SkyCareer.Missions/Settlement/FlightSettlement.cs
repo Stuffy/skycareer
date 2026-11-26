@@ -168,6 +168,9 @@ public static class FlightSettlement
             ? new FlightScore(0, 0, 0, 0, 0)
             : FlightScorer.Score(i.Type.Scoring, r, lateBy, comfort);
 
+        if (score.SafetyPenalty > 0)
+            notes.Add(L.F("Safety: overspeed warning {0} s, stall warning {1} s (score −{2}).", r.OverspeedSeconds, r.StallWarningSeconds, score.SafetyPenalty));
+
         // Revenue
         int reputation;
         switch (outcome)

@@ -224,4 +224,27 @@ public class VarietyTests
         // A cargo event doesn't concern a charter flight.
         Assert.Null(Offer(_ => new DemandEvent(DemandKind.Harvest, DemandEvents.CargoPayFactor, Departure)).Demand);
     }
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(5, 0, 0)]
+    [InlineData(20, 0, 15)]
+    [InlineData(10, 10, 15)]
+    [InlineData(120, 0, FlightScorer.MaxSafetyPenalty)]
+    public void Safety_deduction_counts_sustained_warnings_after_a_grace_time(int overspeed, int stall, int expected)
+    {
+        var r = new FlightResult { OverspeedSeconds = overspeed, StallWarningSeconds = stall, TouchdownFpm = -120 };
+        Assert.Equal(expected, FlightScorer.Score(new ScoringRule(), r, TimeSpan.Zero).SafetyPenalty);
+    }
+
+    [Fact]
+    public void Rule_violations_do_not_lower_the_score()
+    {
+        var clean = new FlightResult { TouchdownFpm = -120 };
+        var violated = clean with { Violations = [new RuleViolation(ViolationType.PayloadChanged, "test")] };
+        var a = FlightScorer.Score(new ScoringRule(), clean, TimeSpan.Zero);
+        var b = FlightScorer.Score(new ScoringRule(), violated, TimeSpan.Zero);
+        Assert.Equal(a.Total, b.Total);
+        Assert.Equal(0, b.SafetyPenalty);
+    }
 }

@@ -74,6 +74,9 @@ public sealed class FlightSession
     /// <summary>A pause in the samples longer than this after an app restart is treated as a gap without data.</summary>
     public static readonly TimeSpan RestartGap = TimeSpan.FromSeconds(30);
 
+    /// <summary>Stall warnings below this height (flare, touchdown) are not counted.</summary>
+    public const double StallWarningMinAglFt = 100;
+
     public FlightSession(FlightPhaseTracker.Options? phaseOptions = null, IntegrityMonitor.Options? integrityOptions = null)
     {
         Phases = new FlightPhaseTracker(phaseOptions);
@@ -163,7 +166,8 @@ public sealed class FlightSession
             if (!t.Slew) _distanceNm += prev.Position.DistanceNmTo(t.Position);
             double dt = (t.Timestamp - prev.Timestamp).TotalSeconds;
             if (t.OverspeedWarning) _overspeedSec += dt;
-            if (t.StallWarning && !t.OnGround) _stallSec += dt;
+            // The stall horn in the flare is normal (and wanted in light aircraft).
+            if (t.StallWarning && !t.OnGround && t.AltitudeAglFt > StallWarningMinAglFt) _stallSec += dt;
         }
         if (_waypoints.Count > 0) CheckWaypoints(t);
         if (_last is { } before2 && !t.OnGround && !t.Paused && !t.Slew)

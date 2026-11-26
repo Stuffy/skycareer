@@ -343,5 +343,6 @@
   "The customer asks for another destination": "Der Kunde wünscht ein anderes Ziel",
   "The customer's change of destination was declined.": "Die Zieländerung des Kunden wurde abgelehnt.",
   "Warning light: {0} at {1:P0}. Precautionary landing at {2}? The customer pays the share flown ({3}); flying on wears the aircraft more.": "Warnleuchte: {0} bei {1:P0}. Sicherheitslandung in {2}? Der Kunde zahlt den geflogenen Anteil ({3}); Weiterfliegen verschleißt das Flugzeug stärker.",
-  "Your passengers now want to go to {0} ({1}) instead of {2}. The new destination pays {3} instead of {4}.": "Deine Passagiere wollen jetzt nach {0} ({1}) statt nach {2}. Das neue Ziel zahlt {3} statt {4}."
+  "Your passengers now want to go to {0} ({1}) instead of {2}. The new destination pays {3} instead of {4}.": "Deine Passagiere wollen jetzt nach {0} ({1}) statt nach {2}. Das neue Ziel zahlt {3} statt {4}.",
+  "Safety: overspeed warning {0} s, stall warning {1} s (score −{2}).": "Sicherheit: Overspeed-Warnung {0} s, Stall-Warnung {1} s (Wertung −{2})."
 }

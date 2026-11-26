@@ -66,7 +66,7 @@ public class DeboardingTests
         Assert.Empty(session.Integrity.Violations);
         Assert.Contains(session.Notes, n => n.Contains("700 → 500 kg"));
 
-        session.Process(back with { Timestamp = back.Timestamp.AddSeconds(1), PayloadKg = 300 });
+        for (int s = 1; s <= 12; s++) session.Process(back with { Timestamp = back.Timestamp.AddSeconds(s), PayloadKg = 300 });
         Assert.Contains(session.Integrity.Violations, v => v.Kind == ViolationKind.PayloadChanged);
     }
 }

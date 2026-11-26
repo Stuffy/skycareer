@@ -1533,7 +1533,14 @@ public sealed class CareerServiceTests : IAsyncLifetime
         if (share > 0)
         {
             Assert.Contains(s.Notes, n => n.StartsWith("Rule violation:"));
-            Assert.True(s.ReputationChange < 1);
+            // Violations cost reputation once, not again through the score.
+            Assert.Equal(0, s.Score.SafetyPenalty);
+            if (s.Outcome == FlightOutcome.Completed)
+            {
+                int kinds = violations.Where(v => v != ViolationType.SimRate).Distinct().Count();
+                int clean = 1 + (s.Score.Total >= 85 ? 1 : 0) + (s.Score.Total >= 95 ? 1 : 0);
+                Assert.Equal(clean - Math.Min(3, kinds), s.ReputationChange);
+            }
         }
         Assert.DoesNotContain(s.Notes, n => n.Contains("annulliert"));
         if (violations.Contains(ViolationType.SimRate))

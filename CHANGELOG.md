@@ -2,6 +2,19 @@
 
 All notable changes to SkyCareer. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **Ice no longer counts as a payload change:** MSFS adds accreted ice to the aircraft's weight, so flights through
+  icing conditions reported a payload change of a few dozen kilograms. Extra weight up to 150 kg is now tolerated
+  (removing load is still checked to 10 kg), and a deviation must last 10 seconds before it counts.
+
+### Changed
+- **Fairer safety deduction:** brief overspeed or stall warnings (5 seconds per flight) are free, after that each second
+  costs one point (at most 30). Rule violations no longer reduce the score as well – they already cost pay and
+  reputation – so a good flight keeps its reputation bonus. Stall warnings in the flare (below 100 ft) are ignored, and
+  the settlement says where the deduction came from.
+
 ## 0.6.0 – 2026-11-24
 
 ### Added

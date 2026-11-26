@@ -15,7 +15,16 @@ public sealed class IntegrityMonitor
     {
         public double MaxSimRate { get; init; } = 1;
         public double FuelIncreaseToleranceKg { get; init; } = 5;
-        public double PayloadChangeToleranceKg { get; init; } = 10;
+        /// <summary>Payload below the locked value: removing load is what would make a flight unfairly easier.</summary>
+        public double PayloadDecreaseToleranceKg { get; init; } = 10;
+        /// <summary>
+        /// Payload above the locked value. MSFS counts accreted ice in TOTAL WEIGHT, so the computed payload grows by
+        /// tens of kilograms in icing conditions and melts back later (verified with recordings, 2026-11); extra load
+        /// gives the pilot no advantage anyway.
+        /// </summary>
+        public double PayloadIncreaseToleranceKg { get; init; } = 150;
+        /// <summary>A payload deviation only counts once it lasted this long, so single outlier samples don't.</summary>
+        public double PayloadConfirmSeconds { get; init; } = 10;
         /// <summary>Extra distance on top of what ground speed allows before a jump counts as teleport.</summary>
         public double TeleportSlackNm { get; init; } = 2;
     }
@@ -25,6 +34,7 @@ public sealed class IntegrityMonitor
     private readonly HashSet<ViolationKind> _active = [];
     private Telemetry? _last;
     private double? _payloadAtDeparture;
+    private DateTimeOffset? _payloadOffSince;
 
     public IntegrityMonitor(Options? options = null) => _opt = options ?? new Options();
 
@@ -32,7 +42,11 @@ public sealed class IntegrityMonitor
     public event EventHandler<IntegrityViolation>? ViolationDetected;
 
     /// <summary>Call when the takeoff roll starts; payload is locked from then on.</summary>
-    public void LockPayload(double payloadKg) => _payloadAtDeparture = payloadKg;
+    public void LockPayload(double payloadKg)
+    {
+        _payloadAtDeparture = payloadKg;
+        _payloadOffSince = null;
+    }
 
     public bool PayloadLocked => _payloadAtDeparture is not null;
 
@@ -40,6 +54,7 @@ public sealed class IntegrityMonitor
     public void UnlockPayload()
     {
         _payloadAtDeparture = null;
+        _payloadOffSince = null;
         _active.Remove(ViolationKind.PayloadChanged);
     }
 
@@ -51,8 +66,16 @@ public sealed class IntegrityMonitor
         // Only the flight itself counts: unloading after landing (GSX deboarding, a resume that catches up after the
         // aircraft was already parked) is expected.
         if (_payloadAtDeparture is { } locked && phase is >= FlightPhase.TakeoffRoll and <= FlightPhase.Approach)
-            Flag(ViolationKind.PayloadChanged, Math.Abs(t.PayloadKg - locked) > _opt.PayloadChangeToleranceKg, t,
-                $"Payload {t.PayloadKg:N0} kg, locked at {locked:N0} kg");
+        {
+            double change = t.PayloadKg - locked;
+            bool off = change < -_opt.PayloadDecreaseToleranceKg || change > _opt.PayloadIncreaseToleranceKg;
+            _payloadOffSince = off ? _payloadOffSince ?? t.Timestamp : null;
+            // While a deviation is still unconfirmed nothing changes: an already reported one stays active.
+            if (!off || (t.Timestamp - _payloadOffSince!.Value).TotalSeconds >= _opt.PayloadConfirmSeconds)
+                Flag(ViolationKind.PayloadChanged, off, t,
+                    $"Payload {(change < 0 ? "decreased" : "increased")} to {t.PayloadKg:N0} kg, locked at {locked:N0} kg");
+        }
+        else _payloadOffSince = null;
 
         if (_last is { } prev && !t.Paused && !prev.Paused)
         {

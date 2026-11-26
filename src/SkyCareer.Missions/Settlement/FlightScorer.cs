@@ -16,6 +16,18 @@ public static class FlightScorer
         return Math.Clamp(landing - r.Bounces * 10, 0, 100);
     }
 
+    /// <summary>Seconds of overspeed and stall warnings per flight that cost nothing (a brief blip in a descent or gust).</summary>
+    public const int WarningGraceSeconds = 5;
+    public const int PointsPerWarningSecond = 1;
+    public const int MaxSafetyPenalty = 30;
+
+    /// <summary>
+    /// Points off for how the aircraft was flown: sustained overspeed and stall warnings. Rule violations aren't part of
+    /// it, they already cost payout and reputation in the settlement.
+    /// </summary>
+    public static int SafetyPenalty(FlightResult r) =>
+        Math.Clamp((r.OverspeedSeconds + r.StallWarningSeconds - WarningGraceSeconds) * PointsPerWarningSecond, 0, MaxSafetyPenalty);
+
     /// <param name="comfort">Passenger comfort of the flight; when given, its in-flight part is the smoothness instead of the peak G alone.</param>
     public static FlightScore Score(ScoringRule rule, FlightResult r, TimeSpan lateBy, ComfortRating? comfort = null)
     {
@@ -30,8 +42,7 @@ public static class FlightScorer
         double weighted = weights <= 0 ? 100
             : (landing * rule.LandingRateWeight + smooth * rule.GForceWeight + punctuality * rule.PunctualityWeight) / weights;
 
-        int severeKinds = r.Violations.Where(v => v.Severe).Select(v => v.Type).Distinct().Count();
-        int safety = (int)Math.Min(40, (r.OverspeedSeconds + r.StallWarningSeconds) * 2 + severeKinds * 20);
+        int safety = SafetyPenalty(r);
         int total = (int)Math.Round(Math.Clamp(weighted - safety, 0, 100));
         return new FlightScore(total, (int)Math.Round(landing), (int)Math.Round(smooth), (int)Math.Round(punctuality), safety);
     }

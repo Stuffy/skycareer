@@ -118,8 +118,38 @@ public class FlightTrackingTests
         var roll = new SyntheticFlight()
             .Hold(5, t => t with { AnyEngineRunning = true, ParkingBrake = false, GroundSpeedKt = 15 })
             .Hold(3, t => t with { GroundSpeedKt = 60 })
-            .Hold(3, t => t with { PayloadKg = t.PayloadKg + 400 });
+            .Hold(12, t => t with { PayloadKg = t.PayloadKg - 400 });
         Assert.Contains(Run(roll.Samples).Integrity.Violations, v => v.Kind == ViolationKind.PayloadChanged);
+    }
+
+    [Fact]
+    public void Ice_accretion_is_no_payload_change_but_removed_load_is()
+    {
+        // Ice: up to +45 kg at ~0.3 kg/s, shed in steps, then melting back (seen with the Citation X in a descent).
+        var samples = SyntheticFlight.Standard().Samples.ToList();
+        int start = samples.FindIndex(t => t.AltitudeFt > 3000 && !t.OnGround);
+        double Ice(int i) => i < 150 ? i * 0.3 : Math.Max(0, 45 - (i - 150) * 0.3);
+        var iced = samples.Select((t, i) => i >= start && i < start + 300 ? t with { PayloadKg = t.PayloadKg + Ice(i - start) } : t);
+        Assert.DoesNotContain(Run(iced).Integrity.Violations, v => v.Kind == ViolationKind.PayloadChanged);
+
+        // A single outlier sample doesn't count, a sustained decrease does, a large increase too.
+        var spike = samples.Select((t, i) => i >= start && i < start + 2 ? t with { PayloadKg = t.PayloadKg - 30 } : t);
+        Assert.DoesNotContain(Run(spike).Integrity.Violations, v => v.Kind == ViolationKind.PayloadChanged);
+        var removed = samples.Select((t, i) => i >= start && i < start + 15 ? t with { PayloadKg = t.PayloadKg - 30 } : t);
+        var v = Assert.Single(Run(removed).Integrity.Violations, v => v.Kind == ViolationKind.PayloadChanged);
+        Assert.Contains("decreased", v.Detail);
+        var added = samples.Select((t, i) => i >= start && i < start + 15 ? t with { PayloadKg = t.PayloadKg + 300 } : t);
+        Assert.Contains(Run(added).Integrity.Violations, v => v.Kind == ViolationKind.PayloadChanged);
+    }
+
+    [Fact]
+    public void Stall_warnings_in_the_flare_are_not_counted()
+    {
+        var samples = SyntheticFlight.Standard().Samples;
+        var flare = samples.Select(t => !t.OnGround && t.AltitudeAglFt < FlightSession.StallWarningMinAglFt ? t with { StallWarning = true } : t);
+        Assert.Equal(0, Run(flare).Summarize().StallWarningSeconds);
+        var aloft = samples.Select(t => t.AltitudeAglFt is > 2000 and < 2600 ? t with { StallWarning = true } : t);
+        Assert.True(Run(aloft).Summarize().StallWarningSeconds > 0);
     }
 
     [Fact]
